@@ -1,0 +1,111 @@
+"""Data models"""
+
+from datetime import datetime
+from enum import Enum
+from typing import Any, Optional
+from pydantic import BaseModel, Field
+import json
+
+
+class ExecutionType(str, Enum):
+    """Type of execution"""
+
+    JOB = "job"
+    ACTIVITY = "activity"
+    WORKFLOW = "workflow"
+
+
+class ExecutionStatus(str, Enum):
+    """Status of an execution"""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    SUSPENDED = "suspended"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class WorkerStatus(str, Enum):
+    """Status of a worker"""
+
+    RUNNING = "running"
+    STOPPED = "stopped"
+
+
+class Execution(BaseModel):
+    """An execution (job, activity, or workflow)"""
+
+    id: str
+    type: ExecutionType
+    function_name: str
+    queue: str
+    status: ExecutionStatus
+    priority: int = 5
+
+    args: list[Any] = Field(default_factory=list)
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+    options: dict[str, Any] = Field(default_factory=dict)
+
+    result: Optional[Any] = None
+    error: Optional[dict[str, Any]] = None
+
+    attempt: int = 0
+    max_retries: int = 3
+
+    parent_workflow_id: Optional[str] = None
+    checkpoint: Optional[dict[str, Any]] = None
+
+    created_at: datetime
+    claimed_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    timeout_seconds: Optional[int] = None
+
+    worker_id: Optional[str] = None
+
+    @classmethod
+    def from_record(cls, record) -> "Execution":
+        """Create from database record"""
+        data = dict(record)
+        # Parse JSONB fields
+        for field in ["args", "kwargs", "options", "result", "error", "checkpoint"]:
+            if field in data and data[field] is not None:
+                if isinstance(data[field], str):
+                    data[field] = json.loads(data[field])
+        return cls(**data)
+
+
+class WorkflowSignal(BaseModel):
+    """A signal sent to a workflow"""
+
+    id: str
+    workflow_id: str
+    signal_name: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    consumed: bool = False
+
+    @classmethod
+    def from_record(cls, record) -> "WorkflowSignal":
+        """Create from database record"""
+        data = dict(record)
+        if isinstance(data.get("payload"), str):
+            data["payload"] = json.loads(data["payload"])
+        return cls(**data)
+
+
+class WorkerHeartbeat(BaseModel):
+    """Worker heartbeat record"""
+
+    worker_id: str
+    last_heartbeat: datetime
+    queues: list[str]
+    status: WorkerStatus
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @classmethod
+    def from_record(cls, record) -> "WorkerHeartbeat":
+        """Create from database record"""
+        data = dict(record)
+        if isinstance(data.get("metadata"), str):
+            data["metadata"] = json.loads(data["metadata"])
+        return cls(**data)
