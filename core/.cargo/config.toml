@@ -1,0 +1,5 @@
+[build]
+target-dir = "target"
+
+[env]
+DATABASE_URL = { value = "", relative = true }

@@ -12,7 +12,18 @@
       "Bash(pip uninstall:*)",
       "Bash(pip install:*)",
       "Bash(cat:*)",
-      "Bash(docker exec:*)"
+      "Bash(docker exec:*)",
+      "Bash(cargo init:*)",
+      "Bash(chmod:*)",
+      "Bash(command -v:*)",
+      "Bash(source $HOME/.cargo/env)",
+      "Bash(cargo --version)",
+      "Bash(echo $SHELL)",
+      "Read(//Users/maxnorth/.cargo/**)",
+      "Bash(./test_e2e.sh:*)",
+      "Bash(source:*)",
+      "Bash(./run_enqueue.sh)",
+      "Bash(export PYTHONPATH=\"$PWD:$PYTHONPATH\")"
     ],
     "deny": [],
     "ask": []

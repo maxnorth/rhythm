@@ -74,7 +74,8 @@ class WorkflowExecutionContext:
             logger.debug(f"Replaying activity {activity_proxy.function_name}")
             return history_event["result"]
         else:
-            # NEW STEP: need to suspend and execute activity
+            # NEW STEP: we've finished replaying, now executing new steps
+            self.is_replaying = False
             activity_execution_id = generate_id("act")
 
             logger.debug(f"Suspending workflow to execute activity {activity_proxy.function_name}")
@@ -114,7 +115,8 @@ class WorkflowExecutionContext:
             logger.debug(f"Replaying signal {signal_name}")
             return history_event["payload"]
         else:
-            # NEW STEP: need to suspend and wait for signal
+            # NEW STEP: we've finished replaying, now executing new steps
+            self.is_replaying = False
             logger.debug(f"Suspending workflow to wait for signal {signal_name}")
 
             # Record command to wait for signal
@@ -238,3 +240,32 @@ def get_version(change_id: str, min_version: int, max_version: int) -> int:
         raise RuntimeError("get_version() can only be called from within a workflow")
 
     return ctx.get_version(change_id, min_version, max_version)
+
+
+def is_replaying() -> bool:
+    """
+    Check if the workflow is currently replaying from history.
+
+    Returns True during replay, False when executing new steps.
+    Useful for conditional logging or other non-deterministic operations
+    that should only run once.
+
+    Returns:
+        True if replaying, False otherwise
+
+    Example:
+        @workflow(queue="orders", version=1)
+        async def process_order(order_id: str):
+            if not is_replaying():
+                print(f"[WORKFLOW] Starting order processing for {order_id}")
+
+            result = await validate_order.run(order_id)
+
+            if not is_replaying():
+                print(f"[WORKFLOW] Validation completed: {result}")
+    """
+    ctx = get_current_workflow_context()
+    if ctx is None:
+        raise RuntimeError("is_replaying() can only be called from within a workflow")
+
+    return ctx.is_replaying

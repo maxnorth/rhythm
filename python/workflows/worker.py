@@ -10,7 +10,7 @@ import traceback
 import json
 
 from workflows.config import settings
-from workflows.db import get_connection, get_pool
+from workflows.rust_bridge import RustBridge
 from workflows.models import Execution, ExecutionStatus, ExecutionType, WorkerStatus
 from workflows.registry import get_function
 from workflows.context import (
@@ -74,8 +74,8 @@ class Worker:
             if task and not task.done():
                 task.cancel()
 
-        # Update worker status
-        await self._update_heartbeat(status=WorkerStatus.STOPPED)
+        # Update worker status via Rust
+        RustBridge.stop_worker(self.worker_id)
 
         # Wait for current executions to complete (with timeout)
         timeout = 30
@@ -111,47 +111,24 @@ class Worker:
                 await asyncio.sleep(settings.worker_heartbeat_interval)
 
     async def _update_heartbeat(self, status: WorkerStatus = WorkerStatus.RUNNING):
-        """Update worker heartbeat in database"""
-        async with get_connection() as conn:
-            await conn.execute(
-                """
-                INSERT INTO worker_heartbeats (worker_id, last_heartbeat, queues, status, metadata)
-                VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT (worker_id) DO UPDATE SET
-                    last_heartbeat = $2,
-                    queues = $3,
-                    status = $4,
-                    metadata = $5
-                """,
-                self.worker_id,
-                datetime.utcnow(),
-                self.queues,
-                status.value,
-                json.dumps({"current_executions": self.current_executions}),
-            )
+        """Update worker heartbeat in database via Rust"""
+        RustBridge.update_heartbeat(self.worker_id, self.queues)
 
     async def _listener_loop(self):
-        """Listen for NOTIFY events on queue channels"""
-        pool = await get_pool()
+        """Continuously try to claim and execute work"""
+        logger.info(f"Worker {self.worker_id} listening on queues: {self.queues}")
 
-        async with pool.acquire() as conn:
-            # Listen on all queue channels
-            for queue in self.queues:
-                await conn.add_listener(f"queue_{queue}", lambda *args: None)
+        while self.running:
+            try:
+                # Wait briefly and try to claim work
+                await asyncio.sleep(0.1)
+                await self._try_claim_and_execute()
 
-            logger.info(f"Worker {self.worker_id} listening on channels: {self.queues}")
-
-            while self.running:
-                try:
-                    # Wait briefly and try to claim work
-                    await asyncio.sleep(0.1)
-                    await self._try_claim_and_execute()
-
-                except asyncio.CancelledError:
-                    break
-                except Exception as e:
-                    logger.error(f"Error in listener loop: {e}")
-                    await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in listener loop: {e}")
+                await asyncio.sleep(1)
 
     async def _poll_loop(self):
         """Fallback polling loop in case notifications are missed"""
@@ -178,52 +155,10 @@ class Worker:
                 await asyncio.sleep(settings.worker_heartbeat_timeout)
 
     async def _recover_dead_worker_executions(self):
-        """Find and recover executions from dead workers"""
-        timeout_threshold = datetime.utcnow() - timedelta(
-            seconds=settings.worker_heartbeat_timeout
-        )
-
-        async with get_connection() as conn:
-            # Find dead workers
-            dead_workers = await conn.fetch(
-                """
-                SELECT worker_id FROM worker_heartbeats
-                WHERE status = 'running'
-                  AND last_heartbeat < $1
-                """,
-                timeout_threshold,
-            )
-
-            if not dead_workers:
-                return
-
-            dead_worker_ids = [w["worker_id"] for w in dead_workers]
-            logger.warning(f"Found {len(dead_worker_ids)} dead workers: {dead_worker_ids}")
-
-            # Mark workers as stopped
-            await conn.execute(
-                """
-                UPDATE worker_heartbeats
-                SET status = 'stopped'
-                WHERE worker_id = ANY($1)
-                """,
-                dead_worker_ids,
-            )
-
-            # Reset their running executions to pending
-            result = await conn.execute(
-                """
-                UPDATE executions
-                SET status = 'pending', worker_id = NULL, claimed_at = NULL
-                WHERE worker_id = ANY($1)
-                  AND status IN ('running', 'suspended')
-                """,
-                dead_worker_ids,
-            )
-
-            recovered_count = int(result.split()[-1]) if result else 0
-            if recovered_count > 0:
-                logger.info(f"Recovered {recovered_count} executions from dead workers")
+        """Find and recover executions from dead workers via Rust"""
+        recovered_count = RustBridge.recover_dead_workers(settings.worker_heartbeat_timeout)
+        if recovered_count > 0:
+            logger.info(f"Recovered {recovered_count} executions from dead workers")
 
     async def _try_claim_and_execute(self):
         """Try to claim work and execute it"""
@@ -237,35 +172,14 @@ class Worker:
             asyncio.create_task(self._execute_with_tracking(execution))
 
     async def _claim_execution(self) -> Optional[Execution]:
-        """Claim a pending execution from the queue"""
-        async with get_connection() as conn:
-            row = await conn.fetchrow(
-                """
-                UPDATE executions
-                SET status = 'running',
-                    worker_id = $1,
-                    claimed_at = NOW()
-                WHERE id IN (
-                    SELECT id FROM executions
-                    WHERE queue = ANY($2)
-                      AND status = 'pending'
-                    ORDER BY priority DESC, created_at ASC
-                    LIMIT 1
-                    FOR UPDATE SKIP LOCKED
-                )
-                RETURNING *
-                """,
-                self.worker_id,
-                self.queues,
+        """Claim a pending execution from the queue via Rust"""
+        exec_dict = RustBridge.claim_execution(self.worker_id, self.queues)
+        if exec_dict:
+            execution = Execution.from_dict(exec_dict)
+            logger.info(
+                f"Claimed {execution.type} execution {execution.id}: {execution.function_name}"
             )
-
-            if row:
-                execution = Execution.from_record(row)
-                logger.info(
-                    f"Claimed {execution.type} execution {execution.id}: {execution.function_name}"
-                )
-                return execution
-
+            return execution
         return None
 
     async def _execute_with_tracking(self, execution: Execution):
@@ -342,100 +256,59 @@ class Worker:
     async def _handle_workflow_suspend(
         self, execution: Execution, ctx: WorkflowExecutionContext, commands: list[dict]
     ):
-        """Handle workflow suspension and create activity executions"""
+        """Handle workflow suspension and create activity executions via Rust"""
         logger.info(f"Workflow {execution.id} suspended with {len(commands)} commands")
 
-        async with get_connection() as conn:
-            async with conn.transaction():
-                # Create activity executions for each command
-                for cmd in commands:
-                    if cmd["type"] == "activity":
-                        await conn.execute(
-                            """
-                            INSERT INTO executions (
-                                id, type, function_name, queue, status, priority,
-                                args, kwargs, options, max_retries, timeout_seconds,
-                                parent_workflow_id
-                            )
-                            VALUES ($1, 'activity', $2, $3, 'pending', $4, $5, $6, $7, $8, $9, $10)
-                            """,
-                            cmd["activity_execution_id"],
-                            cmd["name"],
-                            execution.queue,  # Inherit workflow's queue
-                            cmd["config"].get("priority", 5),
-                            json.dumps(cmd["args"]),
-                            json.dumps(cmd["kwargs"]),
-                            json.dumps(cmd["config"]),
-                            cmd["config"].get("retries", settings.default_retries),
-                            cmd["config"].get("timeout"),
-                            execution.id,
-                        )
-
-                    elif cmd["type"] == "wait_signal":
-                        # Just update checkpoint - signal waiting is passive
-                        pass
-
-                # Update workflow checkpoint
-                new_checkpoint = {
-                    "history": ctx.history,
-                    "pending_commands": commands,
-                }
-
-                await conn.execute(
-                    """
-                    UPDATE executions
-                    SET status = 'suspended',
-                        checkpoint = $2,
-                        worker_id = NULL
-                    WHERE id = $1
-                    """,
-                    execution.id,
-                    json.dumps(new_checkpoint),
+        # Create activity executions for each command
+        for cmd in commands:
+            if cmd["type"] == "activity":
+                RustBridge.create_execution(
+                    exec_type="activity",
+                    function_name=cmd["name"],
+                    queue=execution.queue,  # Inherit workflow's queue
+                    priority=cmd["config"].get("priority", 5),
+                    args=cmd["args"],
+                    kwargs=cmd["kwargs"],
+                    max_retries=cmd["config"].get("retries", settings.default_retries),
+                    timeout_seconds=cmd["config"].get("timeout"),
+                    parent_workflow_id=execution.id,
                 )
 
-                # Notify queue for new activities
-                await conn.execute(f"NOTIFY queue_{execution.queue}")
+            elif cmd["type"] == "wait_signal":
+                # Just update checkpoint - signal waiting is passive
+                pass
+
+        # Update workflow checkpoint and suspend
+        new_checkpoint = {
+            "history": ctx.history,
+            "pending_commands": commands,
+        }
+
+        RustBridge.suspend_workflow(execution.id, new_checkpoint)
 
         logger.info(f"Workflow {execution.id} suspended and activities created")
 
     async def _complete_execution(self, execution: Execution, result: any):
-        """Mark execution as completed"""
+        """Mark execution as completed via Rust"""
         logger.info(f"Execution {execution.id} completed successfully")
 
-        async with get_connection() as conn:
-            async with conn.transaction():
-                # Update execution
-                await conn.execute(
-                    """
-                    UPDATE executions
-                    SET status = 'completed',
-                        result = $2,
-                        completed_at = NOW(),
-                        worker_id = NULL
-                    WHERE id = $1
-                    """,
-                    execution.id,
-                    json.dumps(result),
-                )
+        RustBridge.complete_execution(execution.id, result)
 
-                # If this is an activity, resume parent workflow
-                if execution.parent_workflow_id:
-                    await self._resume_parent_workflow(conn, execution, result)
+        # If this is an activity, resume parent workflow
+        if execution.parent_workflow_id:
+            await self._resume_parent_workflow(execution, result)
 
-    async def _resume_parent_workflow(self, conn, activity_execution: Execution, result: any):
+    async def _resume_parent_workflow(self, activity_execution: Execution, result: any):
         """Resume parent workflow after activity completion"""
         workflow_id = activity_execution.parent_workflow_id
 
-        # Append result to workflow history
-        workflow = await conn.fetchrow(
-            "SELECT checkpoint FROM executions WHERE id = $1", workflow_id
-        )
-
-        if not workflow:
+        # Get workflow checkpoint
+        workflow_dict = RustBridge.get_execution(workflow_id)
+        if not workflow_dict:
             logger.error(f"Parent workflow {workflow_id} not found")
             return
 
-        checkpoint = json.loads(workflow["checkpoint"]) if workflow["checkpoint"] else {}
+        checkpoint = workflow_dict.get("checkpoint") or {}
         history = checkpoint.get("history", [])
 
         history.append(
@@ -449,27 +322,16 @@ class Worker:
 
         checkpoint["history"] = history
 
-        # Re-queue workflow
-        await conn.execute(
-            """
-            UPDATE executions
-            SET status = 'pending',
-                checkpoint = $2
-            WHERE id = $1
-            """,
-            workflow_id,
-            json.dumps(checkpoint),
-        )
+        # Suspend workflow with updated checkpoint (this will set status to suspended)
+        RustBridge.suspend_workflow(workflow_id, checkpoint)
 
-        # Notify queue
-        queue = await conn.fetchval("SELECT queue FROM executions WHERE id = $1", workflow_id)
-        if queue:
-            await conn.execute(f"NOTIFY queue_{queue}")
+        # Immediately resume it (set status back to pending)
+        RustBridge.resume_workflow(workflow_id)
 
         logger.info(f"Parent workflow {workflow_id} resumed")
 
     async def _handle_execution_failure(self, execution: Execution, error: Exception):
-        """Handle execution failure with retry logic"""
+        """Handle execution failure with retry logic via Rust"""
         execution.attempt += 1
 
         error_data = {
@@ -482,45 +344,15 @@ class Worker:
             f"Execution {execution.id} failed (attempt {execution.attempt}/{execution.max_retries}): {error}"
         )
 
-        async with get_connection() as conn:
-            if execution.attempt < execution.max_retries:
-                # Retry with backoff
-                delay = calculate_retry_delay(execution.attempt)
-                retry_at = datetime.utcnow() + timedelta(seconds=delay)
-
-                await conn.execute(
-                    """
-                    UPDATE executions
-                    SET status = 'pending',
-                        attempt = $2,
-                        error = $3,
-                        worker_id = NULL,
-                        claimed_at = NULL
-                    WHERE id = $1
-                    """,
-                    execution.id,
-                    execution.attempt,
-                    json.dumps(error_data),
-                )
-
-                logger.info(f"Execution {execution.id} will retry in {delay}s")
-
-            else:
-                # Max retries exhausted
-                await conn.execute(
-                    """
-                    UPDATE executions
-                    SET status = 'failed',
-                        error = $2,
-                        completed_at = NOW(),
-                        worker_id = NULL
-                    WHERE id = $1
-                    """,
-                    execution.id,
-                    json.dumps(error_data),
-                )
-
-                logger.error(f"Execution {execution.id} failed permanently after {execution.attempt} attempts")
+        if execution.attempt < execution.max_retries:
+            # Retry
+            delay = calculate_retry_delay(execution.attempt)
+            RustBridge.fail_execution(execution.id, error_data, retry=True)
+            logger.info(f"Execution {execution.id} will retry in {delay}s")
+        else:
+            # Max retries exhausted
+            RustBridge.fail_execution(execution.id, error_data, retry=False)
+            logger.error(f"Execution {execution.id} failed permanently after {execution.attempt} attempts")
 
 
 async def run_worker(queues: list[str], worker_id: Optional[str] = None):

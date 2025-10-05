@@ -73,6 +73,14 @@ class Execution(BaseModel):
                     data[field] = json.loads(data[field])
         return cls(**data)
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "Execution":
+        """Create from dictionary (e.g., from Rust)"""
+        # Rust returns exec_type as "type", rename it
+        if "exec_type" in data:
+            data["type"] = data.pop("exec_type")
+        return cls(**data)
+
 
 class WorkflowSignal(BaseModel):
     """A signal sent to a workflow"""

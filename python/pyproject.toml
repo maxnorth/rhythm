@@ -6,7 +6,6 @@ build-backend = "hatchling.build"
 name = "workflows"
 version = "0.1.0"
 description = "A lightweight durable execution framework using only Postgres"
-readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "asyncpg>=0.29.0",

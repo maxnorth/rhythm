@@ -3,7 +3,7 @@ Simple example demonstrating jobs, activities, and workflows
 """
 
 import asyncio
-from workflows import job, activity, workflow
+from workflows import job, activity, workflow, is_replaying
 
 
 # Simple job that runs independently
@@ -74,23 +74,28 @@ async def process_order_workflow(
 
     This workflow will survive crashes and resume from checkpoints.
     """
-    print(f"\n[WORKFLOW] Starting order processing for {order_id}\n")
+    if not is_replaying():
+        print(f"\n[WORKFLOW] Starting order processing for {order_id}\n")
 
     # Step 1: Validate the order
     validation_result = await validate_order.run(order_id, amount)
-    print(f"[WORKFLOW] ✓ Validation completed: {validation_result}\n")
+    if not is_replaying():
+        print(f"[WORKFLOW] ✓ Validation completed: {validation_result}\n")
 
     # Step 2: Charge the payment
     payment_result = await charge_payment.run(order_id, amount, payment_method)
-    print(f"[WORKFLOW] ✓ Payment charged: {payment_result['transaction_id']}\n")
+    if not is_replaying():
+        print(f"[WORKFLOW] ✓ Payment charged: {payment_result['transaction_id']}\n")
 
     # Step 3: Send confirmation email
     email_result = await send_confirmation_email.run(customer_email, order_id, amount)
-    print(f"[WORKFLOW] ✓ Email sent: {email_result}\n")
+    if not is_replaying():
+        print(f"[WORKFLOW] ✓ Email sent: {email_result}\n")
 
     # Step 4: Update inventory
     inventory_result = await update_inventory.run(order_id, items)
-    print(f"[WORKFLOW] ✓ Inventory updated: {inventory_result}\n")
+    if not is_replaying():
+        print(f"[WORKFLOW] ✓ Inventory updated: {inventory_result}\n")
 
     return {
         "status": "completed",

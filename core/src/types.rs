@@ -1,0 +1,100 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "text", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum ExecutionType {
+    Job,
+    Activity,
+    Workflow,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "text", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum ExecutionStatus {
+    Pending,
+    Running,
+    Suspended,
+    Completed,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Execution {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub exec_type: ExecutionType,
+    pub function_name: String,
+    pub queue: String,
+    pub status: ExecutionStatus,
+    pub priority: i32,
+
+    pub args: JsonValue,
+    pub kwargs: JsonValue,
+    pub options: JsonValue,
+
+    pub result: Option<JsonValue>,
+    pub error: Option<JsonValue>,
+
+    pub attempt: i32,
+    pub max_retries: i32,
+
+    pub parent_workflow_id: Option<String>,
+    pub checkpoint: Option<JsonValue>,
+
+    pub created_at: DateTime<Utc>,
+    pub claimed_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub timeout_seconds: Option<i32>,
+
+    pub worker_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateExecutionParams {
+    pub exec_type: ExecutionType,
+    pub function_name: String,
+    pub queue: String,
+    pub priority: i32,
+    pub args: JsonValue,
+    pub kwargs: JsonValue,
+    pub max_retries: i32,
+    pub timeout_seconds: Option<i32>,
+    pub parent_workflow_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "text", rename_all = "lowercase")]
+pub enum WorkerStatus {
+    Running,
+    Stopped,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerHeartbeat {
+    pub worker_id: String,
+    pub last_heartbeat: DateTime<Utc>,
+    pub queues: Vec<String>,
+    pub status: WorkerStatus,
+    pub metadata: JsonValue,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowSignal {
+    pub id: String,
+    pub workflow_id: String,
+    pub signal_name: String,
+    pub payload: JsonValue,
+    pub created_at: DateTime<Utc>,
+    pub consumed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExecutionListFilter {
+    pub queue: Option<String>,
+    pub status: Option<ExecutionStatus>,
+    pub limit: Option<i32>,
+}
