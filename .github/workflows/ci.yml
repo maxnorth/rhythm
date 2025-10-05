@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  rust-checks:
+    name: Rust Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            core/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check formatting
+        run: cd core && cargo fmt --check
+
+      - name: Run clippy
+        run: cd core && cargo clippy -- -D warnings
+
+      - name: Build Rust
+        run: cd core && cargo build --release
+
+  python-checks:
+    name: Python Checks
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Rust (for maturin)
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install maturin ruff mypy pytest
+
+      - name: Build Rust extension
+        run: cd core && maturin build --release
+
+      - name: Install Python package
+        run: |
+          pip install core/target/wheels/*.whl
+          cd python && pip install -e .
+
+      - name: Run ruff (linting)
+        run: cd python && ruff check currant/
+
+      - name: Run ruff (formatting)
+        run: cd python && ruff format --check currant/
+
+      - name: Type check with mypy
+        run: cd python && mypy currant/ --ignore-missing-imports
+        continue-on-error: true
