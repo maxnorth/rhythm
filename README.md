@@ -77,7 +77,7 @@ from app import send_email, process_order
 
 async def main():
     # Enqueue a job
-    job_id = await send_email.enqueue(
+    job_id = await send_email.queue(
         to="user@example.com",
         subject="Welcome",
         body="Thanks for signing up!"
@@ -85,7 +85,7 @@ async def main():
     print(f"Job enqueued: {job_id}")
 
     # Enqueue a workflow
-    workflow_id = await process_order.enqueue(
+    workflow_id = await process_order.queue(
         order_id="order_123",
         amount=5000,
         email="customer@example.com",
@@ -154,14 +154,14 @@ async def process_order(order_id: str, amount: int, email: str, card_token: str)
 
 ### Dynamic Options
 
-Override execution options at enqueue time:
+Override execution options at queue time:
 
 ```python
 # Override queue and priority
 job_id = await send_email.options(
     queue="high-priority",
     priority=10
-).enqueue(to="vip@example.com", subject="Urgent", body="...")
+).queue(to="vip@example.com", subject="Urgent", body="...")
 
 # Override timeout for activity
 @workflow(queue="orders", version=1)

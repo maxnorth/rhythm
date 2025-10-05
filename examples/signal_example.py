@@ -78,7 +78,7 @@ async def main():
     print("=" * 60 + "\n")
 
     # Start the approval workflow
-    workflow_id = await document_approval_workflow.enqueue(
+    workflow_id = await document_approval_workflow.queue(
         doc_id="doc_12345",
         author="john@example.com",
     )

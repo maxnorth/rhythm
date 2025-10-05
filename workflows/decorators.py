@@ -6,6 +6,7 @@ import inspect
 
 from workflows.config import settings
 from workflows.registry import register_function
+from workflows.client import queue_execution
 
 
 class ExecutableProxy:
@@ -46,11 +47,10 @@ class ExecutableProxy:
             **new_config,
         )
 
-    async def enqueue(self, *args, **kwargs) -> str:
+    async def queue(self, *args, **kwargs) -> str:
         """Enqueue this execution"""
-        from workflows.client import enqueue_execution
 
-        return await enqueue_execution(
+        return await queue_execution(
             exec_type=self.exec_type,
             function_name=self.function_name,
             args=args,
@@ -72,7 +72,7 @@ class ExecutableProxy:
         if ctx is None:
             raise RuntimeError(
                 f"{self.exec_type}.run() can only be called from within a workflow. "
-                f"Use .enqueue() to run standalone."
+                f"Use .queue() to run standalone."
             )
 
         return await ctx.execute_activity(self, args, kwargs)
@@ -89,16 +89,18 @@ class JobProxy(ExecutableProxy):
         if queue is None:
             raise ValueError("@job decorator requires a 'queue' parameter")
 
-        timeout = config.get("timeout") or settings.default_timeout
-        super().__init__(fn, exec_type="job", queue=queue, timeout=timeout, **config)
+        if "timeout" not in config or config["timeout"] is None:
+            config["timeout"] = settings.default_timeout
+        super().__init__(fn, exec_type="job", queue=queue, **config)
 
 
 class ActivityProxy(ExecutableProxy):
     """Proxy for activity functions"""
 
     def __init__(self, fn: Callable, **config):
-        timeout = config.get("timeout") or settings.default_timeout
-        super().__init__(fn, exec_type="activity", timeout=timeout, **config)
+        if "timeout" not in config or config["timeout"] is None:
+            config["timeout"] = settings.default_timeout
+        super().__init__(fn, exec_type="activity", **config)
 
 
 class WorkflowProxy(ExecutableProxy):
@@ -108,13 +110,13 @@ class WorkflowProxy(ExecutableProxy):
         if queue is None:
             raise ValueError("@workflow decorator requires a 'queue' parameter")
 
-        timeout = config.get("timeout") or settings.default_workflow_timeout
+        if "timeout" not in config or config["timeout"] is None:
+            config["timeout"] = settings.default_workflow_timeout
 
         super().__init__(
             fn,
             exec_type="workflow",
             queue=queue,
-            timeout=timeout,
             version=version,
             **config,
         )

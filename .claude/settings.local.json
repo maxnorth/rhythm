@@ -1,7 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(docker-compose up:*)",
+      "Bash(export WORKFLOWS_DATABASE_URL=\"postgresql://workflows:workflows@localhost/workflows\")",
+      "Bash(workflows worker:*)",
+      "Bash(workflows --help)",
+      "Read(//Users/maxnorth/.venv/bin/**)",
+      "Bash(python:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(pip install:*)",
+      "Bash(cat:*)",
+      "Bash(docker exec:*)"
     ],
     "deny": [],
     "ask": []

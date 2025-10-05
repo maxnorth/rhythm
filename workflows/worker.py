@@ -137,21 +137,16 @@ class Worker:
         async with pool.acquire() as conn:
             # Listen on all queue channels
             for queue in self.queues:
-                await conn.execute(f"LISTEN queue_{queue}")
+                await conn.add_listener(f"queue_{queue}", lambda *args: None)
 
             logger.info(f"Worker {self.worker_id} listening on channels: {self.queues}")
 
             while self.running:
                 try:
-                    # Wait for notification with timeout
-                    await asyncio.wait_for(conn.wait_for_notify(), timeout=10.0)
-
-                    # Try to claim and execute work
+                    # Wait briefly and try to claim work
+                    await asyncio.sleep(0.1)
                     await self._try_claim_and_execute()
 
-                except asyncio.TimeoutError:
-                    # No notifications, continue listening
-                    continue
                 except asyncio.CancelledError:
                     break
                 except Exception as e:

@@ -50,9 +50,25 @@ def migrate():
     help="Queue(s) to process (can specify multiple)",
 )
 @click.option("--worker-id", help="Worker ID (auto-generated if not provided)")
-def worker(queue, worker_id):
+@click.option(
+    "--import-module",
+    "-m",
+    multiple=True,
+    help="Python module(s) to import (e.g. examples.simple_example)",
+)
+def worker(queue, worker_id, import_module):
     """Run a worker to process jobs and workflows"""
     queues = list(queue)
+
+    # Import modules to register functions
+    for module_name in import_module:
+        try:
+            __import__(module_name)
+            click.echo(f"Imported module: {module_name}")
+        except ImportError as e:
+            click.echo(f"Failed to import {module_name}: {e}", err=True)
+            sys.exit(1)
+
     click.echo(f"Starting worker for queues: {', '.join(queues)}")
 
     async def _run():
@@ -104,11 +120,11 @@ def status(execution_id):
     asyncio.run(_status())
 
 
-@cli.command()
+@cli.command(name="list")
 @click.option("--queue", "-q", help="Filter by queue")
 @click.option("--status", "-s", help="Filter by status")
 @click.option("--limit", "-l", default=20, help="Number of results (default: 20)")
-def list(queue, status, limit):
+def list_cmd(queue, status, limit):
     """List executions"""
 
     async def _list():

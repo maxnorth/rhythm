@@ -11,7 +11,7 @@ from workflows.utils import generate_id
 logger = logging.getLogger(__name__)
 
 
-async def enqueue_execution(
+async def queue_execution(
     exec_type: str,
     function_name: str,
     args: tuple,
