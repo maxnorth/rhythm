@@ -100,13 +100,13 @@ asyncio.run(main())
 
 ```bash
 # Start worker for emails queue
-workflows worker -q emails
+currant worker -q emails
 
 # Start worker for orders queue
-workflows worker -q orders
+currant worker -q orders
 
 # Start worker for multiple queues
-workflows worker -q emails -q orders
+currant worker -q emails -q orders
 ```
 
 ## Advanced Features
@@ -178,7 +178,7 @@ async def risky_order(order_id: str):
 workflows migrate
 
 # Start worker
-workflows worker -q queue_name
+currant worker -q queue_name
 
 # Check execution status
 workflows status <execution_id>

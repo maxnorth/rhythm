@@ -4,10 +4,10 @@ import json
 from typing import Any, Dict, List, Optional
 
 try:
-    import workflows_core as rust
+    import currant_core as rust
 except ImportError:
     raise ImportError(
-        "workflows_core Rust extension not found. "
+        "currant_core Rust extension not found. "
         "Build it with: cd core && maturin develop"
     )
 

@@ -1,14 +1,14 @@
 [package]
-name = "workflows-core"
+name = "currant-core"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "workflows_core"
+name = "currant_core"
 crate-type = ["cdylib", "rlib"]
 
 [[bin]]
-name = "workflows"
+name = "currant"
 path = "src/bin/cli.rs"
 
 [dependencies]

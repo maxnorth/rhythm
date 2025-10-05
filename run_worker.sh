@@ -9,13 +9,13 @@ if [ -f "$HOME/.venv/bin/activate" ]; then
 fi
 
 # Set required environment variables
-export WORKFLOWS_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
+export CURRANT_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
 export PYTHONPATH="${PWD}:${PYTHONPATH}"
 
 # Run the worker
 echo "Starting worker with environment:"
-echo "  WORKFLOWS_DATABASE_URL=$WORKFLOWS_DATABASE_URL"
+echo "  CURRANT_DATABASE_URL=$CURRANT_DATABASE_URL"
 echo "  PYTHONPATH=$PYTHONPATH"
 echo ""
 
-workflows worker -q notifications -q orders -m examples.simple_example
+currant worker -q notifications -q orders -m examples.simple_example

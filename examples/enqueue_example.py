@@ -39,7 +39,7 @@ async def main():
 
     print("=" * 60)
     print("Jobs enqueued! Start workers to process them:")
-    print("  workflows worker -q notifications -q orders -m examples.simple_example")
+    print("  currant worker -q notifications -q orders -m examples.simple_example")
     print("=" * 60)
 
 

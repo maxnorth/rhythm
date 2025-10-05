@@ -3,7 +3,7 @@ Example demonstrating workflow signals for human-in-the-loop workflows
 """
 
 import asyncio
-from workflows import workflow, activity, wait_for_signal, send_signal
+from currant import workflow, activity, wait_for_signal, send_signal
 
 
 @activity()
@@ -87,13 +87,13 @@ async def main():
     print("=" * 60)
     print("Workflow is now waiting for approval signal.")
     print("Start a worker and then send a signal:")
-    print(f"  workflows worker -q documents")
+    print(f"  currant worker -q documents")
     print("\nTo approve:")
-    print(f'  python -c "import asyncio; from workflows import send_signal; '
+    print(f'  python -c "import asyncio; from currant import send_signal; '
           f'asyncio.run(send_signal(\'{workflow_id}\', \'approval_decision\', '
           f'{{\'approved\': True, \'approved_by\': \'manager@example.com\'}}))"')
     print("\nTo reject:")
-    print(f'  python -c "import asyncio; from workflows import send_signal; '
+    print(f'  python -c "import asyncio; from currant import send_signal; '
           f'asyncio.run(send_signal(\'{workflow_id}\', \'approval_decision\', '
           f'{{\'approved\': False, \'approved_by\': \'manager@example.com\', '
           f'\'reason\': \'Needs revision\'}}))"')

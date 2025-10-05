@@ -3,7 +3,7 @@ Simple example demonstrating jobs, activities, and workflows
 """
 
 import asyncio
-from workflows import job, activity, workflow, is_replaying
+from currant import job, activity, workflow, is_replaying
 
 
 # Simple job that runs independently
@@ -15,7 +15,7 @@ async def send_notification(user_id: str, message: str):
     return {"sent": True, "user_id": user_id}
 
 
-# Activities that are called from workflows
+# Activities that are called from currant
 @activity(retries=3, timeout=60)
 async def validate_order(order_id: str, amount: int):
     """Validate an order"""
@@ -140,8 +140,8 @@ async def main():
 
     print("=" * 60)
     print("Jobs enqueued! Start workers to process them:")
-    print("  workflows worker -q notifications")
-    print("  workflows worker -q orders")
+    print("  currant worker -q notifications")
+    print("  currant worker -q orders")
     print("=" * 60)
 
 

@@ -36,9 +36,9 @@ echo
 echo "✓ Build complete!"
 echo
 echo "To run migrations:"
-echo "  export WORKFLOWS_DATABASE_URL='postgresql://localhost/workflows'"
+echo "  export CURRANT_DATABASE_URL='postgresql://localhost/workflows'"
 echo "  python -c 'from workflows.rust_bridge import RustBridge; RustBridge.migrate()'"
 echo
 echo "To run examples:"
 echo "  python examples/enqueue_example.py"
-echo "  python -m workflows worker -q orders -q notifications -m examples.simple_example"
+echo "  python -m currant worker -q orders -q notifications -m examples.simple_example"

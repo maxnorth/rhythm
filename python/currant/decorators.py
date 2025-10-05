@@ -4,9 +4,9 @@ from typing import Any, Callable, Optional
 from functools import wraps
 import inspect
 
-from workflows.config import settings
-from workflows.registry import register_function
-from workflows.client import queue_execution
+from currant.config import settings
+from currant.registry import register_function
+from currant.client import queue_execution
 
 
 class ExecutableProxy:
@@ -66,7 +66,7 @@ class ExecutableProxy:
         Run this execution within a workflow context.
         This will checkpoint and suspend the workflow.
         """
-        from workflows.context import get_current_workflow_context
+        from currant.context import get_current_workflow_context
 
         ctx = get_current_workflow_context()
         if ctx is None:
@@ -167,7 +167,7 @@ def activity(
     """
     Decorator for defining an activity (workflow step).
 
-    Activities are called from workflows via .run() and inherit the workflow's queue.
+    Activities are called from currant via .run() and inherit the workflow's queue.
 
     Args:
         retries: Number of retry attempts (default: 3)

@@ -9,17 +9,17 @@ from typing import Optional
 import traceback
 import json
 
-from workflows.config import settings
-from workflows.rust_bridge import RustBridge
-from workflows.models import Execution, ExecutionStatus, ExecutionType, WorkerStatus
-from workflows.registry import get_function
-from workflows.context import (
+from currant.config import settings
+from currant.rust_bridge import RustBridge
+from currant.models import Execution, ExecutionStatus, ExecutionType, WorkerStatus
+from currant.registry import get_function
+from currant.context import (
     WorkflowExecutionContext,
     WorkflowSuspendException,
     set_current_workflow_context,
     clear_current_workflow_context,
 )
-from workflows.utils import generate_id, calculate_retry_delay
+from currant.utils import generate_id, calculate_retry_delay
 
 logger = logging.getLogger(__name__)
 

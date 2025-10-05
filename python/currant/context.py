@@ -6,7 +6,7 @@ from datetime import datetime
 import asyncio
 import logging
 
-from workflows.utils import generate_id
+from currant.utils import generate_id
 
 logger = logging.getLogger(__name__)
 

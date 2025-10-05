@@ -5,7 +5,7 @@ import logging
 from typing import Any, Optional
 from datetime import datetime
 
-from workflows.rust_bridge import RustBridge
+from currant.rust_bridge import RustBridge
 
 logger = logging.getLogger(__name__)
 

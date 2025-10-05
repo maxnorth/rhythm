@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "workflows"
+name = "currant"
 version = "0.1.0"
 description = "A lightweight durable execution framework using only Postgres"
 requires-python = ">=3.11"
@@ -23,7 +23,7 @@ dev = [
 ]
 
 [project.scripts]
-workflows = "workflows.cli:cli"
+currant = "currant.cli:cli"
 
 [tool.black]
 line-length = 100

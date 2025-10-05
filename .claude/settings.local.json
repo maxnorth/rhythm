@@ -23,7 +23,10 @@
       "Bash(./test_e2e.sh:*)",
       "Bash(source:*)",
       "Bash(./run_enqueue.sh)",
-      "Bash(export PYTHONPATH=\"$PWD:$PYTHONPATH\")"
+      "Bash(export PYTHONPATH=\"$PWD:$PYTHONPATH\")",
+      "Bash(find:*)",
+      "Bash(currant:*)",
+      "Bash(maturin develop:*)"
     ],
     "deny": [],
     "ask": []

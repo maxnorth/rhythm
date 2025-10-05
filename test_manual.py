@@ -47,7 +47,7 @@ async def main():
     print("=" * 60)
     print()
     print("Now start a worker in another terminal:")
-    print("  workflows worker -q notifications -q orders -m examples.simple_example")
+    print("  currant worker -q notifications -q orders -m examples.simple_example")
     print()
 
 

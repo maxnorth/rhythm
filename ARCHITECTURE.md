@@ -18,7 +18,7 @@ workflows/
 │   └── Cargo.toml
 │
 ├── python/            # Python adapter
-│   └── workflows/
+│   └── currant/
 │       ├── rust_bridge.py   # Rust FFI wrapper
 │       ├── decorators.py    # @job, @activity, @workflow
 │       ├── client.py        # .queue(), send_signal()
@@ -164,7 +164,7 @@ pytest
 ```bash
 # Terminal 1: Start worker
 export WORKFLOWS_DATABASE_URL="postgresql://localhost/workflows"
-python -m workflows worker -q orders -q notifications -m examples.simple_example
+python -m currant worker -q orders -q notifications -m examples.simple_example
 
 # Terminal 2: Enqueue work
 python examples/enqueue_example.py

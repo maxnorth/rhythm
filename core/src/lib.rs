@@ -259,7 +259,7 @@ fn migrate_sync() -> PyResult<()> {
 
 /// Python module
 #[pymodule]
-fn workflows_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn currant_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(init_runtime, m)?)?;
     m.add_function(wrap_pyfunction!(create_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(claim_execution_sync, m)?)?;

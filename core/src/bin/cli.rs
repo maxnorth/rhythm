@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use workflows_core::db;
+use currant_core::db;
 
 #[derive(Parser)]
 #[command(name = "workflows")]

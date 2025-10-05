@@ -5,9 +5,9 @@ import click
 import logging
 import sys
 
-from workflows.rust_bridge import RustBridge
-from workflows.worker import run_worker
-from workflows.client import get_execution_status, list_executions, cancel_execution
+from currant.rust_bridge import RustBridge
+from currant.worker import run_worker
+from currant.client import get_execution_status, list_executions, cancel_execution
 
 # Setup logging
 logging.basicConfig(
@@ -19,7 +19,7 @@ logging.basicConfig(
 
 @click.group()
 def cli():
-    """Workflows - A lightweight durable execution framework"""
+    """Currant - A lightweight durable execution framework"""
     pass
 
 

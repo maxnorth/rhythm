@@ -94,7 +94,7 @@ Enqueuing example jobs and workflows
 
 ============================================================
 Jobs enqueued! Start workers to process them:
-  workflows worker -q notifications -q orders -m examples.simple_example
+  currant worker -q notifications -q orders -m examples.simple_example
 ============================================================
 ```
 
@@ -104,7 +104,7 @@ In a separate terminal:
 
 ```bash
 export WORKFLOWS_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
-python -m workflows worker -q notifications -q orders -m examples.simple_example
+python -m currant worker -q notifications -q orders -m examples.simple_example
 ```
 
 Expected output:
@@ -190,14 +190,14 @@ If this fails:
 
 ```bash
 export RUST_LOG=debug
-python -m workflows worker ...
+python -m currant worker ...
 ```
 
 ### Enable Python Logging
 
 ```bash
 export PYTHONUNBUFFERED=1
-python -m workflows worker ...
+python -m currant worker ...
 ```
 
 ## Common Issues
@@ -223,7 +223,7 @@ export WORKFLOWS_DATABASE_URL="postgresql://workflows:workflows@localhost/workfl
 
 **Solution:** Import the module when starting the worker
 ```bash
-python -m workflows worker -q myqueue -m examples.simple_example
+python -m currant worker -q myqueue -m examples.simple_example
 ```
 
 ### Issue: Rust compilation errors
@@ -242,7 +242,7 @@ cargo build
 
 ```bash
 # Terminal 1: Start worker
-python -m workflows worker -q bench -m examples.simple_example
+python -m currant worker -q bench -m examples.simple_example
 
 # Terminal 2: Enqueue 1000 jobs
 python -c "
