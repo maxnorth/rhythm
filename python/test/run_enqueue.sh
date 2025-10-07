@@ -1,16 +1,19 @@
 #!/bin/bash
 
-# Ensure we're in the project directory
+# Ensure we're in the test directory
 cd "$(dirname "$0")"
 
+# Go to python root to find venv
+PYTHON_ROOT="$(cd .. && pwd)"
+
 # Activate virtual environment if it exists
-if [ -f "$HOME/.venv/bin/activate" ]; then
-    source "$HOME/.venv/bin/activate"
+if [ -f "$PYTHON_ROOT/.venv/bin/activate" ]; then
+    source "$PYTHON_ROOT/.venv/bin/activate"
 fi
 
 # Set required environment variables
 export CURRANT_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
-export PYTHONPATH="${PWD}:${PYTHONPATH}"
+export PYTHONPATH="$PYTHON_ROOT:${PYTHONPATH}"
 
 # Run the test script
 echo "Enqueuing jobs with environment:"

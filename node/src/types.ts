@@ -1,0 +1,62 @@
+/**
+ * Core types for Currant
+ */
+
+export interface ExecutionConfig {
+  name?: string; // Function name (optional, inferred from function if not provided)
+  queue?: string;
+  retries?: number;
+  timeout?: number;
+  priority?: number;
+  version?: number;
+}
+
+export interface ExecutableProxy<TArgs extends any[] = any[], TReturn = any> {
+  queue(...args: TArgs): Promise<string>;
+  run(...args: TArgs): Promise<TReturn>;
+  options(opts: Partial<ExecutionConfig>): ExecutableProxy<TArgs, TReturn>;
+  call(...args: TArgs): Promise<TReturn>;
+  functionName: string;
+  config: ExecutionConfig;
+}
+
+export interface JobConfig extends ExecutionConfig {
+  queue: string;
+}
+
+export interface WorkflowConfig extends ExecutionConfig {
+  queue: string;
+  version?: number;
+}
+
+export interface ActivityConfig extends ExecutionConfig {}
+
+export interface SignalPayload {
+  [key: string]: any;
+}
+
+export interface ExecutionStatus {
+  id: string;
+  type: 'job' | 'activity' | 'workflow';
+  function_name: string;
+  queue: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'suspended';
+  priority: number;
+  result?: any;
+  error?: any;
+  attempt: number;
+  max_retries: number;
+  created_at: Date;
+  claimed_at?: Date;
+  completed_at?: Date;
+}
+
+export interface HistoryEvent {
+  type: 'activity' | 'signal' | 'version';
+  [key: string]: any;
+}
+
+export interface Checkpoint {
+  history: HistoryEvent[];
+  [key: string]: any;
+}

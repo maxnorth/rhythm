@@ -7,10 +7,14 @@ pub mod worker;
 // Re-export main types
 pub use types::*;
 
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
+
+#[cfg(feature = "python")]
 use serde_json::Value as JsonValue;
 
 /// Initialize the Rust runtime (must be called once)
+#[cfg(feature = "python")]
 #[pyfunction]
 fn init_runtime() -> PyResult<()> {
     tokio::runtime::Builder::new_multi_thread()
@@ -21,6 +25,7 @@ fn init_runtime() -> PyResult<()> {
 }
 
 /// Create an execution
+#[cfg(feature = "python")]
 #[pyfunction]
 fn create_execution_sync(
     exec_type: String,
@@ -70,6 +75,7 @@ fn create_execution_sync(
 }
 
 /// Claim an execution for a worker
+#[cfg(feature = "python")]
 #[pyfunction]
 fn claim_execution_sync(worker_id: String, queues: Vec<String>) -> PyResult<Option<String>> {
     let runtime = tokio::runtime::Runtime::new()
@@ -89,6 +95,7 @@ fn claim_execution_sync(worker_id: String, queues: Vec<String>) -> PyResult<Opti
 }
 
 /// Complete an execution
+#[cfg(feature = "python")]
 #[pyfunction]
 fn complete_execution_sync(execution_id: String, result: String) -> PyResult<()> {
     let runtime = tokio::runtime::Runtime::new()
@@ -103,6 +110,7 @@ fn complete_execution_sync(execution_id: String, result: String) -> PyResult<()>
 }
 
 /// Fail an execution
+#[cfg(feature = "python")]
 #[pyfunction]
 fn fail_execution_sync(execution_id: String, error: String, retry: bool) -> PyResult<()> {
     let runtime = tokio::runtime::Runtime::new()
@@ -117,6 +125,7 @@ fn fail_execution_sync(execution_id: String, error: String, retry: bool) -> PyRe
 }
 
 /// Suspend a workflow
+#[cfg(feature = "python")]
 #[pyfunction]
 fn suspend_workflow_sync(workflow_id: String, checkpoint: String) -> PyResult<()> {
     let runtime = tokio::runtime::Runtime::new()
@@ -131,6 +140,7 @@ fn suspend_workflow_sync(workflow_id: String, checkpoint: String) -> PyResult<()
 }
 
 /// Resume a workflow
+#[cfg(feature = "python")]
 #[pyfunction]
 fn resume_workflow_sync(workflow_id: String) -> PyResult<()> {
     let runtime = tokio::runtime::Runtime::new()
@@ -142,6 +152,7 @@ fn resume_workflow_sync(workflow_id: String) -> PyResult<()> {
 }
 
 /// Get execution by ID
+#[cfg(feature = "python")]
 #[pyfunction]
 fn get_execution_sync(execution_id: String) -> PyResult<Option<String>> {
     let runtime = tokio::runtime::Runtime::new()
@@ -161,6 +172,7 @@ fn get_execution_sync(execution_id: String) -> PyResult<Option<String>> {
 }
 
 /// Get workflow activities
+#[cfg(feature = "python")]
 #[pyfunction]
 fn get_workflow_activities_sync(workflow_id: String) -> PyResult<String> {
     let runtime = tokio::runtime::Runtime::new()
@@ -175,6 +187,7 @@ fn get_workflow_activities_sync(workflow_id: String) -> PyResult<String> {
 }
 
 /// Update worker heartbeat
+#[cfg(feature = "python")]
 #[pyfunction]
 fn update_heartbeat_sync(worker_id: String, queues: Vec<String>) -> PyResult<()> {
     let runtime = tokio::runtime::Runtime::new()
@@ -186,6 +199,7 @@ fn update_heartbeat_sync(worker_id: String, queues: Vec<String>) -> PyResult<()>
 }
 
 /// Stop worker
+#[cfg(feature = "python")]
 #[pyfunction]
 fn stop_worker_sync(worker_id: String) -> PyResult<()> {
     let runtime = tokio::runtime::Runtime::new()
@@ -197,6 +211,7 @@ fn stop_worker_sync(worker_id: String) -> PyResult<()> {
 }
 
 /// Recover dead workers
+#[cfg(feature = "python")]
 #[pyfunction]
 fn recover_dead_workers_sync(timeout_seconds: i64) -> PyResult<usize> {
     let runtime = tokio::runtime::Runtime::new()
@@ -208,6 +223,7 @@ fn recover_dead_workers_sync(timeout_seconds: i64) -> PyResult<usize> {
 }
 
 /// Send a signal to a workflow
+#[cfg(feature = "python")]
 #[pyfunction]
 fn send_signal_sync(workflow_id: String, signal_name: String, payload: String) -> PyResult<String> {
     let runtime = tokio::runtime::Runtime::new()
@@ -222,6 +238,7 @@ fn send_signal_sync(workflow_id: String, signal_name: String, payload: String) -
 }
 
 /// Get signals for a workflow
+#[cfg(feature = "python")]
 #[pyfunction]
 fn get_signals_sync(workflow_id: String, signal_name: String) -> PyResult<String> {
     let runtime = tokio::runtime::Runtime::new()
@@ -236,6 +253,7 @@ fn get_signals_sync(workflow_id: String, signal_name: String) -> PyResult<String
 }
 
 /// Consume a signal
+#[cfg(feature = "python")]
 #[pyfunction]
 fn consume_signal_sync(signal_id: String) -> PyResult<()> {
     let runtime = tokio::runtime::Runtime::new()
@@ -247,6 +265,7 @@ fn consume_signal_sync(signal_id: String) -> PyResult<()> {
 }
 
 /// Run migrations
+#[cfg(feature = "python")]
 #[pyfunction]
 fn migrate_sync() -> PyResult<()> {
     let runtime = tokio::runtime::Runtime::new()
@@ -258,6 +277,7 @@ fn migrate_sync() -> PyResult<()> {
 }
 
 /// Python module
+#[cfg(feature = "python")]
 #[pymodule]
 fn currant_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(init_runtime, m)?)?;

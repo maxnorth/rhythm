@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Ensure we're in the project directory
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 # Activate virtual environment if it exists
-if [ -f "$HOME/.venv/bin/activate" ]; then
-    source "$HOME/.venv/bin/activate"
+if [ -f ".venv/bin/activate" ]; then
+    source ".venv/bin/activate"
 fi
 
 # Set required environment variables
