@@ -2,8 +2,6 @@
 
 from contextvars import ContextVar
 from typing import Any, Optional
-from datetime import datetime
-import asyncio
 import logging
 
 from currant.utils import generate_id
@@ -67,9 +65,9 @@ class WorkflowExecutionContext:
         if history_event:
             # REPLAY MODE: return cached result
             assert history_event["type"] == "activity", "History mismatch: expected activity"
-            assert (
-                history_event["name"] == activity_proxy.function_name
-            ), f"History mismatch: expected {activity_proxy.function_name}, got {history_event['name']}"
+            assert history_event["name"] == activity_proxy.function_name, (
+                f"History mismatch: expected {activity_proxy.function_name}, got {history_event['name']}"
+            )
 
             logger.debug(f"Replaying activity {activity_proxy.function_name}")
             return history_event["result"]
@@ -108,9 +106,9 @@ class WorkflowExecutionContext:
         if history_event:
             # REPLAY MODE: return cached signal
             assert history_event["type"] == "signal", "History mismatch: expected signal"
-            assert (
-                history_event["signal_name"] == signal_name
-            ), f"History mismatch: expected signal {signal_name}, got {history_event['signal_name']}"
+            assert history_event["signal_name"] == signal_name, (
+                f"History mismatch: expected signal {signal_name}, got {history_event['signal_name']}"
+            )
 
             logger.debug(f"Replaying signal {signal_name}")
             return history_event["payload"]
@@ -131,9 +129,7 @@ class WorkflowExecutionContext:
             # Suspend workflow execution
             raise WorkflowSuspendException(self.new_commands)
 
-    def get_version(
-        self, change_id: str, min_version: int, max_version: int
-    ) -> int:
+    def get_version(self, change_id: str, min_version: int, max_version: int) -> int:
         """
         Get the version for a particular change point in the workflow.
         This allows workflows to evolve while maintaining compatibility.
@@ -144,9 +140,9 @@ class WorkflowExecutionContext:
         if history_event:
             # REPLAY MODE: return cached version
             assert history_event["type"] == "version", "History mismatch: expected version"
-            assert (
-                history_event["change_id"] == change_id
-            ), f"History mismatch: expected change_id {change_id}, got {history_event['change_id']}"
+            assert history_event["change_id"] == change_id, (
+                f"History mismatch: expected change_id {change_id}, got {history_event['change_id']}"
+            )
 
             version = history_event["version"]
             logger.debug(f"Replaying version check {change_id} = {version}")

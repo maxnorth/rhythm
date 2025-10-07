@@ -7,8 +7,7 @@ try:
     import currant_core as rust
 except ImportError:
     raise ImportError(
-        "currant_core Rust extension not found. "
-        "Build it with: cd core && maturin develop"
+        "currant_core Rust extension not found. Build it with: cd core && maturin develop"
     )
 
 
@@ -51,23 +50,17 @@ class RustBridge:
     @staticmethod
     def complete_execution(execution_id: str, result: Any) -> None:
         """Complete an execution"""
-        rust.complete_execution_sync(
-            execution_id=execution_id, result=json.dumps(result)
-        )
+        rust.complete_execution_sync(execution_id=execution_id, result=json.dumps(result))
 
     @staticmethod
     def fail_execution(execution_id: str, error: Dict[str, Any], retry: bool) -> None:
         """Fail an execution"""
-        rust.fail_execution_sync(
-            execution_id=execution_id, error=json.dumps(error), retry=retry
-        )
+        rust.fail_execution_sync(execution_id=execution_id, error=json.dumps(error), retry=retry)
 
     @staticmethod
     def suspend_workflow(workflow_id: str, checkpoint: Dict[str, Any]) -> None:
         """Suspend a workflow"""
-        rust.suspend_workflow_sync(
-            workflow_id=workflow_id, checkpoint=json.dumps(checkpoint)
-        )
+        rust.suspend_workflow_sync(workflow_id=workflow_id, checkpoint=json.dumps(checkpoint))
 
     @staticmethod
     def resume_workflow(workflow_id: str) -> None:
@@ -104,9 +97,7 @@ class RustBridge:
         return rust.recover_dead_workers_sync(timeout_seconds=timeout_seconds)
 
     @staticmethod
-    def send_signal(
-        workflow_id: str, signal_name: str, payload: Dict[str, Any]
-    ) -> str:
+    def send_signal(workflow_id: str, signal_name: str, payload: Dict[str, Any]) -> str:
         """Send a signal to a workflow"""
         return rust.send_signal_sync(
             workflow_id=workflow_id,

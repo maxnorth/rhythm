@@ -1,7 +1,6 @@
 """Decorators for defining jobs, activities, and workflows"""
 
 from typing import Any, Callable, Optional
-from functools import wraps
 import inspect
 
 from currant.config import settings

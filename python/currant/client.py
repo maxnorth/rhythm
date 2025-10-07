@@ -1,9 +1,7 @@
 """Client API for enqueuing work and sending signals"""
 
-import json
 import logging
 from typing import Any, Optional
-from datetime import datetime
 
 from currant.rust_bridge import RustBridge
 
@@ -102,7 +100,7 @@ async def cancel_execution(execution_id: str) -> bool:
         RustBridge.fail_execution(
             execution_id,
             {"message": "Execution cancelled", "type": "CancellationError"},
-            retry=False
+            retry=False,
         )
         logger.info(f"Execution {execution_id} cancelled")
         return True
@@ -120,6 +118,9 @@ async def list_executions(
     """
     List executions with optional filters.
 
+    NOTE: This function is currently not implemented as it requires direct database access.
+    Use the Rust bridge functions instead for execution management.
+
     Args:
         queue: Filter by queue name
         status: Filter by status
@@ -129,38 +130,6 @@ async def list_executions(
     Returns:
         List of execution dicts
     """
-    query = """
-        SELECT id, type, function_name, queue, status, priority,
-               result, error, attempt, max_retries,
-               created_at, claimed_at, completed_at
-        FROM executions
-        WHERE 1=1
-    """
-    params = []
-
-    if queue:
-        params.append(queue)
-        query += f" AND queue = ${len(params)}"
-
-    if status:
-        params.append(status)
-        query += f" AND status = ${len(params)}"
-
-    query += f" ORDER BY created_at DESC LIMIT {limit} OFFSET {offset}"
-
-    async with get_connection() as conn:
-        rows = await conn.fetch(query, *params)
-
-        results = []
-        for row in rows:
-            data = dict(row)
-
-            # Parse JSON fields
-            if data.get("result"):
-                data["result"] = json.loads(data["result"]) if isinstance(data["result"], str) else data["result"]
-            if data.get("error"):
-                data["error"] = json.loads(data["error"]) if isinstance(data["error"], str) else data["error"]
-
-            results.append(data)
-
-        return results
+    raise NotImplementedError(
+        "list_executions is not yet implemented. Use Rust bridge functions for execution management."
+    )

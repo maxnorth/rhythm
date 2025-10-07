@@ -1,7 +1,6 @@
 """Utility functions"""
 
 import uuid
-import time
 from typing import Any
 import json
 
@@ -19,7 +18,7 @@ def serialize_args(*args, **kwargs) -> tuple[str, str]:
 
 def calculate_retry_delay(attempt: int, base: float = 2.0, max_delay: float = 60.0) -> float:
     """Calculate exponential backoff delay"""
-    delay = base * (2 ** attempt)
+    delay = base * (2**attempt)
     return min(delay, max_delay)
 
 

@@ -98,11 +98,11 @@ def status(execution_id):
                 click.echo(f"Completed: {result['completed_at']}")
 
             if result.get("result"):
-                click.echo(f"\nResult:")
+                click.echo("\nResult:")
                 click.echo(f"  {result['result']}")
 
             if result.get("error"):
-                click.echo(f"\nError:")
+                click.echo("\nError:")
                 click.echo(f"  {result['error'].get('message')}")
         else:
             click.echo(f"Execution {execution_id} not found", err=True)

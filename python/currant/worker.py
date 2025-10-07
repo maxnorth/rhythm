@@ -3,15 +3,12 @@
 import asyncio
 import logging
 import signal
-import sys
-from datetime import datetime, timedelta
 from typing import Optional
 import traceback
-import json
 
 from currant.config import settings
 from currant.rust_bridge import RustBridge
-from currant.models import Execution, ExecutionStatus, ExecutionType, WorkerStatus
+from currant.models import Execution, ExecutionType, WorkerStatus
 from currant.registry import get_function
 from currant.context import (
     WorkflowExecutionContext,
@@ -82,7 +79,7 @@ class Worker:
         start = asyncio.get_event_loop().time()
         while self.current_executions > 0:
             if asyncio.get_event_loop().time() - start > timeout:
-                logger.warning(f"Timeout waiting for executions to complete")
+                logger.warning("Timeout waiting for executions to complete")
                 break
             await asyncio.sleep(0.5)
 
@@ -352,7 +349,9 @@ class Worker:
         else:
             # Max retries exhausted
             RustBridge.fail_execution(execution.id, error_data, retry=False)
-            logger.error(f"Execution {execution.id} failed permanently after {execution.attempt} attempts")
+            logger.error(
+                f"Execution {execution.id} failed permanently after {execution.attempt} attempts"
+            )
 
 
 async def run_worker(queues: list[str], worker_id: Optional[str] = None):
