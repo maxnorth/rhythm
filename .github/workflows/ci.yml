@@ -76,7 +76,7 @@ jobs:
 
       - name: Install Python package
         run: |
-          pip install python/target/wheels/*.whl
+          pip install python/native/target/wheels/*.whl
           cd python && pip install -e .
 
       - name: Run ruff (linting)
