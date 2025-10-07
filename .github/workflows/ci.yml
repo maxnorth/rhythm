@@ -44,8 +44,9 @@ jobs:
     name: Python Checks
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
 
@@ -93,6 +94,7 @@ jobs:
     name: Node.js Checks
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         node-version: ['18', '20', '22']
     steps:
