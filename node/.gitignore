@@ -9,6 +9,14 @@ coverage/
 *.node
 index.js
 index.d.ts
+index.cjs
+index.d.cts
+
+# Compiled JS/TS files in src (should only be in dist/)
+src/**/*.js
+src/**/*.d.ts
+src/**/*.js.map
+src/**/*.d.ts.map
 
 # Rust build artifacts
 native/target/

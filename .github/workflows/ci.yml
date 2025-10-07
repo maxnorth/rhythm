@@ -71,12 +71,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install maturin ruff mypy pytest
 
-      - name: Build Rust extension
-        run: cd core && maturin build --release
+      - name: Build Python extension with maturin
+        run: cd python && maturin build --release
 
       - name: Install Python package
         run: |
-          pip install core/target/wheels/*.whl
+          pip install python/target/wheels/*.whl
           cd python && pip install -e .
 
       - name: Run ruff (linting)
@@ -88,3 +88,45 @@ jobs:
       - name: Type check with mypy
         run: cd python && mypy currant/ --ignore-missing-imports
         continue-on-error: true
+
+  node-checks:
+    name: Node.js Checks
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['18', '20', '22']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install Rust (for NAPI)
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Cache Node dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Node dependencies
+        run: cd node && npm ci
+
+      - name: Build native bindings
+        run: cd node/native && npm run build
+
+      - name: Build TypeScript
+        run: cd node && npm run build
+
+      - name: Run linter
+        run: cd node && npm run lint
+        continue-on-error: true
+
+      - name: Run type check
+        run: cd node && npx tsc --noEmit

@@ -1,0 +1,21 @@
+[package]
+name = "currant-python"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "currant_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+# Core business logic
+currant-core = { path = "../../core" }
+
+# Python bindings
+pyo3 = { version = "0.21", features = ["extension-module", "abi3-py38"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde_json = "1.0"

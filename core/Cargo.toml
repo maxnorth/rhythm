@@ -5,12 +5,7 @@ edition = "2021"
 
 [lib]
 name = "currant_core"
-crate-type = ["cdylib", "rlib"]
-
-[features]
-default = []
-python = ["pyo3"]
-node = []
+crate-type = ["rlib"]
 
 [[bin]]
 name = "currant"
@@ -42,9 +37,6 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 
 # Datetime
 chrono = { version = "0.4", features = ["serde"] }
-
-# Python bindings (optional)
-pyo3 = { version = "0.21", features = ["extension-module", "abi3-py38"], optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4"

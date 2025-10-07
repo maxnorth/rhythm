@@ -11,8 +11,8 @@ crate-type = ["cdylib"]
 napi = { version = "2", features = ["async", "serde-json"] }
 napi-derive = "2"
 
-# Core currant (without Python features)
-currant-core = { path = "../../core", default-features = false }
+# Core currant
+currant-core = { path = "../../core" }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
