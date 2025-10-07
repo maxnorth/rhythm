@@ -313,7 +313,10 @@ pub async fn list_executions(filter: ExecutionListFilter) -> Result<Vec<Executio
         q = q.bind(limit);
     }
 
-    let rows = q.fetch_all(pool.as_ref()).await.context("Failed to list executions")?;
+    let rows = q
+        .fetch_all(pool.as_ref())
+        .await
+        .context("Failed to list executions")?;
 
     let mut executions = Vec::new();
     for row in rows {

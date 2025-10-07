@@ -7,8 +7,8 @@ use std::sync::Arc;
 /// Note: sqlx pools are internally reference-counted, so creating multiple
 /// "instances" actually shares the same underlying connection pool
 pub async fn get_pool() -> Result<Arc<PgPool>> {
-    let database_url = env::var("CURRANT_DATABASE_URL")
-        .context("CURRANT_DATABASE_URL must be set")?;
+    let database_url =
+        env::var("CURRANT_DATABASE_URL").context("CURRANT_DATABASE_URL must be set")?;
 
     let pool = PgPoolOptions::new()
         .max_connections(20)

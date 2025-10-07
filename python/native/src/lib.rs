@@ -1,6 +1,6 @@
+use ::currant_core::{db, executions, signals, worker, CreateExecutionParams, ExecutionType};
 use pyo3::prelude::*;
 use serde_json::Value as JsonValue;
-use ::currant_core::{ExecutionType, CreateExecutionParams, executions, worker, signals, db};
 
 /// Initialize the Rust runtime (must be called once)
 #[pyfunction]

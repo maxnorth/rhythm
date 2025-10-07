@@ -3,7 +3,7 @@ use napi_derive::napi;
 use serde_json::Value as JsonValue;
 
 use currant_core::types::*;
-use currant_core::{executions, signals, worker, db};
+use currant_core::{db, executions, signals, worker};
 
 /// Create an execution
 #[napi]
@@ -56,8 +56,7 @@ pub async fn claim_execution(worker_id: String, queues: Vec<String>) -> Result<O
         .map_err(|e| Error::from_reason(e.to_string()))?;
 
     if let Some(exec) = result {
-        let json = serde_json::to_string(&exec)
-            .map_err(|e| Error::from_reason(e.to_string()))?;
+        let json = serde_json::to_string(&exec).map_err(|e| Error::from_reason(e.to_string()))?;
         Ok(Some(json))
     } else {
         Ok(None)
@@ -113,8 +112,7 @@ pub async fn get_execution(execution_id: String) -> Result<Option<String>> {
         .map_err(|e| Error::from_reason(e.to_string()))?;
 
     if let Some(exec) = result {
-        let json = serde_json::to_string(&exec)
-            .map_err(|e| Error::from_reason(e.to_string()))?;
+        let json = serde_json::to_string(&exec).map_err(|e| Error::from_reason(e.to_string()))?;
         Ok(Some(json))
     } else {
         Ok(None)
@@ -128,8 +126,7 @@ pub async fn get_workflow_activities(workflow_id: String) -> Result<String> {
         .await
         .map_err(|e| Error::from_reason(e.to_string()))?;
 
-    serde_json::to_string(&activities)
-        .map_err(|e| Error::from_reason(e.to_string()))
+    serde_json::to_string(&activities).map_err(|e| Error::from_reason(e.to_string()))
 }
 
 /// Update worker heartbeat
@@ -160,7 +157,11 @@ pub async fn recover_dead_workers(timeout_seconds: i64) -> Result<u32> {
 
 /// Send a signal to a workflow
 #[napi]
-pub async fn send_signal(workflow_id: String, signal_name: String, payload: String) -> Result<String> {
+pub async fn send_signal(
+    workflow_id: String,
+    signal_name: String,
+    payload: String,
+) -> Result<String> {
     let payload: JsonValue = serde_json::from_str(&payload)
         .map_err(|e| Error::from_reason(format!("Invalid payload JSON: {}", e)))?;
 
@@ -176,8 +177,7 @@ pub async fn get_signals(workflow_id: String, signal_name: String) -> Result<Str
         .await
         .map_err(|e| Error::from_reason(e.to_string()))?;
 
-    serde_json::to_string(&signals_list)
-        .map_err(|e| Error::from_reason(e.to_string()))
+    serde_json::to_string(&signals_list).map_err(|e| Error::from_reason(e.to_string()))
 }
 
 /// Consume a signal
