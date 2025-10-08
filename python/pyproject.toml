@@ -23,7 +23,7 @@ dev = [
 ]
 
 [project.scripts]
-currant = "currant.cli:cli"
+currant = "currant.__main__:main"
 
 [tool.black]
 line-length = 100

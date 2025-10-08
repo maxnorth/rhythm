@@ -120,3 +120,17 @@ class RustBridge:
     def migrate() -> None:
         """Run database migrations"""
         rust.migrate_sync()
+
+    @staticmethod
+    def run_cli(args: List[str]) -> None:
+        """
+        Run the CLI by calling into Rust.
+
+        Args:
+            args: Command-line arguments (sys.argv)
+
+        The Rust code parses the provided arguments.
+        This allows the CLI logic to live entirely in Rust while being invoked
+        from Python.
+        """
+        rust.run_cli_sync(args)

@@ -205,19 +205,104 @@ npm test             # 23 tests
 
 ### When Adding Features
 
-1. **Core logic goes in Rust** if it involves:
+1. **Core logic goes in Rust (`/core`)** if it involves:
    - Database operations
    - Worker coordination
    - Execution state management
    - Performance-critical paths
+   - **CLI commands and argument parsing** (unified across all languages)
 
 2. **Adapter logic** handles:
    - Language-specific APIs
    - Function registry
    - Serialization/deserialization
    - Workflow replay mechanics
+   - **FFI bindings in `<lang>/native/` directories** (PyO3, NAPI-RS, etc.)
 
 3. **Always update this file** when making architectural decisions that future conversations need to know about.
+
+### Critical Architectural Principle: Language Bindings Separation
+
+**IMPORTANT**: `core/` is a pure Rust library with NO language-specific bindings (no PyO3, no NAPI features).
+
+Language bindings live in separate crates:
+- **Python**: `python/native/` - PyO3 bindings that import `currant-core`
+- **Node.js**: `node/native/` - NAPI-RS bindings that import `currant-core`
+
+**Why this matters**:
+- ✅ Core stays clean and language-agnostic
+- ✅ No feature flag conflicts between PyO3/NAPI
+- ✅ Each language adapter can evolve independently
+- ✅ Core can be used by any language with FFI
+- ✅ Clearer separation of concerns
+
+**Structure**:
+```
+core/
+├── Cargo.toml        # Pure Rust library, crate-type = ["rlib"]
+└── src/
+    ├── lib.rs        # NO PyO3/NAPI imports
+    ├── cli.rs        # CLI logic (used by all languages)
+    └── ...
+
+python/native/
+├── Cargo.toml        # PyO3 bindings, crate-type = ["cdylib"]
+└── src/lib.rs        # use currant_core::*; + PyO3 wrappers
+
+node/native/
+├── Cargo.toml        # NAPI-RS bindings, crate-type = ["cdylib"]
+└── src/lib.rs        # use currant_core::*; + NAPI wrappers
+```
+
+**Never**:
+- ❌ Add PyO3/NAPI dependencies to `core/Cargo.toml`
+- ❌ Add language-specific code to `core/src/`
+- ❌ Create separate binaries for each language
+
+**Always**:
+- ✅ Keep core as pure Rust library
+- ✅ Put FFI bindings in `<lang>/native/` directories
+- ✅ Have language adapters pass normalized args to Rust CLI (NOT read from process directly)
+
+### CLI Architecture: Hybrid Approach
+
+**Core provides CLI framework** (`core/src/cli.rs`):
+- Command definitions and argument parsing (using `clap`)
+- Implementation for language-agnostic commands: `migrate`, `status`, `list`, `cancel`, `signal`
+- Accepts `Vec<String>` args (doesn't read `std::env::args()` directly)
+- Function: `pub async fn run_cli_from_args(args: Vec<String>)`
+
+**Language adapters have mixed responsibility**:
+
+1. **Commands implemented in Rust** (majority):
+   - `migrate`, `status`, `list`, `cancel`, `signal`
+   - Language adapter normalizes `sys.argv` and passes to Rust
+   - Consistent behavior across all languages
+
+2. **Commands requiring language-specific logic** (per-command override):
+   - `worker` - Python/Node handle entirely (module importing, runtime setup)
+   - Language adapter intercepts command, parses args, calls language-specific code
+   - Example: Python imports modules before starting worker loop
+
+**Example flow (Python)**:
+```python
+# python/currant/__main__.py
+args = sys.argv.copy()
+args[0] = 'currant'
+
+if args[1] == 'worker':
+    # Python handles: parse args, import modules, run worker
+    await run_worker(queues, worker_id)
+else:
+    # Rust handles: all other commands
+    RustBridge.run_cli(args)
+```
+
+**Rationale**:
+- ✅ Eliminates duplication for 90% of CLI code
+- ✅ Allows language-specific behavior where needed
+- ✅ Rust CLI is testable with any args (no process dependency)
+- ✅ Each language can extend with custom commands
 
 ### Testing Philosophy
 

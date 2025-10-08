@@ -36,7 +36,6 @@ class WorkflowExecutionContext:
         self.checkpoint = checkpoint or {}
         self.history = self.checkpoint.get("history", [])
         self.current_step_index = 0
-        self.is_replaying = len(self.history) > 0
         self.new_commands = []
         self.pending_signals = {}
 
@@ -44,6 +43,14 @@ class WorkflowExecutionContext:
             f"WorkflowExecutionContext created for {execution_id}, "
             f"history length: {len(self.history)}, replaying: {self.is_replaying}"
         )
+
+    @property
+    def is_replaying(self) -> bool:
+        """
+        Check if we're currently replaying from history.
+        Returns True if there are still unprocessed history events.
+        """
+        return self.current_step_index < len(self.history)
 
     def get_next_history_event(self) -> Optional[dict]:
         """Get the next event from history during replay"""
@@ -73,7 +80,7 @@ class WorkflowExecutionContext:
             return history_event["result"]
         else:
             # NEW STEP: we've finished replaying, now executing new steps
-            self.is_replaying = False
+            # (is_replaying was already set to False by get_next_history_event)
             activity_execution_id = generate_id("act")
 
             logger.debug(f"Suspending workflow to execute activity {activity_proxy.function_name}")
@@ -114,7 +121,7 @@ class WorkflowExecutionContext:
             return history_event["payload"]
         else:
             # NEW STEP: we've finished replaying, now executing new steps
-            self.is_replaying = False
+            # (is_replaying was already set to False by get_next_history_event)
             logger.debug(f"Suspending workflow to wait for signal {signal_name}")
 
             # Record command to wait for signal

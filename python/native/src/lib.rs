@@ -1,4 +1,4 @@
-use ::currant_core::{db, executions, signals, worker, CreateExecutionParams, ExecutionType};
+use ::currant_core::{cli, db, executions, signals, worker, CreateExecutionParams, ExecutionType};
 use pyo3::prelude::*;
 use serde_json::Value as JsonValue;
 
@@ -249,6 +249,20 @@ fn migrate_sync() -> PyResult<()> {
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
+/// Run the CLI
+///
+/// This function takes Python's sys.argv to parse commands and handle all CLI logic.
+/// It's called from Python's __main__.py after any necessary module imports.
+#[pyfunction]
+fn run_cli_sync(args: Vec<String>) -> PyResult<()> {
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+
+    runtime
+        .block_on(cli::run_cli_from_args(args))
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+}
+
 /// Python module
 #[pymodule]
 fn currant_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -268,5 +282,6 @@ fn currant_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_signals_sync, m)?)?;
     m.add_function(wrap_pyfunction!(consume_signal_sync, m)?)?;
     m.add_function(wrap_pyfunction!(migrate_sync, m)?)?;
+    m.add_function(wrap_pyfunction!(run_cli_sync, m)?)?;
     Ok(())
 }
