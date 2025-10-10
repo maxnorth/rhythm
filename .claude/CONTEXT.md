@@ -319,6 +319,79 @@ Critical tables:
 
 See `core/migrations/` for schema details.
 
+## Performance and Scalability
+
+### Worker Polling vs LISTEN/NOTIFY
+
+**Current Approach**: Poll-based worker loop (0.05-0.1s intervals)
+
+**Decision**: For initial release, use optimized polling instead of LISTEN/NOTIFY
+
+**Rationale**:
+- **FFI Complexity**: Exposing Rust's async `PgListener.recv()` across FFI boundaries is complex
+  - Blocking calls interfere with language async runtimes (asyncio, Node event loop)
+  - Would need per-language async FFI integration (complicated, error-prone)
+- **Performance is Acceptable**:
+  - 50ms polling = ~25ms average latency (fine for most workloads)
+  - 100 workers = 2,000 QPS when idle (Postgres can handle 10k-50k QPS easily)
+  - Breakpoint: ~500-1000 workers before polling becomes a bottleneck
+- **Simpler Architecture**:
+  - Language owns the worker loop and async concurrency control
+  - Rust provides simple synchronous FFI functions
+  - Works consistently across all language runtimes
+
+**Trade-offs**:
+- ✅ Simple, works across all languages without runtime-specific integration
+- ✅ Good enough for <100 workers (99% of users)
+- ⚠️ Not optimal for 1000+ worker deployments
+- ⚠️ Higher latency (~25ms vs <1ms with LISTEN/NOTIFY)
+
+**Future**: For users needing <10ms latency or running 1000+ workers:
+- Provide optional Rust binary worker that uses native LISTEN/NOTIFY
+- Calls language functions via subprocess/HTTP/gRPC
+- Advanced users opt-in to this complexity
+
+### Benchmarking Tool
+
+**Decision**: Ship benchmark functions with each language adapter
+
+**Implementation**:
+- Rust CLI provides `currant bench` command
+- Auto-spawns workers, enqueues jobs, collects metrics
+- Benchmark functions (`__currant_bench_*`) ship in `currant/benchmark.py`, `currant/benchmark.ts`
+- Auto-registered when `CURRANT_BENCHMARK=1` env var is set
+
+**Why this approach**:
+- Tests the **full stack**: FFI overhead, serialization, async scheduling, database
+- Language-agnostic CLI (works with any adapter)
+- Database-based metrics (no instrumentation needed in worker code)
+- Simulates real workloads: noop jobs, compute jobs, workflows with activities
+
+**Benchmark jobs**:
+- `__currant_bench_noop__`: Minimal overhead job (tests throughput)
+- `__currant_bench_compute__`: CPU-bound job (tests under load)
+- `__currant_bench_activity__`: No-op activity (tests workflow coordination)
+- `__currant_bench_workflow__`: Workflow with N activities (tests end-to-end)
+
+**Usage**:
+```bash
+# Basic throughput test
+currant bench --workers 10 --jobs 1000
+
+# Workflow test
+currant bench --workers 10 --workflows 100 --activities-per-workflow 5
+
+# Multi-queue with payload
+currant bench --workers 20 --jobs 1000 --queues default,priority --payload-size 10000
+```
+
+**Metrics collected**:
+- Jobs/sec throughput
+- Average latency (created_at → completed_at)
+- Success/failure rates
+- Database query load
+- Worker utilization
+
 ## Common Patterns
 
 ### Adding a New Language Adapter
@@ -328,6 +401,7 @@ See `core/migrations/` for schema details.
 3. Implement worker loop: claim → execute → report
 4. Implement workflow replay logic (handle suspend/resume)
 5. Implement client API (`.queue()`, `send_signal()`)
+6. Add benchmark module with `__currant_bench_*` functions
 
 ### Debugging Workflow Issues
 
@@ -335,6 +409,19 @@ See `core/migrations/` for schema details.
 - Look at `checkpoint` JSON for replay history
 - Worker logs show which activities executed
 - Use `get_workflow_activities()` to see child executions
+
+### Running Benchmarks
+
+```bash
+# Measure your setup's performance
+currant bench --workers 10 --jobs 1000 --workflows 100
+
+# Test different queue configurations
+currant bench --workers 20 --queues default,priority,background
+
+# Test with realistic payloads
+currant bench --workers 10 --jobs 1000 --payload-size 10000
+```
 
 ---
 

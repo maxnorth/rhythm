@@ -63,6 +63,15 @@ def main():
             print("Error: At least one queue is required (-q/--queue)", file=sys.stderr)
             sys.exit(1)
 
+        # Auto-import benchmark module if CURRANT_BENCHMARK=1
+        import os
+        if os.environ.get("CURRANT_BENCHMARK") == "1":
+            try:
+                import currant.benchmark
+                print("✓ Benchmark functions registered")
+            except ImportError as e:
+                print(f"Warning: Failed to import benchmark module: {e}", file=sys.stderr)
+
         # Import modules to register decorated functions
         for module_name in import_modules:
             try:

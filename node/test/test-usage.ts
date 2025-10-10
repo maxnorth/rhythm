@@ -2,7 +2,7 @@
  * Real-world usage verification test
  */
 
-import { job, activity, workflow, isReplaying } from './src/index.js';
+import { job, activity, workflow, isReplaying } from '../src/index.js';
 
 console.log('='.repeat(60));
 console.log('Currant Node.js Library - Usage Verification');
@@ -139,7 +139,7 @@ console.log('-'.repeat(60));
   console.log('\n[TEST 10] Function Registry');
   console.log('-'.repeat(60));
 
-  const { registry } = await import('./src/registry.js');
+  const { registry } = await import('../src/registry.js');
   console.log('✓ Registered functions:', registry.list());
 
   // Summary

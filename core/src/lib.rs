@@ -1,3 +1,4 @@
+pub mod benchmark;
 pub mod cli;
 pub mod db;
 pub mod executions;

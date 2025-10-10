@@ -73,6 +73,53 @@ pub enum Commands {
         #[arg(default_value = "{}")]
         payload: String,
     },
+
+    /// Run performance benchmarks
+    Bench {
+        /// Number of workers to spawn
+        #[arg(long, default_value = "10")]
+        workers: usize,
+
+        /// Number of jobs to enqueue
+        #[arg(long, default_value = "0")]
+        jobs: usize,
+
+        /// Number of workflows to enqueue
+        #[arg(long, default_value = "0")]
+        workflows: usize,
+
+        /// Job type: noop, compute
+        #[arg(long, default_value = "noop")]
+        job_type: String,
+
+        /// Payload size in bytes
+        #[arg(long, default_value = "0")]
+        payload_size: usize,
+
+        /// Activities per workflow
+        #[arg(long, default_value = "3")]
+        activities_per_workflow: usize,
+
+        /// Queues to use (comma-separated)
+        #[arg(long, default_value = "default")]
+        queues: String,
+
+        /// Queue distribution as percentages (comma-separated, must sum to 100)
+        #[arg(long)]
+        queue_distribution: Option<String>,
+
+        /// Benchmark duration (e.g., "60s", "5m")
+        #[arg(long)]
+        duration: Option<String>,
+
+        /// Target job enqueue rate (jobs/sec)
+        #[arg(long)]
+        rate: Option<f64>,
+
+        /// Compute iterations for compute job type
+        #[arg(long, default_value = "1000")]
+        compute_iterations: usize,
+    },
 }
 
 /// Run the CLI by parsing process arguments
@@ -93,6 +140,7 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
     use crate::db;
     use crate::executions;
     use crate::signals;
+    use crate::benchmark;
 
     match cli.command {
         Commands::Migrate => {
@@ -234,6 +282,36 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
                 signals::send_signal(&workflow_id, &signal_name, payload_value).await?;
 
             println!("✓ Signal sent: {}", signal_id);
+        }
+
+        Commands::Bench {
+            workers,
+            jobs,
+            workflows,
+            job_type,
+            payload_size,
+            activities_per_workflow,
+            queues,
+            queue_distribution,
+            duration,
+            rate,
+            compute_iterations,
+        } => {
+            let params = benchmark::BenchmarkParams {
+                workers,
+                jobs,
+                workflows,
+                job_type,
+                payload_size,
+                activities_per_workflow,
+                queues,
+                queue_distribution,
+                duration,
+                rate,
+                compute_iterations,
+            };
+
+            benchmark::run_benchmark(params).await?;
         }
     }
 

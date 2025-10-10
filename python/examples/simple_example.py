@@ -129,7 +129,9 @@ async def main():
     print(f"✓ Order workflow enqueued: {workflow_id}\n")
 
     # Enqueue another order with high priority
-    workflow_id_2 = await process_order_workflow.options(priority=10).queue(
+    workflow_id_2 = await process_order_workflow.options(
+        priority=10
+    ).queue(
         order_id="order_789",
         customer_email="vip@example.com",
         amount=19999,
