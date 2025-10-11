@@ -31,7 +31,10 @@ struct BenchmarkMetrics {
     completed_jobs: i64,
     failed_jobs: i64,
     pending_jobs: i64,
-    total_duration_ms: f64,
+    avg_latency_ms: f64,
+    p50_latency_ms: f64,
+    p95_latency_ms: f64,
+    p99_latency_ms: f64,
 }
 
 pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
@@ -376,16 +379,24 @@ async fn collect_metrics(
 ) -> Result<BenchmarkMetrics> {
     let pool = get_pool().await?;
 
-    // Find executions created during enqueueing, but use execution time window for throughput calculation
-    let row: (i64, i64, i64, Option<f64>) = sqlx::query_as(
+    // Collect comprehensive metrics including percentiles
+    let row: (i64, i64, i64, Option<f64>, Option<f64>, Option<f64>, Option<f64>) = sqlx::query_as(
         r#"
+        WITH latencies AS (
+            SELECT EXTRACT(EPOCH FROM (completed_at - created_at)) * 1000 as latency_ms
+            FROM executions
+            WHERE created_at >= $1
+              AND created_at <= $2
+              AND status = 'completed'
+        )
         SELECT
-            COUNT(*) FILTER (WHERE status = 'completed') as completed,
-            COUNT(*) FILTER (WHERE status = 'failed') as failed,
-            COUNT(*) FILTER (WHERE status = 'pending') as pending,
-            CAST(AVG(EXTRACT(EPOCH FROM (completed_at - created_at)) * 1000) AS DOUBLE PRECISION) as avg_duration_ms
-        FROM executions
-        WHERE created_at >= $1 AND created_at <= $2
+            (SELECT COUNT(*) FROM executions WHERE created_at >= $1 AND created_at <= $2 AND status = 'completed') as completed,
+            (SELECT COUNT(*) FROM executions WHERE created_at >= $1 AND created_at <= $2 AND status = 'failed') as failed,
+            (SELECT COUNT(*) FROM executions WHERE created_at >= $1 AND created_at <= $2 AND status = 'pending') as pending,
+            (SELECT CAST(AVG(latency_ms) AS DOUBLE PRECISION) FROM latencies) as avg_latency,
+            (SELECT CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) AS DOUBLE PRECISION) FROM latencies) as p50,
+            (SELECT CAST(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS DOUBLE PRECISION) FROM latencies) as p95,
+            (SELECT CAST(percentile_cont(0.99) WITHIN GROUP (ORDER BY latency_ms) AS DOUBLE PRECISION) FROM latencies) as p99
         "#,
     )
     .bind(enqueue_start_time)
@@ -401,7 +412,10 @@ async fn collect_metrics(
         completed_jobs: row.0,
         failed_jobs: row.1,
         pending_jobs: row.2,
-        total_duration_ms: row.3.unwrap_or(0.0),
+        avg_latency_ms: row.3.unwrap_or(0.0),
+        p50_latency_ms: row.4.unwrap_or(0.0),
+        p95_latency_ms: row.5.unwrap_or(0.0),
+        p99_latency_ms: row.6.unwrap_or(0.0),
     })
 }
 
@@ -462,7 +476,11 @@ fn display_report(metrics: &BenchmarkMetrics) {
     println!();
     println!("🚀 Throughput: {:.1} jobs/sec", throughput);
     println!();
-    println!("📈 Average Latency: {:.1}ms", metrics.total_duration_ms);
+    println!("📈 Latency:");
+    println!("   Average: {:.1}ms", metrics.avg_latency_ms);
+    println!("   p50: {:.1}ms", metrics.p50_latency_ms);
+    println!("   p95: {:.1}ms", metrics.p95_latency_ms);
+    println!("   p99: {:.1}ms", metrics.p99_latency_ms);
     println!();
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 }
