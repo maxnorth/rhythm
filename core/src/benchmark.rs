@@ -55,6 +55,34 @@ struct BenchmarkMetrics {
     workflow_latency: LatencyMetrics,
 }
 
+/// RAII guard that ensures workers are stopped when dropped
+/// This prevents orphaned worker processes if the benchmark fails
+struct WorkerGuard {
+    workers: Option<Vec<Child>>,
+}
+
+impl WorkerGuard {
+    fn new(workers: Vec<Child>) -> Self {
+        Self {
+            workers: Some(workers),
+        }
+    }
+
+    /// Extract workers for normal shutdown, preventing drop cleanup
+    fn take(mut self) -> Vec<Child> {
+        self.workers.take().unwrap_or_default()
+    }
+}
+
+impl Drop for WorkerGuard {
+    fn drop(&mut self) {
+        if let Some(workers) = self.workers.take() {
+            eprintln!("\n⚠️  Cleaning up {} workers due to early exit", workers.len());
+            let _ = stop_workers(workers);
+        }
+    }
+}
+
 pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
     println!("🚀 Starting Currant Benchmark");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -81,9 +109,10 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
         println!("   Enqueue Rate: {}/sec", rate);
     }
 
-    // Step 1: Spawn workers
+    // Step 1: Spawn workers with cleanup guard
     println!("\n🔧 Spawning {} workers...", params.workers);
     let workers = spawn_workers(params.workers, &params.queues)?;
+    let worker_guard = WorkerGuard::new(workers);
 
     // Give workers time to start up (Python startup + import can be slow)
     println!("   Waiting for workers to initialize...");
@@ -137,8 +166,9 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
         enqueued_workflows
     ).await?;
 
-    // Step 5: Stop workers
+    // Step 5: Stop workers (extract from guard to prevent drop cleanup)
     println!("\n🛑 Stopping workers...");
+    let workers = worker_guard.take();
     stop_workers(workers)?;
     println!("✓ Workers stopped");
 
