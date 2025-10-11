@@ -6,6 +6,8 @@
 
 Currant is a **lightweight durable execution framework** that enables building reliable, multi-step workflows using only PostgreSQL - no external orchestrator needed.
 
+**Language Support**: Designed to support any language with FFI capabilities. Initial development focuses on Python and Node.js adapters.
+
 **Competitors**: Temporal, DBOS Transact, AWS Step Functions
 **Key Differentiator**: Postgres-only architecture (no separate orchestrator/server required)
 
@@ -16,18 +18,20 @@ Currant is a **lightweight durable execution framework** that enables building r
 ```
 ┌─────────────────────────────────┐
 │     Language Adapters           │
-│  (Python ✅, Node.js 🚧)        │
+│  (Any language with FFI)        │
+│  Python ✅  Node.js ✅          │
+│  Future: Go, Rust, etc.         │
 │  - Decorators (@job, @workflow) │
 │  - Worker loops                 │
 │  - Workflow replay logic        │
 └────────────┬────────────────────┘
-             │ FFI (PyO3/Neon)
+             │ FFI (PyO3, NAPI-RS, CGO, etc.)
 ┌────────────▼────────────────────┐
 │       Rust Core Engine          │
 │  - Database operations (sqlx)   │
 │  - Execution management         │
 │  - Worker coordination          │
-│  - LISTEN/NOTIFY                │
+│  - Language-agnostic interface  │
 └────────────┬────────────────────┘
              │
 ┌────────────▼────────────────────┐
@@ -57,21 +61,29 @@ Currant is a **lightweight durable execution framework** that enables building r
 - `context.py` - Workflow context (`wait_for_signal()`, `get_version()`)
 - `rust_bridge.py` - FFI wrapper with JSON serialization
 
-**Node.js Adapter** (`/node`) - 🚧 In Progress
-- Native Rust bindings via Neon
+**Node.js Adapter** (`/node`):
+- Native Rust bindings via NAPI-RS
 - Similar API to Python adapter
+- 23 tests passing
+
+**Future Adapters**:
+- Any language with FFI support (Go, Rust native, Ruby, etc.)
+- Core's language-agnostic design enables easy integration
 
 ## Core Design Decisions
 
 ### 1. Why Rust Core + Language Adapters?
 
-**Decision**: Implement core logic in Rust once, expose via FFI to language-specific adapters.
+**Decision**: Implement core logic in Rust once, expose via FFI to language-specific adapters. Support any language with FFI capabilities.
 
 **Rationale**:
 - **Performance**: Rust handles all database operations, critical for low-latency task claiming
 - **Correctness**: Type safety and ownership prevent entire classes of concurrency bugs
-- **Polyglot**: Core logic written once, N language adapters are thin wrappers
+- **Polyglot**: Core logic written once, any language can create thin FFI wrappers
 - **Testability**: Core engine thoroughly tested in Rust
+- **Universal**: Works with any language that can call C FFI (Python/PyO3, Node/NAPI, Go/CGO, etc.)
+
+**Initial Focus**: Python and Node.js adapters during development phase
 
 **Alternatives Rejected**:
 - Pure language implementations → code duplication, inconsistent behavior
@@ -173,7 +185,7 @@ job_id = await send_email.queue(to="user@example.com", subject="Hi")
 - Migrations
 
 ### 📋 Future Roadmap
-- Go adapter
+- Additional language adapters (Go, Rust native, Ruby, etc.)
 - Distributed tracing integration
 - Metrics and observability
 - Workflow visualization dashboard
@@ -196,9 +208,10 @@ npm test             # 23 tests
 ```
 
 ### Key Points
-- Rust core supports both Python and Node.js via feature flags
-- PyO3 and NAPI don't conflict (feature flags prevent this)
-- Native bindings consolidated into main packages (not separate packages)
+- Rust core is language-agnostic with separate binding crates per language
+- Currently supports Python (PyO3) and Node.js (NAPI-RS)
+- Can support any language with FFI capabilities
+- Native bindings live in `<lang>/native/` directories
 - Database: PostgreSQL in Docker at `postgresql://workflows:workflows@localhost/workflows`
 
 ## Development Guidelines
@@ -223,17 +236,18 @@ npm test             # 23 tests
 
 ### Critical Architectural Principle: Language Bindings Separation
 
-**IMPORTANT**: `core/` is a pure Rust library with NO language-specific bindings (no PyO3, no NAPI features).
+**IMPORTANT**: `core/` is a pure Rust library with NO language-specific bindings. It's designed to be universal - any language with FFI capabilities can integrate with it.
 
 Language bindings live in separate crates:
 - **Python**: `python/native/` - PyO3 bindings that import `currant-core`
 - **Node.js**: `node/native/` - NAPI-RS bindings that import `currant-core`
+- **Future languages**: Follow the same pattern (e.g., `go/native/` with CGO, `ruby/native/` with Rutie, etc.)
 
 **Why this matters**:
-- ✅ Core stays clean and language-agnostic
-- ✅ No feature flag conflicts between PyO3/NAPI
+- ✅ Core stays clean and language-agnostic - supports any language
+- ✅ No feature flag conflicts between different FFI frameworks
 - ✅ Each language adapter can evolve independently
-- ✅ Core can be used by any language with FFI
+- ✅ Easy to add new language support without modifying core
 - ✅ Clearer separation of concerns
 
 **Structure**:
@@ -398,12 +412,15 @@ currant bench --workers 20 --jobs 1000 --queues default,priority --payload-size 
 
 ### Adding a New Language Adapter
 
-1. Create FFI bindings to Rust core (e.g., Neon for Node.js)
+Currant is designed to support any language with FFI capabilities. To add a new language:
+
+1. Create `<lang>/native/` directory with FFI bindings to Rust core
+   - Python uses PyO3, Node.js uses NAPI-RS, Go would use CGO, etc.
 2. Implement decorators/annotations for function registration
 3. Implement worker loop: claim → execute → report
 4. Implement workflow replay logic (handle suspend/resume)
 5. Implement client API (`.queue()`, `send_signal()`)
-6. Add benchmark module with `__currant_bench_*` functions
+6. Add benchmark module with language-specific benchmark functions
 
 ### Debugging Workflow Issues
 
