@@ -162,8 +162,7 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
     // Step 4: Collect metrics
     println!("\n📊 Collecting metrics...");
     let metrics = collect_metrics(
-        enqueue_start_time,    // For finding which executions to count
-        execution_start_time,  // For calculating throughput (exclude enqueueing time)
+        enqueue_start_time,    // For finding which executions to count and calculating throughput
         end_time,
         enqueued_jobs,
         enqueued_workflows,
@@ -262,8 +261,8 @@ fn spawn_workers(count: usize, queues: &str) -> Result<Vec<Child>> {
         cmd.args(["-u", "-m", "currant", "worker", "--queue", queues, "--import", "currant.benchmark"]);
 
         let worker = cmd
-            .stdout(Stdio::null()) // Suppress worker output
-            .stderr(Stdio::null()) // Suppress worker errors
+            .stdout(Stdio::inherit()) // Show worker output for debugging
+            .stderr(Stdio::inherit()) // Show worker errors for debugging
             .spawn()
             .map_err(|e| anyhow!("Failed to spawn worker {}: {}", i, e))?;
 
@@ -429,8 +428,7 @@ async fn wait_for_completion(
 }
 
 async fn collect_metrics(
-    enqueue_start_time: DateTime<Utc>,
-    execution_start_time: DateTime<Utc>,
+    start_time: DateTime<Utc>,
     end_time: DateTime<Utc>,
     enqueued_jobs: usize,
     enqueued_workflows: usize,
@@ -449,7 +447,7 @@ async fn collect_metrics(
         WHERE created_at >= $1 AND created_at <= $2
         "#,
     )
-    .bind(enqueue_start_time)
+    .bind(start_time)
     .bind(end_time)
     .fetch_one(pool.as_ref())
     .await?;
@@ -498,7 +496,7 @@ async fn collect_metrics(
         GROUP BY type, total_count
         "#,
     )
-    .bind(enqueue_start_time)
+    .bind(start_time)
     .bind(end_time)
     .bind(warmup_percent)
     .fetch_all(pool.as_ref())
@@ -526,7 +524,7 @@ async fn collect_metrics(
     }
 
     Ok(BenchmarkMetrics {
-        start_time: execution_start_time,
+        start_time,
         end_time,
         enqueued_jobs,
         enqueued_workflows,

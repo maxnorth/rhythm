@@ -43,8 +43,8 @@ pub async fn create_execution(params: CreateExecutionParams) -> Result<String> {
     .await
     .context("Failed to create execution")?;
 
-    // Send LISTEN/NOTIFY
-    sqlx::query(&format!("NOTIFY {}, '{}'", params.queue, id))
+    // Send LISTEN/NOTIFY (quote channel name to handle reserved keywords like 'default')
+    sqlx::query(&format!("NOTIFY \"{}\", '{}'", params.queue, id))
         .execute(pool.as_ref())
         .await
         .ok(); // Don't fail if notify fails
@@ -109,6 +109,64 @@ pub async fn claim_execution(worker_id: &str, queues: &[String]) -> Result<Optio
     Ok(None)
 }
 
+/// Claim multiple executions for a worker (batch claiming)
+pub async fn claim_executions_batch(worker_id: &str, queues: &[String], limit: i32) -> Result<Vec<Execution>> {
+    let pool = get_pool().await?;
+
+    let rows = sqlx::query(
+        r#"
+        UPDATE executions
+        SET status = 'running',
+            worker_id = $1,
+            claimed_at = NOW(),
+            attempt = attempt + 1
+        WHERE id IN (
+            SELECT id FROM executions
+            WHERE queue = ANY($2)
+              AND status = 'pending'
+            ORDER BY priority DESC, created_at ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT $3
+        )
+        RETURNING *
+        "#,
+    )
+    .bind(worker_id)
+    .bind(queues)
+    .bind(limit)
+    .fetch_all(pool.as_ref())
+    .await
+    .context("Failed to claim executions batch")?;
+
+    let mut executions = Vec::new();
+    for row in rows {
+        executions.push(Execution {
+            id: row.get("id"),
+            exec_type: row.get("type"),
+            function_name: row.get("function_name"),
+            queue: row.get("queue"),
+            status: row.get("status"),
+            priority: row.get("priority"),
+            args: row.get("args"),
+            kwargs: row.get("kwargs"),
+            options: row.get("options"),
+            result: row.get("result"),
+            error: row.get("error"),
+            attempt: row.get("attempt"),
+            max_retries: row.get("max_retries"),
+            parent_workflow_id: row.get("parent_workflow_id"),
+            checkpoint: row.get("checkpoint"),
+            created_at: row.get("created_at"),
+            claimed_at: row.get("claimed_at"),
+            completed_at: row.get("completed_at"),
+            timeout_seconds: row.get("timeout_seconds"),
+            worker_id: row.get("worker_id"),
+        });
+    }
+
+    Ok(executions)
+}
+
 /// Complete an execution successfully
 pub async fn complete_execution(execution_id: &str, result: JsonValue) -> Result<()> {
     let pool = get_pool().await?;
@@ -127,6 +185,39 @@ pub async fn complete_execution(execution_id: &str, result: JsonValue) -> Result
     .execute(pool.as_ref())
     .await
     .context("Failed to complete execution")?;
+
+    Ok(())
+}
+
+/// Complete multiple executions in a single batch operation
+pub async fn complete_executions_batch(completions: Vec<(String, JsonValue)>) -> Result<()> {
+    if completions.is_empty() {
+        return Ok(());
+    }
+
+    let pool = get_pool().await?;
+
+    // Build dynamic query with UNNEST for batch update
+    let ids: Vec<String> = completions.iter().map(|(id, _)| id.clone()).collect();
+    let results: Vec<JsonValue> = completions.iter().map(|(_, result)| result.clone()).collect();
+
+    sqlx::query(
+        r#"
+        UPDATE executions
+        SET status = 'completed',
+            result = data.result,
+            completed_at = NOW()
+        FROM (
+            SELECT UNNEST($1::text[]) as id, UNNEST($2::jsonb[]) as result
+        ) data
+        WHERE executions.id = data.id
+        "#,
+    )
+    .bind(&ids)
+    .bind(&results)
+    .execute(pool.as_ref())
+    .await
+    .context("Failed to batch complete executions")?;
 
     Ok(())
 }

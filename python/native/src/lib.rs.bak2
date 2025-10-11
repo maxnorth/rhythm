@@ -76,6 +76,7 @@ fn create_execution_sync(
 #[pyfunction]
 fn claim_execution_sync(worker_id: String, queues: Vec<String>) -> PyResult<Option<String>> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     let result = runtime
         .block_on(executions::claim_execution(&worker_id, &queues))
@@ -94,6 +95,7 @@ fn claim_execution_sync(worker_id: String, queues: Vec<String>) -> PyResult<Opti
 #[pyfunction]
 fn claim_executions_batch_sync(worker_id: String, queues: Vec<String>, limit: i32) -> PyResult<Vec<String>> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     let result = runtime
         .block_on(executions::claim_executions_batch(&worker_id, &queues, limit))
@@ -113,6 +115,7 @@ fn claim_executions_batch_sync(worker_id: String, queues: Vec<String>, limit: i3
 #[pyfunction]
 fn complete_execution_sync(execution_id: String, result: String) -> PyResult<()> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     let result: JsonValue = serde_json::from_str(&result)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
@@ -122,28 +125,11 @@ fn complete_execution_sync(execution_id: String, result: String) -> PyResult<()>
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
-/// Complete multiple executions in batch
-#[pyfunction]
-fn complete_executions_batch_sync(completions: Vec<(String, String)>) -> PyResult<()> {
-    let runtime = get_runtime();
-
-    // Parse JSON results
-    let mut parsed_completions = Vec::new();
-    for (id, result_str) in completions {
-        let result: JsonValue = serde_json::from_str(&result_str)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-        parsed_completions.push((id, result));
-    }
-
-    runtime
-        .block_on(executions::complete_executions_batch(parsed_completions))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
-
 /// Fail an execution
 #[pyfunction]
 fn fail_execution_sync(execution_id: String, error: String, retry: bool) -> PyResult<()> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     let error: JsonValue = serde_json::from_str(&error)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
@@ -157,6 +143,7 @@ fn fail_execution_sync(execution_id: String, error: String, retry: bool) -> PyRe
 #[pyfunction]
 fn suspend_workflow_sync(workflow_id: String, checkpoint: String) -> PyResult<()> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     let checkpoint: JsonValue = serde_json::from_str(&checkpoint)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
@@ -170,6 +157,7 @@ fn suspend_workflow_sync(workflow_id: String, checkpoint: String) -> PyResult<()
 #[pyfunction]
 fn resume_workflow_sync(workflow_id: String) -> PyResult<()> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     runtime
         .block_on(executions::resume_workflow(&workflow_id))
@@ -180,6 +168,7 @@ fn resume_workflow_sync(workflow_id: String) -> PyResult<()> {
 #[pyfunction]
 fn get_execution_sync(execution_id: String) -> PyResult<Option<String>> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     let result = runtime
         .block_on(executions::get_execution(&execution_id))
@@ -198,6 +187,7 @@ fn get_execution_sync(execution_id: String) -> PyResult<Option<String>> {
 #[pyfunction]
 fn get_workflow_activities_sync(workflow_id: String) -> PyResult<String> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     let activities = runtime
         .block_on(executions::get_workflow_activities(&workflow_id))
@@ -211,6 +201,7 @@ fn get_workflow_activities_sync(workflow_id: String) -> PyResult<String> {
 #[pyfunction]
 fn update_heartbeat_sync(worker_id: String, queues: Vec<String>) -> PyResult<()> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     runtime
         .block_on(worker::update_heartbeat(&worker_id, &queues))
@@ -221,6 +212,7 @@ fn update_heartbeat_sync(worker_id: String, queues: Vec<String>) -> PyResult<()>
 #[pyfunction]
 fn stop_worker_sync(worker_id: String) -> PyResult<()> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     runtime
         .block_on(worker::stop_worker(&worker_id))
@@ -231,6 +223,7 @@ fn stop_worker_sync(worker_id: String) -> PyResult<()> {
 #[pyfunction]
 fn recover_dead_workers_sync(timeout_seconds: i64) -> PyResult<usize> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     runtime
         .block_on(worker::recover_dead_workers(timeout_seconds))
@@ -241,6 +234,7 @@ fn recover_dead_workers_sync(timeout_seconds: i64) -> PyResult<usize> {
 #[pyfunction]
 fn send_signal_sync(workflow_id: String, signal_name: String, payload: String) -> PyResult<String> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     let payload: JsonValue = serde_json::from_str(&payload)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
@@ -254,6 +248,7 @@ fn send_signal_sync(workflow_id: String, signal_name: String, payload: String) -
 #[pyfunction]
 fn get_signals_sync(workflow_id: String, signal_name: String) -> PyResult<String> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     let signals = runtime
         .block_on(signals::get_signals(&workflow_id, &signal_name))
@@ -267,6 +262,7 @@ fn get_signals_sync(workflow_id: String, signal_name: String) -> PyResult<String
 #[pyfunction]
 fn consume_signal_sync(signal_id: String) -> PyResult<()> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     runtime
         .block_on(signals::consume_signal(&signal_id))
@@ -277,6 +273,7 @@ fn consume_signal_sync(signal_id: String) -> PyResult<()> {
 #[pyfunction]
 fn migrate_sync() -> PyResult<()> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     runtime
         .block_on(db::migrate())
@@ -290,6 +287,7 @@ fn migrate_sync() -> PyResult<()> {
 #[pyfunction]
 fn run_cli_sync(args: Vec<String>) -> PyResult<()> {
     let runtime = get_runtime();
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     runtime
         .block_on(cli::run_cli_from_args(args))
@@ -304,7 +302,6 @@ fn currant_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(claim_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(claim_executions_batch_sync, m)?)?;
     m.add_function(wrap_pyfunction!(complete_execution_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(complete_executions_batch_sync, m)?)?;
     m.add_function(wrap_pyfunction!(fail_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(suspend_workflow_sync, m)?)?;
     m.add_function(wrap_pyfunction!(resume_workflow_sync, m)?)?;

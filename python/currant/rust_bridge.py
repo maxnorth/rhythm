@@ -48,9 +48,21 @@ class RustBridge:
         return None
 
     @staticmethod
+    def claim_executions_batch(worker_id: str, queues: List[str], limit: int) -> List[Dict[str, Any]]:
+        """Claim multiple executions for a worker (batch claiming)"""
+        results = rust.claim_executions_batch_sync(worker_id=worker_id, queues=queues, limit=limit)
+        return [json.loads(r) for r in results]
+
+    @staticmethod
     def complete_execution(execution_id: str, result: Any) -> None:
         """Complete an execution"""
         rust.complete_execution_sync(execution_id=execution_id, result=json.dumps(result))
+
+    @staticmethod
+    def complete_executions_batch(completions: List[tuple[str, Any]]) -> None:
+        """Complete multiple executions in batch"""
+        serialized = [(id, json.dumps(result)) for id, result in completions]
+        rust.complete_executions_batch_sync(completions=serialized)
 
     @staticmethod
     def fail_execution(execution_id: str, error: Dict[str, Any], retry: bool) -> None:

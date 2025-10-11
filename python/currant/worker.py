@@ -1,10 +1,12 @@
 """Worker implementation for executing jobs, activities, and workflows"""
 
 import asyncio
+import asyncpg
 import logging
 import signal
-from typing import Optional
+from typing import Optional, List
 import traceback
+import os
 
 from currant.config import settings
 from currant.rust_bridge import RustBridge
@@ -33,6 +35,18 @@ class Worker:
         self.heartbeat_task: Optional[asyncio.Task] = None
         self.poll_task: Optional[asyncio.Task] = None
         self.recovery_task: Optional[asyncio.Task] = None
+        self.claimer_task: Optional[asyncio.Task] = None
+        self.notify_conn: Optional[asyncpg.Connection] = None
+        self.notify_event: asyncio.Event = asyncio.Event()
+
+        # Local job queue for prefetching
+        self.local_queue: asyncio.Queue = asyncio.Queue(maxsize=settings.worker_max_concurrent * 2)
+        self.semaphore: asyncio.Semaphore = asyncio.Semaphore(settings.worker_max_concurrent)
+
+        # Completion batching
+        self.completion_queue: List[tuple[str, any]] = []
+        self.completion_lock: asyncio.Lock = asyncio.Lock()
+        self.completer_task: Optional[asyncio.Task] = None
 
         logger.info(f"Worker {self.worker_id} initialized for queues: {queues}")
 
@@ -44,11 +58,16 @@ class Worker:
         # Register signal handlers
         self._setup_signal_handlers()
 
+        # Setup LISTEN connection
+        await self._setup_listen_connection()
+
         # Start background tasks
         self.heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         self.listener_task = asyncio.create_task(self._listener_loop())
         self.poll_task = asyncio.create_task(self._poll_loop())
         self.recovery_task = asyncio.create_task(self._recovery_loop())
+        self.claimer_task = asyncio.create_task(self._claimer_loop())
+        self.completer_task = asyncio.create_task(self._completer_loop())
 
         # Wait for shutdown
         try:
@@ -57,6 +76,8 @@ class Worker:
                 self.listener_task,
                 self.poll_task,
                 self.recovery_task,
+                self.claimer_task,
+                self.completer_task,
             )
         except asyncio.CancelledError:
             logger.info("Worker tasks cancelled")
@@ -67,9 +88,16 @@ class Worker:
         self.running = False
 
         # Cancel background tasks
-        for task in [self.heartbeat_task, self.listener_task, self.poll_task, self.recovery_task]:
+        for task in [self.heartbeat_task, self.listener_task, self.poll_task, self.recovery_task, self.claimer_task, self.completer_task]:
             if task and not task.done():
                 task.cancel()
+
+        # Flush any pending completions
+        await self._flush_completions()
+
+        # Close LISTEN connection
+        if self.notify_conn:
+            await self.notify_conn.close()
 
         # Update worker status via Rust
         RustBridge.stop_worker(self.worker_id)
@@ -84,6 +112,29 @@ class Worker:
             await asyncio.sleep(0.5)
 
         logger.info(f"Worker {self.worker_id} stopped")
+
+    async def _setup_listen_connection(self):
+        """Setup dedicated connection for LISTEN/NOTIFY"""
+        try:
+            db_url = os.getenv("CURRANT_DATABASE_URL")
+            if not db_url:
+                logger.warning("CURRANT_DATABASE_URL not set, LISTEN/NOTIFY disabled")
+                return
+
+            self.notify_conn = await asyncpg.connect(db_url)
+
+            # Setup notification callback
+            def on_notification(conn, pid, channel, payload):
+                self.notify_event.set()
+
+            # Listen on all queues
+            for queue in self.queues:
+                await self.notify_conn.add_listener(queue, on_notification)
+                logger.info(f"Listening on queue: {queue}")
+
+        except Exception as e:
+            logger.warning(f"Failed to setup LISTEN connection: {e}, falling back to polling")
+            self.notify_conn = None
 
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown"""
@@ -112,32 +163,76 @@ class Worker:
         RustBridge.update_heartbeat(self.worker_id, self.queues)
 
     async def _listener_loop(self):
-        """Continuously try to claim and execute work"""
-        logger.info(f"Worker {self.worker_id} listening on queues: {self.queues}")
+        """Pull jobs from local queue and execute them"""
+        logger.info(f"Worker {self.worker_id} executing from local queue")
 
         while self.running:
             try:
-                # Wait briefly and try to claim work
-                await asyncio.sleep(0.1)
-                await self._try_claim_and_execute()
+                # Wait for a job from the local queue (with timeout)
+                execution = await asyncio.wait_for(self.local_queue.get(), timeout=1.0)
+
+                # Execute with semaphore for concurrency control
+                asyncio.create_task(self._execute_with_semaphore(execution))
+
+            except asyncio.TimeoutError:
+                # No jobs in queue, just loop again
+                continue
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in executor loop: {e}")
+                await asyncio.sleep(1)
+
+    async def _claimer_loop(self):
+        """Continuously claim jobs and fill the local queue"""
+        logger.info(f"Worker {self.worker_id} starting claimer loop")
+
+        while self.running:
+            try:
+                # Check queue space first
+                queue_space = self.local_queue.maxsize - self.local_queue.qsize()
+
+                if queue_space > 0:
+                    # Claim up to the available space
+                    claimed = await self._claim_executions_batch(queue_space)
+                    for execution in claimed:
+                        await self.local_queue.put(execution)
+
+                    # If we claimed fewer than requested, no more jobs available
+                    # Wait for notification before trying again
+                    if len(claimed) < queue_space:
+                        if self.notify_conn:
+                            try:
+                                await asyncio.wait_for(self.notify_event.wait(), timeout=5.0)
+                                self.notify_event.clear()
+                            except asyncio.TimeoutError:
+                                pass
+                        else:
+                            await asyncio.sleep(1.0)
+                else:
+                    # Queue full, wait for space
+                    await asyncio.sleep(0.1)
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error in listener loop: {e}")
+                logger.error(f"Error in claimer loop: {e}")
                 await asyncio.sleep(1)
 
     async def _poll_loop(self):
         """Fallback polling loop in case notifications are missed"""
         while self.running:
             try:
-                await asyncio.sleep(settings.worker_poll_interval)
-                await self._try_claim_and_execute()
+                # Poll less aggressively when LISTEN/NOTIFY is working
+                poll_interval = 5.0 if self.notify_conn else settings.worker_poll_interval
+                await asyncio.sleep(poll_interval)
+                # Trigger the claimer to check for work
+                self.notify_event.set()
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Error in poll loop: {e}")
-                await asyncio.sleep(settings.worker_poll_interval)
+                await asyncio.sleep(5.0)
 
     async def _recovery_loop(self):
         """Periodically check for dead workers and recover their work"""
@@ -151,41 +246,63 @@ class Worker:
                 logger.error(f"Error in recovery loop: {e}")
                 await asyncio.sleep(settings.worker_heartbeat_timeout)
 
+    async def _completer_loop(self):
+        """Periodically batch and flush completion updates"""
+        while self.running:
+            try:
+                # Flush every 1ms for low latency
+                await asyncio.sleep(0.001)
+                await self._flush_completions()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in completer loop: {e}")
+                await asyncio.sleep(0.1)
+
     async def _recover_dead_worker_executions(self):
         """Find and recover executions from dead workers via Rust"""
         recovered_count = RustBridge.recover_dead_workers(settings.worker_heartbeat_timeout)
         if recovered_count > 0:
             logger.info(f"Recovered {recovered_count} executions from dead workers")
 
-    async def _try_claim_and_execute(self):
-        """Try to claim work and execute it"""
-        if self.current_executions >= settings.worker_max_concurrent:
-            return
+    async def _flush_completions(self):
+        """Flush pending completions to database in batch"""
+        async with self.completion_lock:
+            if not self.completion_queue:
+                return
 
-        # Claim a pending execution
-        execution = await self._claim_execution()
-        if execution:
-            # Execute in background task
-            asyncio.create_task(self._execute_with_tracking(execution))
+            batch = self.completion_queue[:]
+            self.completion_queue.clear()
 
-    async def _claim_execution(self) -> Optional[Execution]:
-        """Claim a pending execution from the queue via Rust"""
-        exec_dict = RustBridge.claim_execution(self.worker_id, self.queues)
-        if exec_dict:
+        try:
+            RustBridge.complete_executions_batch(batch)
+            logger.debug(f"Flushed {len(batch)} completions")
+        except Exception as e:
+            logger.error(f"Error flushing completions: {e}")
+            # Re-add to queue on failure
+            async with self.completion_lock:
+                self.completion_queue.extend(batch)
+
+    async def _claim_executions_batch(self, limit: int) -> List[Execution]:
+        """Claim multiple pending executions from the queue via Rust (batch claiming)"""
+        exec_dicts = RustBridge.claim_executions_batch(self.worker_id, self.queues, limit)
+        executions = []
+        for exec_dict in exec_dicts:
             execution = Execution.from_dict(exec_dict)
             logger.info(
                 f"Claimed {execution.type} execution {execution.id}: {execution.function_name}"
             )
-            return execution
-        return None
+            executions.append(execution)
+        return executions
 
-    async def _execute_with_tracking(self, execution: Execution):
-        """Execute with tracking of concurrent executions"""
-        self.current_executions += 1
-        try:
-            await self._execute(execution)
-        finally:
-            self.current_executions -= 1
+    async def _execute_with_semaphore(self, execution: Execution):
+        """Execute with semaphore-based concurrency control"""
+        async with self.semaphore:
+            self.current_executions += 1
+            try:
+                await self._execute(execution)
+            finally:
+                self.current_executions -= 1
 
     async def _execute(self, execution: Execution):
         """Execute a job, activity, or workflow"""
@@ -289,7 +406,9 @@ class Worker:
         """Mark execution as completed via Rust"""
         logger.info(f"Execution {execution.id} completed successfully")
 
-        RustBridge.complete_execution(execution.id, result)
+        # Add to completion queue for batch processing
+        async with self.completion_lock:
+            self.completion_queue.append((execution.id, result))
 
         # If this is an activity, resume parent workflow
         if execution.parent_workflow_id:
