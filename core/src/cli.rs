@@ -119,6 +119,10 @@ pub enum Commands {
         /// Compute iterations for compute job type
         #[arg(long, default_value = "1000")]
         compute_iterations: usize,
+
+        /// Warmup percentage: exclude first N% of executions from latency metrics
+        #[arg(long, default_value = "0")]
+        warmup_percent: f64,
     },
 }
 
@@ -296,6 +300,7 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
             duration,
             rate,
             compute_iterations,
+            warmup_percent,
         } => {
             let params = benchmark::BenchmarkParams {
                 workers,
@@ -309,6 +314,7 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
                 duration,
                 rate,
                 compute_iterations,
+                warmup_percent,
             };
 
             benchmark::run_benchmark(params).await?;

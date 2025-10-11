@@ -21,10 +21,12 @@ pub struct BenchmarkParams {
     pub duration: Option<String>,
     pub rate: Option<f64>,
     pub compute_iterations: usize,
+    pub warmup_percent: f64,
 }
 
 struct LatencyMetrics {
     count: i64,
+    count_after_warmup: i64,
     avg_ms: f64,
     p50_ms: f64,
     p95_ms: f64,
@@ -35,6 +37,7 @@ impl Default for LatencyMetrics {
     fn default() -> Self {
         Self {
             count: 0,
+            count_after_warmup: 0,
             avg_ms: 0.0,
             p50_ms: 0.0,
             p95_ms: 0.0,
@@ -163,7 +166,8 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
         execution_start_time,  // For calculating throughput (exclude enqueueing time)
         end_time,
         enqueued_jobs,
-        enqueued_workflows
+        enqueued_workflows,
+        params.warmup_percent
     ).await?;
 
     // Step 5: Stop workers (extract from guard to prevent drop cleanup)
@@ -173,7 +177,7 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
     println!("✓ Workers stopped");
 
     // Step 6: Display report
-    display_report(&metrics);
+    display_report(&metrics, params.warmup_percent);
 
     Ok(())
 }
@@ -430,6 +434,7 @@ async fn collect_metrics(
     end_time: DateTime<Utc>,
     enqueued_jobs: usize,
     enqueued_workflows: usize,
+    warmup_percent: f64,
 ) -> Result<BenchmarkMetrics> {
     let pool = get_pool().await?;
 
@@ -450,30 +455,52 @@ async fn collect_metrics(
     .await?;
 
     // Collect latency metrics grouped by type
-    let latency_rows: Vec<(String, i64, Option<f64>, Option<f64>, Option<f64>, Option<f64>)> = sqlx::query_as(
+    let latency_rows: Vec<(String, i64, i64, Option<f64>, Option<f64>, Option<f64>, Option<f64>)> = sqlx::query_as(
         r#"
         WITH latencies AS (
             SELECT
                 type,
-                EXTRACT(EPOCH FROM (completed_at - created_at)) * 1000 as latency_ms
+                EXTRACT(EPOCH FROM (completed_at - created_at)) * 1000 as latency_ms,
+                ROW_NUMBER() OVER (PARTITION BY type ORDER BY completed_at) as row_num
             FROM executions
             WHERE created_at >= $1
               AND created_at <= $2
               AND status = 'completed'
+        ),
+        type_counts AS (
+            SELECT
+                type,
+                COUNT(*) as total_count
+            FROM latencies
+            GROUP BY type
+        ),
+        warmup_filtered AS (
+            SELECT
+                l.type,
+                l.latency_ms,
+                tc.total_count,
+                CASE
+                    WHEN l.row_num > CEIL(tc.total_count * $3 / 100.0) THEN 1
+                    ELSE 0
+                END as after_warmup
+            FROM latencies l
+            JOIN type_counts tc ON l.type = tc.type
         )
         SELECT
             type,
-            COUNT(*) as count,
-            CAST(AVG(latency_ms) AS DOUBLE PRECISION) as avg,
-            CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) AS DOUBLE PRECISION) as p50,
-            CAST(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS DOUBLE PRECISION) as p95,
-            CAST(percentile_cont(0.99) WITHIN GROUP (ORDER BY latency_ms) AS DOUBLE PRECISION) as p99
-        FROM latencies
-        GROUP BY type
+            total_count,
+            SUM(after_warmup) as count_after_warmup,
+            CAST(AVG(CASE WHEN after_warmup = 1 THEN latency_ms END) AS DOUBLE PRECISION) as avg,
+            CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) FILTER (WHERE after_warmup = 1) AS DOUBLE PRECISION) as p50,
+            CAST(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) FILTER (WHERE after_warmup = 1) AS DOUBLE PRECISION) as p95,
+            CAST(percentile_cont(0.99) WITHIN GROUP (ORDER BY latency_ms) FILTER (WHERE after_warmup = 1) AS DOUBLE PRECISION) as p99
+        FROM warmup_filtered
+        GROUP BY type, total_count
         "#,
     )
     .bind(enqueue_start_time)
     .bind(end_time)
+    .bind(warmup_percent)
     .fetch_all(pool.as_ref())
     .await?;
 
@@ -484,10 +511,11 @@ async fn collect_metrics(
     for row in latency_rows {
         let metrics = LatencyMetrics {
             count: row.1,
-            avg_ms: row.2.unwrap_or(0.0),
-            p50_ms: row.3.unwrap_or(0.0),
-            p95_ms: row.4.unwrap_or(0.0),
-            p99_ms: row.5.unwrap_or(0.0),
+            count_after_warmup: row.2,
+            avg_ms: row.3.unwrap_or(0.0),
+            p50_ms: row.4.unwrap_or(0.0),
+            p95_ms: row.5.unwrap_or(0.0),
+            p99_ms: row.6.unwrap_or(0.0),
         };
 
         match row.0.as_str() {
@@ -545,7 +573,7 @@ fn stop_workers(mut workers: Vec<Child>) -> Result<()> {
     Ok(())
 }
 
-fn display_report(metrics: &BenchmarkMetrics) {
+fn display_report(metrics: &BenchmarkMetrics, warmup_percent: f64) {
     let duration_secs = (metrics.end_time - metrics.start_time).num_milliseconds() as f64 / 1000.0;
     let total_enqueued = metrics.enqueued_jobs + metrics.enqueued_workflows;
     let total_completed = metrics.completed_jobs + metrics.failed_jobs;
@@ -570,7 +598,14 @@ fn display_report(metrics: &BenchmarkMetrics) {
 
     // Display job latency if any jobs were run
     if metrics.job_latency.count > 0 {
-        println!("📈 Job Latency ({} completed):", metrics.job_latency.count);
+        if warmup_percent > 0.0 {
+            println!("📈 Job Latency ({} completed, {} after {:.0}% warmup):",
+                     metrics.job_latency.count,
+                     metrics.job_latency.count_after_warmup,
+                     warmup_percent);
+        } else {
+            println!("📈 Job Latency ({} completed):", metrics.job_latency.count);
+        }
         println!("   Average: {:.1}ms", metrics.job_latency.avg_ms);
         println!("   p50: {:.1}ms | p95: {:.1}ms | p99: {:.1}ms",
                  metrics.job_latency.p50_ms,
@@ -581,7 +616,14 @@ fn display_report(metrics: &BenchmarkMetrics) {
 
     // Display workflow latency if any workflows were run
     if metrics.workflow_latency.count > 0 {
-        println!("📈 Workflow Latency ({} completed):", metrics.workflow_latency.count);
+        if warmup_percent > 0.0 {
+            println!("📈 Workflow Latency ({} completed, {} after {:.0}% warmup):",
+                     metrics.workflow_latency.count,
+                     metrics.workflow_latency.count_after_warmup,
+                     warmup_percent);
+        } else {
+            println!("📈 Workflow Latency ({} completed):", metrics.workflow_latency.count);
+        }
         println!("   Average: {:.1}ms", metrics.workflow_latency.avg_ms);
         println!("   p50: {:.1}ms | p95: {:.1}ms | p99: {:.1}ms",
                  metrics.workflow_latency.p50_ms,
