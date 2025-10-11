@@ -23,6 +23,26 @@ pub struct BenchmarkParams {
     pub compute_iterations: usize,
 }
 
+struct LatencyMetrics {
+    count: i64,
+    avg_ms: f64,
+    p50_ms: f64,
+    p95_ms: f64,
+    p99_ms: f64,
+}
+
+impl Default for LatencyMetrics {
+    fn default() -> Self {
+        Self {
+            count: 0,
+            avg_ms: 0.0,
+            p50_ms: 0.0,
+            p95_ms: 0.0,
+            p99_ms: 0.0,
+        }
+    }
+}
+
 struct BenchmarkMetrics {
     start_time: DateTime<Utc>,
     end_time: DateTime<Utc>,
@@ -31,10 +51,8 @@ struct BenchmarkMetrics {
     completed_jobs: i64,
     failed_jobs: i64,
     pending_jobs: i64,
-    avg_latency_ms: f64,
-    p50_latency_ms: f64,
-    p95_latency_ms: f64,
-    p99_latency_ms: f64,
+    job_latency: LatencyMetrics,
+    workflow_latency: LatencyMetrics,
 }
 
 pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
@@ -100,6 +118,12 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
     };
 
     wait_for_completion(enqueue_start_time, total_work, timeout).await?;
+
+    // Give workflows a moment to finalize after their activities complete
+    // This ensures workflow executions themselves show as 'completed' in metrics
+    if enqueued_workflows > 0 {
+        sleep(Duration::from_millis(500)).await;
+    }
 
     let end_time = Utc::now();
 
@@ -379,24 +403,15 @@ async fn collect_metrics(
 ) -> Result<BenchmarkMetrics> {
     let pool = get_pool().await?;
 
-    // Collect comprehensive metrics including percentiles
-    let row: (i64, i64, i64, Option<f64>, Option<f64>, Option<f64>, Option<f64>) = sqlx::query_as(
+    // Collect completion counts
+    let counts: (i64, i64, i64) = sqlx::query_as(
         r#"
-        WITH latencies AS (
-            SELECT EXTRACT(EPOCH FROM (completed_at - created_at)) * 1000 as latency_ms
-            FROM executions
-            WHERE created_at >= $1
-              AND created_at <= $2
-              AND status = 'completed'
-        )
         SELECT
-            (SELECT COUNT(*) FROM executions WHERE created_at >= $1 AND created_at <= $2 AND status = 'completed') as completed,
-            (SELECT COUNT(*) FROM executions WHERE created_at >= $1 AND created_at <= $2 AND status = 'failed') as failed,
-            (SELECT COUNT(*) FROM executions WHERE created_at >= $1 AND created_at <= $2 AND status = 'pending') as pending,
-            (SELECT CAST(AVG(latency_ms) AS DOUBLE PRECISION) FROM latencies) as avg_latency,
-            (SELECT CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) AS DOUBLE PRECISION) FROM latencies) as p50,
-            (SELECT CAST(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS DOUBLE PRECISION) FROM latencies) as p95,
-            (SELECT CAST(percentile_cont(0.99) WITHIN GROUP (ORDER BY latency_ms) AS DOUBLE PRECISION) FROM latencies) as p99
+            COUNT(*) FILTER (WHERE status = 'completed') as completed,
+            COUNT(*) FILTER (WHERE status = 'failed') as failed,
+            COUNT(*) FILTER (WHERE status = 'pending') as pending
+        FROM executions
+        WHERE created_at >= $1 AND created_at <= $2
         "#,
     )
     .bind(enqueue_start_time)
@@ -404,18 +419,64 @@ async fn collect_metrics(
     .fetch_one(pool.as_ref())
     .await?;
 
+    // Collect latency metrics grouped by type
+    let latency_rows: Vec<(String, i64, Option<f64>, Option<f64>, Option<f64>, Option<f64>)> = sqlx::query_as(
+        r#"
+        WITH latencies AS (
+            SELECT
+                type,
+                EXTRACT(EPOCH FROM (completed_at - created_at)) * 1000 as latency_ms
+            FROM executions
+            WHERE created_at >= $1
+              AND created_at <= $2
+              AND status = 'completed'
+        )
+        SELECT
+            type,
+            COUNT(*) as count,
+            CAST(AVG(latency_ms) AS DOUBLE PRECISION) as avg,
+            CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) AS DOUBLE PRECISION) as p50,
+            CAST(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS DOUBLE PRECISION) as p95,
+            CAST(percentile_cont(0.99) WITHIN GROUP (ORDER BY latency_ms) AS DOUBLE PRECISION) as p99
+        FROM latencies
+        GROUP BY type
+        "#,
+    )
+    .bind(enqueue_start_time)
+    .bind(end_time)
+    .fetch_all(pool.as_ref())
+    .await?;
+
+    // Parse latency metrics by type
+    let mut job_latency = LatencyMetrics::default();
+    let mut workflow_latency = LatencyMetrics::default();
+
+    for row in latency_rows {
+        let metrics = LatencyMetrics {
+            count: row.1,
+            avg_ms: row.2.unwrap_or(0.0),
+            p50_ms: row.3.unwrap_or(0.0),
+            p95_ms: row.4.unwrap_or(0.0),
+            p99_ms: row.5.unwrap_or(0.0),
+        };
+
+        match row.0.as_str() {
+            "job" => job_latency = metrics,
+            "workflow" => workflow_latency = metrics,
+            _ => {} // Ignore activities
+        }
+    }
+
     Ok(BenchmarkMetrics {
-        start_time: execution_start_time,  // Use execution start for throughput calculation
+        start_time: execution_start_time,
         end_time,
         enqueued_jobs,
         enqueued_workflows,
-        completed_jobs: row.0,
-        failed_jobs: row.1,
-        pending_jobs: row.2,
-        avg_latency_ms: row.3.unwrap_or(0.0),
-        p50_latency_ms: row.4.unwrap_or(0.0),
-        p95_latency_ms: row.5.unwrap_or(0.0),
-        p99_latency_ms: row.6.unwrap_or(0.0),
+        completed_jobs: counts.0,
+        failed_jobs: counts.1,
+        pending_jobs: counts.2,
+        job_latency,
+        workflow_latency,
     })
 }
 
@@ -476,11 +537,28 @@ fn display_report(metrics: &BenchmarkMetrics) {
     println!();
     println!("🚀 Throughput: {:.1} jobs/sec", throughput);
     println!();
-    println!("📈 Latency:");
-    println!("   Average: {:.1}ms", metrics.avg_latency_ms);
-    println!("   p50: {:.1}ms", metrics.p50_latency_ms);
-    println!("   p95: {:.1}ms", metrics.p95_latency_ms);
-    println!("   p99: {:.1}ms", metrics.p99_latency_ms);
-    println!();
+
+    // Display job latency if any jobs were run
+    if metrics.job_latency.count > 0 {
+        println!("📈 Job Latency ({} completed):", metrics.job_latency.count);
+        println!("   Average: {:.1}ms", metrics.job_latency.avg_ms);
+        println!("   p50: {:.1}ms | p95: {:.1}ms | p99: {:.1}ms",
+                 metrics.job_latency.p50_ms,
+                 metrics.job_latency.p95_ms,
+                 metrics.job_latency.p99_ms);
+        println!();
+    }
+
+    // Display workflow latency if any workflows were run
+    if metrics.workflow_latency.count > 0 {
+        println!("📈 Workflow Latency ({} completed):", metrics.workflow_latency.count);
+        println!("   Average: {:.1}ms", metrics.workflow_latency.avg_ms);
+        println!("   p50: {:.1}ms | p95: {:.1}ms | p99: {:.1}ms",
+                 metrics.workflow_latency.p50_ms,
+                 metrics.workflow_latency.p95_ms,
+                 metrics.workflow_latency.p99_ms);
+        println!();
+    }
+
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 }
