@@ -60,8 +60,6 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
         println!("   Enqueue Rate: {}/sec", rate);
     }
 
-    let start_time = Utc::now();
-
     // Step 1: Spawn workers
     println!("\n🔧 Spawning {} workers...", params.workers);
     let workers = spawn_workers(params.workers, &params.queues)?;
@@ -75,12 +73,18 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
     println!("\n📬 Enqueueing work...");
     let enqueue_start = Instant::now();
 
+    // Mark the time when first job is enqueued (for finding executions)
+    let enqueue_start_time = Utc::now();
+
     let enqueued_jobs = enqueue_jobs(&params, &queues, &distribution).await?;
     let enqueued_workflows = enqueue_workflows(&params, &queues, &distribution).await?;
 
     let enqueue_duration = enqueue_start.elapsed();
     println!("✓ Enqueued {} jobs and {} workflows in {:.2}s",
              enqueued_jobs, enqueued_workflows, enqueue_duration.as_secs_f64());
+
+    // Start measuring execution performance AFTER enqueueing
+    let execution_start_time = Utc::now();
 
     // Step 3: Wait for completion or timeout
     println!("\n⏳ Waiting for jobs to complete...");
@@ -92,13 +96,19 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
         Duration::from_secs(300) // 5 minute default timeout
     };
 
-    wait_for_completion(start_time, total_work, timeout).await?;
+    wait_for_completion(enqueue_start_time, total_work, timeout).await?;
 
     let end_time = Utc::now();
 
     // Step 4: Collect metrics
     println!("\n📊 Collecting metrics...");
-    let metrics = collect_metrics(start_time, end_time, enqueued_jobs, enqueued_workflows).await?;
+    let metrics = collect_metrics(
+        enqueue_start_time,    // For finding which executions to count
+        execution_start_time,  // For calculating throughput (exclude enqueueing time)
+        end_time,
+        enqueued_jobs,
+        enqueued_workflows
+    ).await?;
 
     // Step 5: Stop workers
     println!("\n🛑 Stopping workers...");
@@ -291,12 +301,20 @@ async fn enqueue_workflows(
 }
 
 fn select_queue<'a>(queues: &[&'a str], distribution: &[f64], index: usize) -> &'a str {
-    let mut cumulative = 0.0;
-    let position = (index as f64 / 1000.0) % 1.0; // Normalize index to 0-1 range
+    // Build cumulative distribution array [0.0, 0.5, 1.0] for 50/50 split
+    // For each index, hash it to a pseudo-random value in [0, 1) and select queue
+    // This ensures even distribution regardless of job count
 
+    // Simple hash function to get deterministic pseudo-random value
+    // Using index directly would cause clustering; we need to spread values uniformly
+    let hash = (index.wrapping_mul(2654435761)) % 1000000;
+    let random_value = hash as f64 / 1000000.0;
+
+    // Select queue based on where random_value falls in cumulative distribution
+    let mut cumulative = 0.0;
     for (i, &percentage) in distribution.iter().enumerate() {
         cumulative += percentage;
-        if position < cumulative {
+        if random_value < cumulative {
             return queues[i];
         }
     }
@@ -350,13 +368,15 @@ async fn wait_for_completion(
 }
 
 async fn collect_metrics(
-    start_time: DateTime<Utc>,
+    enqueue_start_time: DateTime<Utc>,
+    execution_start_time: DateTime<Utc>,
     end_time: DateTime<Utc>,
     enqueued_jobs: usize,
     enqueued_workflows: usize,
 ) -> Result<BenchmarkMetrics> {
     let pool = get_pool().await?;
 
+    // Find executions created during enqueueing, but use execution time window for throughput calculation
     let row: (i64, i64, i64, Option<f64>) = sqlx::query_as(
         r#"
         SELECT
@@ -368,13 +388,13 @@ async fn collect_metrics(
         WHERE created_at >= $1 AND created_at <= $2
         "#,
     )
-    .bind(start_time)
+    .bind(enqueue_start_time)
     .bind(end_time)
     .fetch_one(pool.as_ref())
     .await?;
 
     Ok(BenchmarkMetrics {
-        start_time,
+        start_time: execution_start_time,  // Use execution start for throughput calculation
         end_time,
         enqueued_jobs,
         enqueued_workflows,

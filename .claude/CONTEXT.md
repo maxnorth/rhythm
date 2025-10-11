@@ -356,16 +356,18 @@ See `core/migrations/` for schema details.
 **Decision**: Ship benchmark functions with each language adapter
 
 **Implementation**:
-- Rust CLI provides `currant bench` command
-- Auto-spawns workers, enqueues jobs, collects metrics
-- Benchmark functions (`__currant_bench_*`) ship in `currant/benchmark.py`, `currant/benchmark.ts`
-- Auto-registered when `CURRANT_BENCHMARK=1` env var is set
+- Rust CLI provides `currant bench` command in `core/src/benchmark.rs`
+- Rust spawns language-specific workers (e.g., `python -m currant worker --import currant.benchmark`)
+- Benchmark functions (`__currant_bench_*`) ship in `currant/benchmark.py` (Node.js: TBD)
+- Rust enqueues jobs/workflows, workers execute them, Rust collects DB-based metrics
 
 **Why this approach**:
 - Tests the **full stack**: FFI overhead, serialization, async scheduling, database
-- Language-agnostic CLI (works with any adapter)
+- **Language-specific by design**: Each language adapter has its own benchmark testing the real integration
 - Database-based metrics (no instrumentation needed in worker code)
 - Simulates real workloads: noop jobs, compute jobs, workflows with activities
+
+**Important**: The benchmark is NOT language-agnostic - it's deliberately language-specific to test real adapter performance. Python adapter has `currant bench` (spawns Python workers), Node.js would need its own implementation.
 
 **Benchmark jobs**:
 - `__currant_bench_noop__`: Minimal overhead job (tests throughput)
