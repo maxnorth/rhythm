@@ -278,25 +278,76 @@ node/native/
 - ✅ Put FFI bindings in `<lang>/native/` directories
 - ✅ Have language adapters pass normalized args to Rust CLI (NOT read from process directly)
 
-### CLI Architecture: Hybrid Approach
+### CLI Architecture: Dual-Tier Approach
 
-**Core provides CLI framework** (`core/src/cli.rs`):
-- Command definitions and argument parsing (using `clap`)
-- Implementation for language-agnostic commands: `migrate`, `status`, `list`, `cancel`, `signal`
-- Accepts `Vec<String>` args (doesn't read `std::env::args()` directly)
-- Function: `pub async fn run_cli_from_args(args: Vec<String>)`
+**IMPORTANT DECISION (2025-10-11)**: Two CLI options - optional global admin CLI + language adapter CLIs.
 
-**Language adapters have mixed responsibility**:
+**Design Principle**: Consistency in concepts, not commands. Different languages have different idioms for CLI tools, and we embrace that.
 
-1. **Commands implemented in Rust** (majority):
-   - `migrate`, `status`, `list`, `cancel`, `signal`
-   - Language adapter normalizes `sys.argv` and passes to Rust
-   - Consistent behavior across all languages
+**How Users Invoke Commands:**
 
-2. **Commands requiring language-specific logic** (per-command override):
-   - `worker` - Python/Node handle entirely (module importing, runtime setup)
-   - Language adapter intercepts command, parses args, calls language-specific code
-   - Example: Python imports modules before starting worker loop
+| Language | Command | Version Isolation |
+|----------|---------|-------------------|
+| **Python** | `python -m currant <cmd>` | virtualenv |
+| **Node.js** | `npx currant <cmd>` | node_modules |
+| **Go** | `go run cmd/<cmd>/main.go` | go.mod |
+| **Rust** | `cargo run --bin <cmd>` | Cargo.toml |
+| **Ruby** | `bundle exec currant <cmd>` | Bundler |
+| **Admin (any)** | `currant <cmd>` (optional) | Global install |
+
+---
+
+### Global Admin CLI (Optional)
+
+**Installation:**
+```bash
+cargo install currant-cli
+```
+
+**Available Commands** (database operations only):
+```bash
+currant list           # Query executions
+currant status         # Check schema status
+currant cancel <id>    # Cancel execution
+currant signal <id>    # Send signal to workflow
+currant retry <id>     # Retry failed execution
+currant cleanup        # Purge old executions
+```
+
+**NOT Available** (schema/runtime operations):
+```bash
+currant migrate        # ❌ Use language adapter
+currant worker         # ❌ Use language adapter
+currant bench          # ❌ Use language adapter
+```
+
+**Use Cases:**
+- DevOps/SRE admin tasks without language runtime
+- Quick debugging (`currant list --status=failed`)
+- CI/CD operations (cancel, cleanup, status checks)
+- Multi-language projects (one admin tool)
+
+**Version Strategy:**
+- Reads schema version from database
+- Version compatibility and upgrade management: TBD (future feature)
+- May offer automatic version upgrades in future iterations
+
+---
+
+### Language Adapter CLIs
+
+**Complete CLI** - includes all commands from global CLI + language-specific commands.
+
+**Python/Node.js/Ruby** (CLI-first languages):
+
+```bash
+# All commands available
+python -m currant migrate      # Language-specific (uses installed package)
+python -m currant worker       # Language-specific
+python -m currant bench        # Language-specific
+python -m currant list         # Delegates to bundled core
+python -m currant cancel <id>  # Delegates to bundled core
+```
 
 **Example flow (Python)**:
 ```python
@@ -304,19 +355,126 @@ node/native/
 args = sys.argv.copy()
 args[0] = 'currant'
 
-if args[1] == 'worker':
-    # Python handles: parse args, import modules, run worker
-    await run_worker(queues, worker_id)
+if args[1] in ['worker', 'bench', 'migrate']:
+    # Python handles language-specific commands
+    await run_worker(...) or await run_bench(...) or await run_migrate()
 else:
-    # Rust handles: all other commands
+    # Rust handles: list, status, cancel, signal, retry, cleanup
     RustBridge.run_cli(args)
 ```
 
+**Go/Rust** (library-first languages):
+
+Users write their own command scripts:
+
+```go
+// cmd/migrate/main.go
+package main
+import "github.com/currant/currant"
+
+func main() {
+    currant.Migrate()  // Uses version from go.mod
+}
+
+// cmd/worker/main.go
+func main() {
+    config := currant.LoadConfigFromEnv()
+    worker := currant.NewWorker(config)
+    worker.Run()
+}
+```
+
+```bash
+go run cmd/migrate/main.go
+go run cmd/worker/main.go
+```
+
+**Core provides CLI framework** (`core/src/cli.rs`):
+- Command definitions and argument parsing (using `clap`)
+- Implementation for database operations: `list`, `status`, `cancel`, `signal`, `retry`, `cleanup`
+- Accepts `Vec<String>` args (doesn't read `std::env::args()` directly)
+- Function: `pub async fn run_cli_from_args(args: Vec<String>)`
+
+**Version Management:**
+- **Language adapters**: Version tied to package (pip, npm, go.mod, Cargo.toml)
+- **Global CLI**: Optional, user installs specific version or latest
+- **No version coordination file needed**: Migration runs from language adapter, always uses correct version
+- **Schema version**: Stored in database
+- **Version compatibility**: TBD - strategy for rolling upgrades and backward compatibility
+
+**Migration Strategy:**
+- Always run `migrate` from language adapter (or custom script for Go/Rust)
+- Ensures migration uses same version as application code
+- Global CLI cannot run migrations (prevents version mismatches)
+- Fresh database: Must initialize via language adapter first
+
 **Rationale**:
-- ✅ Eliminates duplication for 90% of CLI code
-- ✅ Allows language-specific behavior where needed
-- ✅ Rust CLI is testable with any args (no process dependency)
-- ✅ Each language can extend with custom commands
+- ✅ Language adapters are self-sufficient (no global CLI needed)
+- ✅ Global CLI is optional (for ops/admin convenience)
+- ✅ No version conflicts (adapters bundle compatible core)
+- ✅ Migrations always match code version
+- ✅ Follows language idioms (CLI-first for Python/Node, library-first for Go/Rust)
+- ✅ Clear separation: schema/runtime = language, data operations = global CLI works fine
+
+### Configuration Management
+
+**Decision (2025-10-11)**: Use config files with environment variable overrides.
+
+**Priority order** (highest to lowest):
+1. CLI flag: `--database-url postgresql://...` (explicit override for debugging)
+2. Environment variable: `CURRANT_DATABASE_URL` (container-friendly)
+3. Config file: `currant.toml` (default for local dev)
+4. Fallback: `postgresql://localhost/currant`
+
+**Config file format** (TOML):
+```toml
+# currant.toml
+[database]
+url = "postgresql://workflows:workflows@localhost/workflows"
+
+[observability]
+enabled = true
+endpoint = "http://localhost:4317"
+```
+
+**Config file location search order**:
+1. `currant.toml` (project root, can commit to repo or gitignore for local overrides)
+2. `~/.config/currant/config.toml` (user-level default)
+
+**Optional**: Load `.env` file if present (many tools do this)
+
+**Benefits**:
+- ✅ No manual env var needed for local dev (config file "just works")
+- ✅ Multi-environment support (dev/staging/prod via different configs)
+- ✅ Multi-language support (Python, Node, Go all read same config file)
+- ✅ Container-friendly (env vars work in Docker/K8s)
+- ✅ Production debugging (can override with `--database-url`)
+
+**Language-specific notes**:
+- **Python/Node/Ruby**: Adapters load config and pass to core
+- **Go/Rust**: Users can use `LoadConfigFromEnv()` helper or build their own config loading
+
+**Example (Go):**
+```go
+func main() {
+    // Option 1: Load from env vars (reads CURRANT_* variables)
+    config := currant.LoadConfigFromEnv()
+
+    // Option 2: Explicit
+    config := currant.Config{
+        DatabaseURL: "postgresql://...",
+        Queues: []string{"default"},
+    }
+
+    // Option 3: Load from config file
+    config := currant.LoadConfig("currant.toml")
+
+    worker := currant.NewWorker(config)
+    worker.Run()
+}
+```
+
+**No version coordination file needed**: Migration always runs from language adapter (which knows its own version), so no `.currant/config.toml` version field is required.
 
 ### Testing Philosophy
 
@@ -367,21 +525,20 @@ See `core/migrations/` for schema details.
 
 ### Benchmarking Tool
 
-**Decision**: Ship benchmark functions with each language adapter
+**Decision (Updated 2025-10-11)**: Benchmarking is implemented in language adapters, not core.
 
 **Implementation**:
-- Rust CLI provides `currant bench` command in `core/src/benchmark.rs`
-- Rust spawns language-specific workers (e.g., `python -m currant worker --import currant.benchmark`)
-- Benchmark functions (`__currant_bench_*`) ship in `currant/benchmark.py` (Node.js: TBD)
-- Rust enqueues jobs/workflows, workers execute them, Rust collects DB-based metrics
+- Each language adapter provides `bench` command (e.g., `python -m currant bench`)
+- Adapter handles spawning workers (knows correct invocation for that language)
+- Benchmark functions (`__currant_bench_*`) ship in adapter's benchmark module
+- Adapter enqueues jobs/workflows via Rust FFI, workers execute, adapter queries metrics from DB
 
-**Why this approach**:
+**Why adapter-specific**:
 - Tests the **full stack**: FFI overhead, serialization, async scheduling, database
-- **Language-specific by design**: Each language adapter has its own benchmark testing the real integration
-- Database-based metrics (no instrumentation needed in worker code)
-- Simulates real workloads: noop jobs, compute jobs, workflows with activities
-
-**Important**: The benchmark is NOT language-agnostic - it's deliberately language-specific to test real adapter performance. Python adapter has `currant bench` (spawns Python workers), Node.js would need its own implementation.
+- **Language-specific by design**: Validates that specific adapter's performance
+- Adapter knows how to spawn its own workers correctly
+- Core stays language-agnostic (no spawning logic, no language assumptions)
+- Users benchmark the actual setup they'll deploy
 
 **Benchmark jobs**:
 - `__currant_bench_noop__`: Minimal overhead job (tests throughput)
@@ -391,14 +548,13 @@ See `core/migrations/` for schema details.
 
 **Usage**:
 ```bash
-# Basic throughput test
-currant bench --workers 10 --jobs 1000
+# Python
+python -m currant bench --workers 10 --jobs 1000
 
-# Workflow test
-currant bench --workers 10 --workflows 100 --activities-per-workflow 5
+# Node
+npx currant bench --workers 10 --workflows 100 --activities-per-workflow 5
 
-# Multi-queue with payload
-currant bench --workers 20 --jobs 1000 --queues default,priority --payload-size 10000
+# Go/Rust (library-only, users can write custom benchmarks if needed)
 ```
 
 **Metrics collected**:
