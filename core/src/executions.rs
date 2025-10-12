@@ -13,7 +13,7 @@ pub async fn create_execution(params: CreateExecutionParams) -> Result<String> {
         "{}_{}",
         match params.exec_type {
             ExecutionType::Task => "task",
-            ExecutionType::Workflow => "wor",
+            ExecutionType::Workflow => "flow",
         },
         Uuid::new_v4()
     );
