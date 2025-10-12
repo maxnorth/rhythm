@@ -539,44 +539,172 @@ See `core/migrations/` for schema details.
 
 ### Benchmarking Tool
 
-**Decision (Updated 2025-10-11)**: Benchmarking is implemented in language adapters, not core.
+**Decision (Updated 2025-10-12)**: Two benchmark modes - baseline (pure Rust) and adapter (full stack).
 
-**Implementation**:
-- Each language adapter provides `bench` command (e.g., `python -m currant bench`)
-- Adapter handles spawning workers (knows correct invocation for that language)
-- Benchmark functions (`__currant_bench_*`) ship in adapter's benchmark module
-- Adapter enqueues tasks/workflows via Rust FFI, workers execute, adapter queries metrics from DB
+#### Architecture Overview
 
-**Why adapter-specific**:
-- Tests the **full stack**: FFI overhead, serialization, async scheduling, database
-- **Language-specific by design**: Validates that specific adapter's performance
-- Adapter knows how to spawn its own workers correctly
-- Core stays language-agnostic (no spawning logic, no language assumptions)
-- Users benchmark the actual setup they'll deploy
+**Core provides unified benchmark implementation** (`core/src/benchmark.rs`):
+- Single orchestration logic: enqueue work → wait for completion → collect metrics
+- Two worker modes:
+  1. **Baseline mode**: Internal tokio tasks (pure Rust, no external processes)
+  2. **Adapter mode**: External worker processes (spawned via command passed by adapter)
+- Core stays language-agnostic (adapters tell core how to spawn their workers)
 
-**Benchmark functions**:
+#### Baseline Benchmark (Admin CLI)
+
+**Purpose**: Establish performance ceiling - test pure database/core throughput without FFI/serialization/language runtime overhead.
+
+**How it works**:
+- Spawns N concurrent tokio tasks (not processes) in the benchmark process
+- Each task runs tight loop: `claim_execution()` → optional delay → `complete_execution()`
+- Uses tokio multi-threaded runtime to maximize CPU utilization
+- No worker processes, no FFI, no serialization - pure Rust throughput
+
+**Command**:
+```bash
+# Admin CLI (also available via Python passthrough)
+currant bench --tasks 10000 --concurrency 1000
+
+# Optional: simulate work between claim/complete
+currant bench --tasks 10000 --concurrency 1000 --work-delay-us 100
+```
+
+**Configuration**:
+- `--concurrency N`: Number of concurrent claim loops (tokio tasks, not processes)
+- `--work-delay-us N`: Microseconds of simulated work per task (default: 0 = pure DB load)
+- `--tasks N`: Number of tasks to enqueue
+- `--workflows N`: Number of workflows to enqueue
+- `--duration 30s`: Max benchmark duration
+
+**Use cases**:
+- "Can the database handle X tasks/sec?"
+- "What's the theoretical maximum throughput?"
+- "Is the bottleneck in core or in the language adapter?"
+
+#### Adapter Benchmark (Language-Specific)
+
+**Purpose**: Measure real-world performance including FFI, serialization, language runtime, and worker coordination.
+
+**How it works**:
+- Language adapter tells core how to spawn workers (passes command as argument)
+- Core spawns N worker processes using the provided command
+- Workers claim and execute actual benchmark functions
+- Tests full stack: FFI overhead, serialization, async scheduling, database
+
+**Commands**:
+```bash
+# Python - baseline (passthrough to admin CLI)
+python -m currant bench --tasks 10000 --concurrency 1000
+# ⚠️  Warning: Running baseline benchmark (pure Rust)
+#    To benchmark Python workers: python -m currant bench worker --workers N
+
+# Python - worker benchmark (Python-specific command)
+python -m currant bench worker --workers 10 --tasks 1000
+
+# Node.js - worker benchmark
+npx currant bench worker --workers 10 --tasks 1000
+```
+
+**Benchmark functions** (in adapter modules):
 - `__currant_bench_noop__`: Minimal overhead task (tests throughput)
 - `__currant_bench_compute__`: CPU-bound task (tests under load)
 - `__currant_bench_task__`: No-op task (tests workflow coordination)
 - `__currant_bench_workflow__`: Workflow with N tasks (tests end-to-end)
 
-**Usage**:
+**Configuration**:
+- `--workers N`: Number of worker processes to spawn
+- `--tasks N`: Number of tasks to enqueue
+- `--workflows N`: Number of workflows to enqueue
+- Other options: `--payload-size`, `--compute-iterations`, `--duration`, etc.
+
+**Use cases**:
+- "What throughput will my Python deployment achieve?"
+- "How much overhead does FFI/serialization add?"
+- "Performance comparison: Python vs Node.js vs future Rust adapter"
+
+#### Comparison & Interpretation
+
+**Expected performance relationships**:
+- **Baseline**: 2000-10000+ tasks/sec (pure database ceiling)
+- **Python adapter**: 20-30% of baseline (FFI + GIL + serialization overhead)
+- **Node.js adapter**: 30-40% of baseline (FFI + event loop overhead)
+- **Future Rust adapter**: 80-90% of baseline (minimal FFI, native async)
+
+**Example analysis**:
 ```bash
-# Python
-python -m currant bench --workers 10 --tasks 1000
+# Run baseline
+currant bench --tasks 10000 --concurrency 1000
+# Result: 5000 tasks/sec
 
-# Node
-npx currant bench --workers 10 --workflows 100 --tasks-per-workflow 5
+# Run Python worker benchmark
+python -m currant bench worker --workers 10 --tasks 10000
+# Result: 1200 tasks/sec (24% of baseline)
 
-# Go/Rust (library-only, users can write custom benchmarks if needed)
+# Interpretation: 76% overhead from Python (FFI, serialization, GIL)
+# This is expected and acceptable for Python deployments
 ```
 
-**Metrics collected**:
+#### Metrics Collected (Same for Both Modes)
+
 - Tasks/sec throughput
-- Average latency (created_at → completed_at)
-- Success/failure rates
-- Database query load
-- Worker utilization
+- Latency percentiles (P50, P95, P99) - created_at → completed_at
+- Success/failure/pending counts
+- Separate metrics for tasks vs workflows
+- Warmup period support (exclude first N% from stats)
+
+#### Implementation Details
+
+**Core benchmark orchestration** (`core/src/benchmark.rs`):
+```rust
+pub enum WorkerMode {
+    Baseline { concurrency: usize, work_delay_us: Option<u64> },
+    External { command: Vec<String>, workers: usize },
+}
+
+pub async fn run_benchmark(mode: WorkerMode, params: BenchmarkParams) -> Result<()> {
+    // Start workers (either internal tasks or external processes)
+    // Enqueue work to database
+    // Wait for completion
+    // Collect metrics from database
+    // Display report
+}
+```
+
+**Language adapter integration** (Python example):
+```python
+# python/currant/__main__.py
+if args[1] == 'bench':
+    if len(args) > 2 and args[2] == 'worker':
+        # Python handles: bench worker
+        worker_cmd = ["python", "-m", "currant", "worker", "--queue", "default", "--import", "currant.benchmark"]
+        RustBridge.run_benchmark(
+            mode=WorkerMode::External(worker_cmd),
+            workers=args.workers,
+            params=...
+        )
+    else:
+        # Passthrough to admin CLI: bench (baseline mode)
+        print("⚠️  Running baseline benchmark (pure Rust)")
+        print("   To benchmark Python workers: python -m currant bench worker --workers N")
+        RustBridge.run_cli(args)
+```
+
+#### Design Rationale
+
+**Why two modes?**
+- Baseline establishes theoretical ceiling and validates database performance
+- Adapter benchmarks show real-world deployment performance
+- Comparison reveals where optimization efforts should focus
+
+**Why core orchestrates both?**
+- Single implementation of metrics collection (consistency)
+- Same output format (easy comparison)
+- Core stays language-agnostic (adapters just pass worker command)
+
+**Why baseline uses tokio tasks not processes?**
+- Maximizes throughput (1000s of concurrent operations)
+- Tests pure database capacity without process spawn overhead
+- Represents best-case performance (what a highly-optimized Rust adapter could achieve)
 
 ## Common Patterns
 
@@ -602,14 +730,20 @@ Currant is designed to support any language with FFI capabilities. To add a new 
 ### Running Benchmarks
 
 ```bash
-# Measure your setup's performance
-currant bench --workers 10 --tasks 1000 --workflows 100
+# Baseline benchmark (pure Rust, theoretical maximum)
+currant bench --tasks 10000 --concurrency 1000
 
-# Test different queue configurations
-currant bench --workers 20 --queues default,priority,background
+# Baseline with simulated work
+currant bench --tasks 10000 --concurrency 1000 --work-delay-us 100
+
+# Python worker benchmark (full stack)
+python -m currant bench worker --workers 10 --tasks 1000
 
 # Test with realistic payloads
-currant bench --workers 10 --tasks 1000 --payload-size 10000
+python -m currant bench worker --workers 10 --tasks 1000 --payload-size 10000
+
+# Test different queue configurations
+python -m currant bench worker --workers 20 --queues default,priority
 ```
 
 ---
