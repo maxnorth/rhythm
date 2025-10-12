@@ -4,8 +4,8 @@
 Transform Currant into a professional-grade async scheduler that can compete with Celery, Temporal, and BullMQ.
 
 **Target Performance:**
-- **Throughput**: 10,000+ jobs/sec with 50 workers
-- **Latency**: p99 < 50ms for noop jobs
+- **Throughput**: 10,000+ tasks/sec with 50 workers
+- **Latency**: p99 < 50ms for noop tasks
 - **Efficiency**: Near-zero DB load when idle
 - **Scalability**: Linear scaling with worker count
 
@@ -22,15 +22,15 @@ Transform Currant into a professional-grade async scheduler that can compete wit
 - The "listener_loop" is just polling, not listening
 - **Fix**: Add asyncpg connection for LISTEN, wake workers on NOTIFY
 
-### 3. Single-Job Claiming
-- Worker claims 1 job at a time via DB query
+### 3. Single-Task Claiming
+- Worker claims 1 task at a time via DB query
 - High DB round-trip overhead
-- **Fix**: Batch-claim up to `max_concurrent` jobs in one query
+- **Fix**: Batch-claim up to `max_concurrent` tasks in one query
 
 ### 4. No Prefetching
 - Worker waits for capacity, then claims
-- Leads to idle time between job completions
-- **Fix**: Prefetch jobs into local queue when below 50% capacity
+- Leads to idle time between task completions
+- **Fix**: Prefetch tasks into local queue when below 50% capacity
 
 ### 5. Inefficient Execution Model
 - Single claim attempt per loop iteration
@@ -56,10 +56,10 @@ Transform Currant into a professional-grade async scheduler that can compete wit
 4. Update Python worker to claim batch when capacity available
 5. Measure: Throughput should increase 3-5x
 
-### Phase 3: Local Job Queue + Prefetching
+### Phase 3: Local Task Queue + Prefetching
 **Files**: `python/currant/worker.py`
 
-1. Add `asyncio.Queue` as local job buffer (max size = `max_concurrent * 2`)
+1. Add `asyncio.Queue` as local task buffer (max size = `max_concurrent * 2`)
 2. Separate "claimer" task that keeps queue filled
 3. Execution tasks pull from local queue
 4. Prefetch when queue < 50% full
@@ -84,7 +84,7 @@ Transform Currant into a professional-grade async scheduler that can compete wit
 ### Phase 6: Benchmark Improvements
 **Files**: `core/src/benchmark.rs`
 
-1. Add `--rate` limiting (spread job enqueueing over time)
+1. Add `--rate` limiting (spread task enqueueing over time)
 2. Add real-time throughput monitoring during test
 3. Add latency histogram output
 4. Add DB query count measurement
@@ -95,23 +95,23 @@ Transform Currant into a professional-grade async scheduler that can compete wit
 Each phase will be validated with:
 ```bash
 # Baseline (before changes)
-python -m currant bench --workers 10 --jobs 1000 --warmup-percent 10
+python -m currant bench --workers 10 --tasks 1000 --warmup-percent 10
 
 # After each phase
-python -m currant bench --workers 10 --jobs 1000 --warmup-percent 10
-python -m currant bench --workers 50 --jobs 10000 --warmup-percent 10
+python -m currant bench --workers 10 --tasks 1000 --warmup-percent 10
+python -m currant bench --workers 50 --tasks 10000 --warmup-percent 10
 
 # Stress test
-python -m currant bench --workers 100 --jobs 50000 --duration 60s
+python -m currant bench --workers 100 --tasks 50000 --duration 60s
 ```
 
 ## Success Metrics
 
 | Metric | Baseline (Expected) | Target |
 |--------|---------------------|--------|
-| Throughput (10 workers, 1000 jobs) | ~100-200/sec | 500+/sec |
-| Throughput (50 workers, 10000 jobs) | ~500/sec | 5000+/sec |
-| p99 Latency (noop job) | 200-500ms | <50ms |
+| Throughput (10 workers, 1000 tasks) | ~100-200/sec | 500+/sec |
+| Throughput (50 workers, 10000 tasks) | ~500/sec | 5000+/sec |
+| p99 Latency (noop task) | 200-500ms | <50ms |
 | DB queries when idle (100 workers) | 1000+/sec | <20/sec |
 
 ## Non-Goals (Scope Control)

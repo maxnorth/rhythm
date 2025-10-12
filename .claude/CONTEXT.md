@@ -2,6 +2,21 @@
 
 > **Instructions for Claude**: Read this file at the start of each session (via `/context` command). After making significant architectural decisions or design changes, UPDATE this file to preserve context for future conversations.
 
+## Development Status
+
+**Pre-release**: Currant has not been released yet and has no users.
+**Breaking changes are OK** - Do not add backwards compatibility code or worry about breaking changes. Make clean, direct changes.
+
+## Recent Changes
+
+**2024-10-12**: Simplified execution types to only "task" and "workflow"
+- Removed "task" and "task" types entirely - consolidated into "task"
+- `@task` decorator for both standalone and workflow steps
+- Tasks with `parent_workflow_id` are workflow steps
+- Database migration consolidated all types to "task" and "workflow"
+- All code, docs, and examples updated throughout codebase
+- No backwards compatibility needed (pre-release)
+
 ## What is Currant?
 
 Currant is a **lightweight durable execution framework** that enables building reliable, multi-step workflows using only PostgreSQL - no external orchestrator needed.
@@ -21,7 +36,7 @@ Currant is a **lightweight durable execution framework** that enables building r
 │  (Any language with FFI)        │
 │  Python ✅  Node.js ✅          │
 │  Future: Go, Rust, etc.         │
-│  - Decorators (@job, @workflow) │
+│  - Decorators (@task, @workflow)│
 │  - Worker loops                 │
 │  - Workflow replay logic        │
 └────────────┬────────────────────┘
@@ -48,13 +63,13 @@ Currant is a **lightweight durable execution framework** that enables building r
 **Rust Core** (`/core`):
 - `lib.rs` - PyO3/FFI bindings exposing Rust functions to language adapters
 - `db.rs` - Database connection pooling (sqlx)
-- `executions.rs` - CRUD operations for jobs/workflows/activities
+- `executions.rs` - CRUD operations for tasks/workflows
 - `worker.rs` - Worker heartbeat, dead worker detection, failover
 - `signals.rs` - Workflow signal management
 - `types.rs` - Shared data structures
 
 **Python Adapter** (`/python/currant`):
-- `decorators.py` - `@job`, `@activity`, `@workflow` decorators
+- `decorators.py` - `@task`, `@workflow` decorators
 - `registry.py` - Function registry for decorated functions
 - `worker.py` - Worker loop (claim → execute → report)
 - `client.py` - `.queue()`, `send_signal()` client API
@@ -127,12 +142,12 @@ Currant is a **lightweight durable execution framework** that enables building r
 **Decision**: Use deterministic replay for workflow suspension/resumption.
 
 **How it works**:
-1. Workflow calls `activity.run()` → raises `WorkflowSuspendException`
-2. Worker catches exception, creates activity execution, suspends workflow
-3. Activity completes (separate execution)
+1. Workflow calls `task.run()` → raises `WorkflowSuspendException`
+2. Worker catches exception, creates task execution, suspends workflow
+3. Task completes (separate execution with parent_workflow_id set)
 4. Workflow resumes, re-executes from beginning
-5. Previous activities return cached results from checkpoint
-6. Workflow continues to next activity or completes
+5. Previous tasks return cached results from checkpoint
+6. Workflow continues to next task or completes
 
 **Why this approach**:
 - ✅ Transparent to developers (just write normal async code)
@@ -142,21 +157,20 @@ Currant is a **lightweight durable execution framework** that enables building r
 
 ## Execution Model
 
-### Three Execution Types
+### Two Execution Types
 
-1. **Job**: Simple async task (like Celery)
-   - Single unit of work
+1. **Task**: Async unit of work
+   - Can run standalone (via `.queue()`)
+   - Can run as workflow step (via `.run()` inside workflow)
+   - Distinguished by `parent_workflow_id` column:
+     - NULL = standalone task
+     - Set = workflow step
    - Retries on failure
-   - Example: Send email, process payment
+   - Example: Send email, charge payment, validate order
 
-2. **Activity**: Workflow step
-   - Always runs within a workflow context
-   - Suspends parent workflow until complete
-   - Example: Charge card, send receipt
-
-3. **Workflow**: Multi-step orchestration
-   - Coordinates multiple activities
-   - Survives crashes via checkpointing
+2. **Workflow**: Multi-step orchestration
+   - Coordinates multiple tasks using `.run()`
+   - Survives crashes via checkpointing and deterministic replay
    - Example: Order processing, approval flow
 
 ### Queue-First Design
@@ -165,7 +179,7 @@ Currant is a **lightweight durable execution framework** that enables building r
 
 ```python
 # Enqueue (returns immediately with execution_id)
-job_id = await send_email.queue(to="user@example.com", subject="Hi")
+task_id = await send_email.queue(to="user@example.com", subject="Hi")
 
 # Worker picks it up asynchronously
 ```
@@ -485,7 +499,7 @@ func main() {
 ### Database Schema
 
 Critical tables:
-- `executions`: All jobs/activities/workflows (polymorphic)
+- `executions`: All tasks/workflows (polymorphic)
 - `worker_heartbeats`: Worker liveness tracking
 - `workflow_signals`: External events for workflows
 
@@ -531,7 +545,7 @@ See `core/migrations/` for schema details.
 - Each language adapter provides `bench` command (e.g., `python -m currant bench`)
 - Adapter handles spawning workers (knows correct invocation for that language)
 - Benchmark functions (`__currant_bench_*`) ship in adapter's benchmark module
-- Adapter enqueues jobs/workflows via Rust FFI, workers execute, adapter queries metrics from DB
+- Adapter enqueues tasks/workflows via Rust FFI, workers execute, adapter queries metrics from DB
 
 **Why adapter-specific**:
 - Tests the **full stack**: FFI overhead, serialization, async scheduling, database
@@ -540,25 +554,25 @@ See `core/migrations/` for schema details.
 - Core stays language-agnostic (no spawning logic, no language assumptions)
 - Users benchmark the actual setup they'll deploy
 
-**Benchmark jobs**:
-- `__currant_bench_noop__`: Minimal overhead job (tests throughput)
-- `__currant_bench_compute__`: CPU-bound job (tests under load)
-- `__currant_bench_activity__`: No-op activity (tests workflow coordination)
-- `__currant_bench_workflow__`: Workflow with N activities (tests end-to-end)
+**Benchmark functions**:
+- `__currant_bench_noop__`: Minimal overhead task (tests throughput)
+- `__currant_bench_compute__`: CPU-bound task (tests under load)
+- `__currant_bench_task__`: No-op task (tests workflow coordination)
+- `__currant_bench_workflow__`: Workflow with N tasks (tests end-to-end)
 
 **Usage**:
 ```bash
 # Python
-python -m currant bench --workers 10 --jobs 1000
+python -m currant bench --workers 10 --tasks 1000
 
 # Node
-npx currant bench --workers 10 --workflows 100 --activities-per-workflow 5
+npx currant bench --workers 10 --workflows 100 --tasks-per-workflow 5
 
 # Go/Rust (library-only, users can write custom benchmarks if needed)
 ```
 
 **Metrics collected**:
-- Jobs/sec throughput
+- Tasks/sec throughput
 - Average latency (created_at → completed_at)
 - Success/failure rates
 - Database query load
@@ -582,20 +596,20 @@ Currant is designed to support any language with FFI capabilities. To add a new 
 
 - Check `executions` table for state
 - Look at `checkpoint` JSON for replay history
-- Worker logs show which activities executed
-- Use `get_workflow_activities()` to see child executions
+- Worker logs show which tasks executed
+- Use `get_workflow_tasks()` to see child executions
 
 ### Running Benchmarks
 
 ```bash
 # Measure your setup's performance
-currant bench --workers 10 --jobs 1000 --workflows 100
+currant bench --workers 10 --tasks 1000 --workflows 100
 
 # Test different queue configurations
 currant bench --workers 20 --queues default,priority,background
 
 # Test with realistic payloads
-currant bench --workers 10 --jobs 1000 --payload-size 10000
+currant bench --workers 10 --tasks 1000 --payload-size 10000
 ```
 
 ---

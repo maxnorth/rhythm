@@ -28,7 +28,7 @@ class WorkflowSuspendException(Exception):
 class WorkflowExecutionContext:
     """
     Context for a workflow execution.
-    Manages replay state and activity execution.
+    Manages replay state and task execution.
     """
 
     def __init__(self, execution_id: str, checkpoint: Optional[dict] = None):
@@ -61,39 +61,39 @@ class WorkflowExecutionContext:
             return event
         return None
 
-    async def execute_activity(self, activity_proxy, args: tuple, kwargs: dict) -> Any:
+    async def execute_task(self, task_proxy, args: tuple, kwargs: dict) -> Any:
         """
-        Execute an activity within the workflow.
-        Either returns cached result (replay) or suspends to execute activity.
+        Execute a task within the workflow.
+        Either returns cached result (replay) or suspends to execute task.
         """
         # Check if we're replaying this step
         history_event = self.get_next_history_event()
 
         if history_event:
             # REPLAY MODE: return cached result
-            assert history_event["type"] == "activity", "History mismatch: expected activity"
-            assert history_event["name"] == activity_proxy.function_name, (
-                f"History mismatch: expected {activity_proxy.function_name}, got {history_event['name']}"
+            assert history_event["type"] == "task", "History mismatch: expected task"
+            assert history_event["name"] == task_proxy.function_name, (
+                f"History mismatch: expected {task_proxy.function_name}, got {history_event['name']}"
             )
 
-            logger.debug(f"Replaying activity {activity_proxy.function_name}")
+            logger.debug(f"Replaying task {task_proxy.function_name}")
             return history_event["result"]
         else:
             # NEW STEP: we've finished replaying, now executing new steps
             # (is_replaying was already set to False by get_next_history_event)
-            activity_execution_id = generate_id("act")
+            task_execution_id = generate_id("task")
 
-            logger.debug(f"Suspending workflow to execute activity {activity_proxy.function_name}")
+            logger.debug(f"Suspending workflow to execute task {task_proxy.function_name}")
 
-            # Record command to execute this activity
+            # Record command to execute this task
             self.new_commands.append(
                 {
-                    "type": "activity",
-                    "activity_execution_id": activity_execution_id,
-                    "name": activity_proxy.function_name,
+                    "type": "task",
+                    "task_execution_id": task_execution_id,
+                    "name": task_proxy.function_name,
                     "args": list(args),
                     "kwargs": kwargs,
-                    "config": activity_proxy.config,
+                    "config": task_proxy.config,
                 }
             )
 

@@ -16,7 +16,7 @@ export CURRANT_DATABASE_URL="postgresql://workflows:workflows@localhost/workflow
 export PYTHONPATH="$PYTHON_ROOT:${PYTHONPATH}"
 
 # Run the test script
-echo "Enqueuing jobs with environment:"
+echo "Enqueuing tasks with environment:"
 echo "  CURRANT_DATABASE_URL=$CURRANT_DATABASE_URL"
 echo "  PYTHONPATH=$PYTHONPATH"
 echo ""

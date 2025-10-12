@@ -1,5 +1,5 @@
 /**
- * Worker implementation for executing jobs, activities, and workflows
+ * Worker implementation for executing tasks and workflows
  */
 
 import { RustBridge } from './rust-bridge-native.js';
@@ -249,11 +249,11 @@ export class Worker {
   ): Promise<void> {
     console.log(`Workflow ${execution.id} suspended with ${commands.length} commands`);
 
-    // Create activity executions for each command
+    // Create task executions for each command
     for (const cmd of commands) {
-      if (cmd.type === 'activity') {
+      if (cmd.type === 'task') {
         await RustBridge.createExecution({
-          execType: 'activity',
+          execType: 'task',
           functionName: cmd.name,
           queue: execution.queue, // Inherit workflow's queue
           priority: cmd.config.priority || 5,
@@ -273,7 +273,7 @@ export class Worker {
     };
 
     await RustBridge.suspendWorkflow(execution.id, newCheckpoint);
-    console.log(`Workflow ${execution.id} suspended and activities created`);
+    console.log(`Workflow ${execution.id} suspended and tasks created`);
   }
 
   private async handleExecutionFailure(execution: any, error: any): Promise<void> {

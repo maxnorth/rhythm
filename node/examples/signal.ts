@@ -2,19 +2,19 @@
  * Example demonstrating workflow signals for human-in-the-loop workflows
  */
 
-import { workflow, activity, waitForSignal } from '../src/index.js';
+import { workflow, task, waitForSignal } from '../src/index.js';
 
-const prepareDocument = activity<[string], { prepared: boolean; doc_id: string }>({})(
-  async (docId: string) => {
-    console.log(`[PREPARE] Preparing document ${docId} for review`);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    return { prepared: true, doc_id: docId };
-  }
-);
+const prepareDocument = task<[string], { prepared: boolean; doc_id: string }>({
+  queue: 'documents',
+})(async (docId: string) => {
+  console.log(`[PREPARE] Preparing document ${docId} for review`);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  return { prepared: true, doc_id: docId };
+});
 
-const publishDocument = activity<[string], { published: boolean; doc_id: string; url: string }>(
-  {}
-)(async (docId: string) => {
+const publishDocument = task<[string], { published: boolean; doc_id: string; url: string }>({
+  queue: 'documents',
+})(async (docId: string) => {
   console.log(`[PUBLISH] Publishing document ${docId}`);
   await new Promise((resolve) => setTimeout(resolve, 300));
   return {
@@ -24,13 +24,13 @@ const publishDocument = activity<[string], { published: boolean; doc_id: string;
   };
 });
 
-const archiveDocument = activity<[string], { archived: boolean; doc_id: string }>({})(
-  async (docId: string) => {
-    console.log(`[ARCHIVE] Archiving rejected document ${docId}`);
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    return { archived: true, doc_id: docId };
-  }
-);
+const archiveDocument = task<[string], { archived: boolean; doc_id: string }>({
+  queue: 'documents',
+})(async (docId: string) => {
+  console.log(`[ARCHIVE] Archiving rejected document ${docId}`);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  return { archived: true, doc_id: docId };
+});
 
 type ApprovalResult =
   | {

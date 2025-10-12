@@ -88,9 +88,9 @@ class RustBridge:
         return None
 
     @staticmethod
-    def get_workflow_activities(workflow_id: str) -> List[Dict[str, Any]]:
-        """Get workflow activities"""
-        result = rust.get_workflow_activities_sync(workflow_id=workflow_id)
+    def get_workflow_tasks(workflow_id: str) -> List[Dict[str, Any]]:
+        """Get workflow child tasks"""
+        result = rust.get_workflow_tasks_sync(workflow_id=workflow_id)
         return json.loads(result)
 
     @staticmethod

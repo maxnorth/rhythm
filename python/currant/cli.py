@@ -52,7 +52,7 @@ def migrate():
     help="Python module(s) to import (e.g. examples.simple_example)",
 )
 def worker(queue, worker_id, import_module):
-    """Run a worker to process jobs and workflows"""
+    """Run a worker to process tasks and workflows"""
     queues = list(queue)
 
     # Import modules to register functions

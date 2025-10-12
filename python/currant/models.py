@@ -10,8 +10,7 @@ import json
 class ExecutionType(str, Enum):
     """Type of execution"""
 
-    JOB = "job"
-    ACTIVITY = "activity"
+    TASK = "task"
     WORKFLOW = "workflow"
 
 
@@ -33,7 +32,7 @@ class WorkerStatus(str, Enum):
 
 
 class Execution(BaseModel):
-    """An execution (job, activity, or workflow)"""
+    """An execution (task or workflow)"""
 
     id: str
     type: ExecutionType

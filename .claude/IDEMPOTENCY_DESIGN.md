@@ -11,11 +11,11 @@ Idempotency guarantees ensure that duplicate task/workflow invocations don't cau
 - Worker crashes (task executes but crashes before completion)
 - Application logic retries (intentional retry after failure)
 
-## Terminology Change: Job → Task
+## Terminology Change: Task → Task
 
-**Decision**: Rename "job" to "task" throughout codebase
-- `@currant.job` → `@currant.task`
-- Drop `@currant.activity` - activities are just tasks called from workflows
+**Decision**: Rename "task" to "task" throughout codebase
+- `@currant.task` → `@currant.task`
+- Drop `@currant.task` - workflow steps are just tasks called from workflows
 - Database columns may keep internal naming for now, expose as "task" in API
 
 ## Core Design Decisions
@@ -183,7 +183,7 @@ WHERE completed_at IS NOT NULL;
 
 ### Retention Cleanup Query
 
-**Background job runs periodically** (e.g., every hour):
+**Background task runs periodically** (e.g., every hour):
 
 ```sql
 -- Per-queue retention cleanup
@@ -248,10 +248,10 @@ await currant.enqueue(
     task_id="payment-order-456"  # Optional
 )
 
-# Task as activity (within workflow)
+# Task within workflow
 @currant.workflow
 async def process_order(ctx, order_id):
-    result = await ctx.execute_activity(
+    result = await ctx.execute_task(
         charge_stripe,
         order_id,
         task_id="payment-order-456"  # Optional
@@ -276,9 +276,9 @@ await currant.start_workflow(
 - Workflows have state/history (need to reference them)
 - Child workflows need to reference parents
 
-## Activities = Tasks
+## Workflow Steps = Tasks
 
-**No more `@currant.activity` decorator**
+**No more `@currant.task` decorator**
 
 ```python
 # Define once
@@ -289,20 +289,20 @@ async def charge_stripe(order_id):
 # Use as standalone
 await currant.enqueue(charge_stripe, order_id=123)
 
-# Use as activity
+# Use as workflow step
 @currant.workflow
 async def process_order(ctx, order_id):
-    await ctx.execute_activity(charge_stripe, order_id)
+    await ctx.execute_task(charge_stripe, order_id)
 ```
 
 **Implementation**:
 - Tasks have optional `parent_workflow_id` column
-- Tasks called from workflows have `execution_type='activity'`
+- Tasks called from workflows have `parent_workflow_id` set (NULL for standalone)
 - But they're just tasks in a queue
 
 ## Rate Limiting & Tasks
 
-**Tasks in activities can be rate-limited via queue config**
+**Tasks in workflows can be rate-limited via queue config**
 
 ```toml
 [queues.stripe-api]
@@ -320,7 +320,7 @@ await currant.enqueue(charge_stripe, order_id=123)
 # From workflow: also rate-limited (same queue!)
 @currant.workflow
 async def process_order(ctx, order_id):
-    await ctx.execute_activity(charge_stripe, order_id)
+    await ctx.execute_task(charge_stripe, order_id)
     # → Goes to "stripe-api" queue → rate limited
 ```
 
@@ -408,7 +408,7 @@ handle2 = await currant.enqueue(
 result2 = await handle2.result()  # Same: {"payment_id": "pay_abc"}
 ```
 
-### Workflow with Activities
+### Workflow with Tasks
 
 ```python
 @currant.task(queue="payments")
@@ -421,14 +421,14 @@ async def reserve_inventory(order_id):
 
 @currant.workflow
 async def process_order(ctx, order_id):
-    # Activities are tasks with queue routing
-    payment = await ctx.execute_activity(
+    # Workflow steps are tasks with queue routing
+    payment = await ctx.execute_task(
         charge_card,
         order_id,
         task_id=f"payment-{order_id}"  # Idempotent
     )
 
-    inventory = await ctx.execute_activity(
+    inventory = await ctx.execute_task(
         reserve_inventory,
         order_id,
         task_id=f"inventory-{order_id}"  # Idempotent
@@ -504,8 +504,8 @@ await currant.enqueue(charge_card, task_id="payment-123")
 - ✅ Add `task_id` and `result` columns
 - ✅ Implement "Allow Duplicate Failed Only" policy
 - ✅ Add retention configuration per queue
-- ✅ Background cleanup job
-- ✅ Rename job → task throughout codebase
+- ✅ Background cleanup task
+- ✅ Rename task → task throughout codebase
 
 ### Phase 2: Optimizations (v2)
 - Optional Redis cache for deduplication
@@ -528,8 +528,8 @@ await currant.enqueue(charge_card, task_id="payment-123")
 - [ ] Migration script
 
 **Core**:
-- [ ] Rename `job` → `task` in all code
-- [ ] Drop `@activity` decorator (use `@task` everywhere)
+- [ ] Rename `task` → `task` in all code
+- [ ] Drop `@task` decorator (use `@task` everywhere)
 - [ ] Implement task_id generation (UUID if not provided)
 - [ ] Implement duplicate detection on enqueue
 - [ ] Store result on task completion
@@ -541,13 +541,13 @@ await currant.enqueue(charge_card, task_id="payment-123")
 - [ ] Parse retention duration strings ("7d", "30d", etc)
 
 **Cleanup**:
-- [ ] Background job for retention cleanup
+- [ ] Background task for retention cleanup
 - [ ] Per-queue cleanup logic
 - [ ] Configurable cleanup interval (default: 1 hour)
 
 **API**:
 - [ ] `task_id` parameter on `enqueue()`
-- [ ] `task_id` parameter on `execute_activity()`
+- [ ] `task_id` parameter on `execute_task()`
 - [ ] Return existing execution handle for duplicates
 - [ ] Clear error messages for duplicate cases
 
@@ -573,5 +573,5 @@ None! All decisions made.
 
 - Temporal Workflow ID reuse policies: https://docs.temporal.io/workflow-execution/workflowid-runid
 - DBOS idempotency: https://docs.dbos.dev/python/tutorials/workflow-tutorial
-- BullMQ deduplication: https://docs.bullmq.io/guide/jobs/deduplication
+- BullMQ deduplication: https://docs.bullmq.io/guide/tasks/deduplication
 - RESEARCH_FINDINGS.md: Comprehensive comparison of all platforms

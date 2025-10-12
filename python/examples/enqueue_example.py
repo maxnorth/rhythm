@@ -1,4 +1,4 @@
-"""Enqueue example jobs from imported module"""
+"""Enqueue example tasks from imported module"""
 
 import asyncio
 from examples.simple_example import send_notification, process_order_workflow
@@ -7,15 +7,15 @@ from examples.simple_example import send_notification, process_order_workflow
 async def main():
     """Enqueue some work"""
     print("=" * 60)
-    print("Enqueuing example jobs and workflows")
+    print("Enqueuing example tasks and workflows")
     print("=" * 60 + "\n")
 
-    # Enqueue a simple notification job
-    job_id = await send_notification.queue(
+    # Enqueue a simple notification task
+    task_id = await send_notification.queue(
         user_id="user_123",
         message="Your order has been confirmed!"
     )
-    print(f"✓ Notification job enqueued: {job_id}\n")
+    print(f"✓ Notification task enqueued: {task_id}\n")
 
     # # Enqueue an order processing workflow
     # workflow_id = await process_order_workflow.queue(
@@ -38,7 +38,7 @@ async def main():
     # print(f"✓ High-priority order workflow enqueued: {workflow_id_2}\n")
 
     print("=" * 60)
-    print("Jobs enqueued! Start workers to process them:")
+    print("Tasks enqueued! Start workers to process them:")
     print("  currant worker -q notifications -q orders -m examples.simple_example")
     print("=" * 60)
 

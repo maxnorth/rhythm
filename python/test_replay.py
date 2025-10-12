@@ -1,27 +1,27 @@
 """Test is_replaying() functionality"""
 
 import asyncio
-from currant import workflow, activity, is_replaying
+from currant import workflow, task, is_replaying
 
 
-@activity(retries=2)
+@task(queue="test", retries=2)
 async def step1():
-    """First activity"""
-    print("[ACTIVITY] Step 1 executing")
+    """First task"""
+    print("[TASK] Step 1 executing")
     return {"step": 1, "result": "done"}
 
 
-@activity(retries=2)
+@task(queue="test", retries=2)
 async def step2():
-    """Second activity"""
-    print("[ACTIVITY] Step 2 executing")
+    """Second task"""
+    print("[TASK] Step 2 executing")
     return {"step": 2, "result": "done"}
 
 
-@activity(retries=2)
+@task(queue="test", retries=2)
 async def step3():
-    """Third activity"""
-    print("[ACTIVITY] Step 3 executing")
+    """Third task"""
+    print("[TASK] Step 3 executing")
     return {"step": 3, "result": "done"}
 
 

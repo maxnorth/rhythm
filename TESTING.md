@@ -83,17 +83,17 @@ python examples/enqueue_example.py
 Expected output:
 ```
 ============================================================
-Enqueuing example jobs and workflows
+Enqueuing example tasks and workflows
 ============================================================
 
-✓ Notification job enqueued: job_xxxxx
+✓ Notification task enqueued: job_xxxxx
 
 ✓ Order workflow enqueued: wor_xxxxx
 
 ✓ High-priority order workflow enqueued: wor_xxxxx
 
 ============================================================
-Jobs enqueued! Start workers to process them:
+Tasks enqueued! Start workers to process them:
   currant worker -q notifications -q orders -m examples.simple_example
 ============================================================
 ```
@@ -114,7 +114,7 @@ Starting worker for queues: notifications, orders
 2025-10-05 XX:XX:XX [INFO] workflows.worker: Worker worker_xxxxx initialized for queues: ['notifications', 'orders']
 2025-10-05 XX:XX:XX [INFO] workflows.worker: Worker worker_xxxxx starting...
 2025-10-05 XX:XX:XX [INFO] workflows.worker: Worker worker_xxxxx listening on queues: ['notifications', 'orders']
-2025-10-05 XX:XX:XX [INFO] workflows.worker: Claimed job execution job_xxxxx: examples.simple_example.send_notification
+2025-10-05 XX:XX:XX [INFO] workflows.worker: Claimed task execution job_xxxxx: examples.simple_example.send_notification
 [NOTIFICATION] Sending to user user_123: Your order has been confirmed!
 2025-10-05 XX:XX:XX [INFO] workflows.worker: Execution job_xxxxx completed successfully
 ...
@@ -142,12 +142,12 @@ The E2E test covers:
 1. ✓ Rust core builds successfully via maturin
 2. ✓ Database migrations run via Rust
 3. ✓ Python can import and use Rust extension (`workflows_core`)
-4. ✓ Jobs can be enqueued via `RustBridge.create_execution()`
-5. ✓ Worker can claim jobs via `RustBridge.claim_execution()`
+4. ✓ Tasks can be enqueued via `RustBridge.create_execution()`
+5. ✓ Worker can claim tasks via `RustBridge.claim_execution()`
 6. ✓ Functions execute correctly
 7. ✓ Results are stored via `RustBridge.complete_execution()`
 8. ✓ Workflows suspend and resume correctly
-9. ✓ Activities are created and executed
+9. ✓ Tasks are created and executed
 10. ✓ Worker heartbeats function via `RustBridge.update_heartbeat()`
 
 ## Debugging
@@ -244,7 +244,7 @@ cargo build
 # Terminal 1: Start worker
 python -m currant worker -q bench -m examples.simple_example
 
-# Terminal 2: Enqueue 1000 jobs
+# Terminal 2: Enqueue 1000 tasks
 python -c "
 import asyncio
 from examples.simple_example import send_notification
@@ -252,14 +252,14 @@ from examples.simple_example import send_notification
 async def main():
     for i in range(1000):
         await send_notification.queue(user_id=f'user_{i}', message='test')
-    print('Enqueued 1000 jobs')
+    print('Enqueued 1000 tasks')
 
 asyncio.run(main())
 "
 ```
 
 Monitor:
-- Time to process all jobs
+- Time to process all tasks
 - Database CPU usage
 - Worker memory usage
 
@@ -272,7 +272,7 @@ name: Test
 
 on: [push, pull_request]
 
-jobs:
+tasks:
   test:
     runs-on: ubuntu-latest
     services:

@@ -9,7 +9,7 @@ import {
   getVersion,
   runInWorkflowContext,
 } from '../context.js';
-import { activity } from '../decorators.js';
+import { task } from '../decorators.js';
 import type { HistoryEvent } from '../types.js';
 
 describe('WorkflowExecutionContext', () => {
@@ -17,8 +17,8 @@ describe('WorkflowExecutionContext', () => {
     it('should replay from history', async () => {
       const history: HistoryEvent[] = [
         {
-          type: 'activity',
-          name: 'testActivity',
+          type: 'task',
+          name: 'testTask',
           result: { value: 42 },
         },
       ];
@@ -27,11 +27,11 @@ describe('WorkflowExecutionContext', () => {
 
       expect(ctx.isReplaying).toBe(true);
 
-      const testActivity = activity<[], { value: number }>()(async function testActivity() {
+      const testTask = task<[], { value: number }>({ queue: 'test' })(async function testTask() {
         return { value: 100 };
       });
 
-      const result = await ctx.executeActivity(testActivity, []);
+      const result = await ctx.executeTask(testTask, []);
       expect(result).toEqual({ value: 42 }); // Should return cached result
       expect(ctx.isReplaying).toBe(true); // Still replaying
     });
@@ -41,11 +41,11 @@ describe('WorkflowExecutionContext', () => {
 
       expect(ctx.isReplaying).toBe(false);
 
-      const testActivity = activity<[], { value: number }>()(async function testActivity() {
+      const testTask = task<[], { value: number }>({ queue: 'test' })(async function testTask() {
         return { value: 100 };
       });
 
-      await expect(ctx.executeActivity(testActivity, [])).rejects.toThrow(
+      await expect(ctx.executeTask(testTask, [])).rejects.toThrow(
         WorkflowSuspendException
       );
     });
@@ -53,19 +53,19 @@ describe('WorkflowExecutionContext', () => {
     it('should throw on history mismatch', async () => {
       const history: HistoryEvent[] = [
         {
-          type: 'activity',
-          name: 'wrongActivity',
+          type: 'task',
+          name: 'wrongTask',
           result: { value: 42 },
         },
       ];
 
       const ctx = new WorkflowExecutionContext('test-exec-3', { history });
 
-      const testActivity = activity<[], { value: number }>()(async function testActivity() {
+      const testTask = task<[], { value: number }>({ queue: 'test' })(async function testTask() {
         return { value: 100 };
       });
 
-      await expect(ctx.executeActivity(testActivity, [])).rejects.toThrow('History mismatch');
+      await expect(ctx.executeTask(testTask, [])).rejects.toThrow('History mismatch');
     });
   });
 
@@ -97,8 +97,8 @@ describe('WorkflowExecutionContext', () => {
     it('should get replaying state', async () => {
       const history: HistoryEvent[] = [
         {
-          type: 'activity',
-          name: 'testActivity',
+          type: 'task',
+          name: 'testTask',
           result: { value: 42 },
         },
       ];

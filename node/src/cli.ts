@@ -16,7 +16,7 @@ program
 
 program
   .command('worker')
-  .description('Run a worker to process jobs and workflows')
+  .description('Run a worker to process tasks and workflows')
   .requiredOption('-q, --queue <queues...>', 'Queue(s) to process')
   .option('-m, --import <modules...>', 'Module(s) to import')
   .option('--worker-id <id>', 'Worker ID (auto-generated if not provided)')

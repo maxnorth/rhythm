@@ -12,8 +12,7 @@ pub async fn create_execution(params: CreateExecutionParams) -> Result<String> {
     let id = format!(
         "{}_{}",
         match params.exec_type {
-            ExecutionType::Job => "job",
-            ExecutionType::Activity => "act",
+            ExecutionType::Task => "task",
             ExecutionType::Workflow => "wor",
         },
         Uuid::new_v4()
@@ -280,7 +279,7 @@ pub async fn fail_execution(execution_id: &str, error: JsonValue, retry: bool) -
     Ok(())
 }
 
-/// Suspend a workflow (for activity execution)
+/// Suspend a workflow (for task execution)
 pub async fn suspend_workflow(workflow_id: &str, checkpoint: JsonValue) -> Result<()> {
     let pool = get_pool().await?;
 
@@ -460,8 +459,8 @@ pub async fn cancel_execution(execution_id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Get child activity executions for a workflow
-pub async fn get_workflow_activities(workflow_id: &str) -> Result<Vec<Execution>> {
+/// Get child task executions for a workflow
+pub async fn get_workflow_tasks(workflow_id: &str) -> Result<Vec<Execution>> {
     let pool = get_pool().await?;
 
     let rows = sqlx::query(
@@ -474,11 +473,11 @@ pub async fn get_workflow_activities(workflow_id: &str) -> Result<Vec<Execution>
     .bind(workflow_id)
     .fetch_all(pool.as_ref())
     .await
-    .context("Failed to get workflow activities")?;
+    .context("Failed to get workflow child tasks")?;
 
-    let mut activities = Vec::new();
+    let mut child_tasks = Vec::new();
     for row in rows {
-        activities.push(Execution {
+        child_tasks.push(Execution {
             id: row.get("id"),
             exec_type: row.get("type"),
             function_name: row.get("function_name"),
@@ -502,7 +501,7 @@ pub async fn get_workflow_activities(workflow_id: &str) -> Result<Vec<Execution>
         });
     }
 
-    Ok(activities)
+    Ok(child_tasks)
 }
 
 #[cfg(test)]
@@ -513,8 +512,8 @@ mod tests {
     #[ignore] // Requires database
     async fn test_create_and_claim_execution() {
         let params = CreateExecutionParams {
-            exec_type: ExecutionType::Job,
-            function_name: "test.job".to_string(),
+            exec_type: ExecutionType::Task,
+            function_name: "test.task".to_string(),
             queue: "test".to_string(),
             priority: 5,
             args: serde_json::json!([]),
@@ -525,7 +524,7 @@ mod tests {
         };
 
         let id = create_execution(params).await.unwrap();
-        assert!(id.starts_with("job_"));
+        assert!(id.starts_with("task_"));
 
         let execution = claim_execution("test-worker", &["test".to_string()])
             .await

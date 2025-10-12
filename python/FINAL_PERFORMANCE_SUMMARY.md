@@ -3,8 +3,8 @@
 ## Results After All Improvements
 
 ### Throughput vs Worker Count
-- **5 workers**: 27.5 jobs/sec = 5.5 jobs/sec/worker
-- **10 workers**: 14.9 jobs/sec = 1.5 jobs/sec/worker  ⚠️ **WORSE**
+- **5 workers**: 27.5 tasks/sec = 5.5 tasks/sec/worker
+- **10 workers**: 14.9 tasks/sec = 1.5 tasks/sec/worker  ⚠️ **WORSE**
 - **20 workers**: Hung/timeout
 
 ### Latency
@@ -15,8 +15,8 @@
 ## Root Cause: Database Connection Pool Saturation
 
 **Evidence**:
-1. Performance **degrades** with more workers (27.5 → 14.9 jobs/sec)
-2. More workers = worse per-worker throughput (5.5 → 1.5 jobs/sec/worker)
+1. Performance **degrades** with more workers (27.5 → 14.9 tasks/sec)
+2. More workers = worse per-worker throughput (5.5 → 1.5 tasks/sec/worker)
 3. 20 workers hang completely
 
 This is classic connection pool exhaustion. Workers are blocking waiting for DB connections.
@@ -29,27 +29,27 @@ This is classic connection pool exhaustion. Workers are blocking waiting for DB 
 - **Impact**: Helped idle efficiency, but not throughput under load
 
 ### 2. ✅ Batch Claiming
-- Claim up to 10 jobs per query
+- Claim up to 10 tasks per query
 - **Impact**: Minimal - claiming isn't the bottleneck
 
 ### 3. ✅ Shared Tokio Runtime
 - Single global runtime instead of creating new ones
 - **Impact**: ~5% improvement in FFI overhead
 
-### 4. ✅ Local Job Queue + Prefetching
-- Workers maintain local queue of 20 jobs
+### 4. ✅ Local Task Queue + Prefetching
+- Workers maintain local queue of 20 tasks
 - Separate claimer/executor tasks
 - Semaphore-based concurrency control
 - **Impact**: None - DB is still the bottleneck
 
 ## The REAL Bottleneck: Database I/O
 
-Every job requires **2 synchronous DB operations**:
+Every task requires **2 synchronous DB operations**:
 1. **Claim**: `UPDATE executions SET status='running'...`
 2. **Complete**: `UPDATE executions SET status='completed'...`
 
-At 27.5 jobs/sec with 5 workers:
-- **55 UPDATE queries/sec** (2 per job)
+At 27.5 tasks/sec with 5 workers:
+- **55 UPDATE queries/sec** (2 per task)
 - **Each query**: ~20-40ms round-trip
 - **Workers spend ~80% of time waiting for DB**
 
@@ -82,7 +82,7 @@ Redis avoids all of these:
 **Expected gain**: 2-3x throughput
 
 ### Option 2: Batch Completions
-Complete multiple jobs in one query:
+Complete multiple tasks in one query:
 ```sql
 UPDATE executions
 SET status = 'completed',
@@ -117,12 +117,12 @@ asyncio.create_task(RustBridge.complete_execution(...))
 2. **Implement Option 2** (batch completions) - Big gain, moderate effort
 3. **Accept limitations** - PostgreSQL will never match Redis speed
 
-**Realistic target after fixes**: 100-150 jobs/sec with 10 workers
+**Realistic target after fixes**: 100-150 tasks/sec with 10 workers
 
-**Current**: 27.5 jobs/sec with 5 workers
-**After pool tuning**: ~80 jobs/sec
-**After batch completions**: ~150 jobs/sec
-**Redis equivalent**: 2000+ jobs/sec
+**Current**: 27.5 tasks/sec with 5 workers
+**After pool tuning**: ~80 tasks/sec
+**After batch completions**: ~150 tasks/sec
+**Redis equivalent**: 2000+ tasks/sec
 
 ## Conclusion
 
@@ -133,10 +133,10 @@ We've eliminated all the Python/architecture bottlenecks. The remaining bottlene
 - ✅ Prefetching: Eliminated idle time
 - ❌ **Database I/O**: Can't eliminate, only optimize
 
-**PostgreSQL as a job queue is ~10-20x slower than Redis**, but the trade-off is:
+**PostgreSQL as a task queue is ~10-20x slower than Redis**, but the trade-off is:
 - ✅ No additional infrastructure
 - ✅ ACID guarantees
 - ✅ Simpler deployment
 - ❌ Lower throughput
 
-For most applications, 100-150 jobs/sec is acceptable. For high-throughput use cases, consider Redis or a hybrid approach.
+For most applications, 100-150 tasks/sec is acceptable. For high-throughput use cases, consider Redis or a hybrid approach.

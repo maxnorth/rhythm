@@ -1,17 +1,17 @@
 /**
- * Enqueue example jobs from imported module
+ * Enqueue example tasks from imported module
  */
 
 import { sendNotification, processOrderWorkflow } from './simple.js';
 
 async function main() {
   console.log('='.repeat(60));
-  console.log('Enqueuing example jobs and workflows');
+  console.log('Enqueuing example tasks and workflows');
   console.log('='.repeat(60) + '\n');
 
-  // Enqueue a simple notification job
-  const jobId = await sendNotification.queue('user_123', 'Your order has been confirmed!');
-  console.log(`✓ Notification job enqueued: ${jobId}\n`);
+  // Enqueue a simple notification task
+  const taskId = await sendNotification.queue('user_123', 'Your order has been confirmed!');
+  console.log(`✓ Notification task enqueued: ${taskId}\n`);
 
   // Enqueue an order processing workflow
   const workflowId = await processOrderWorkflow.queue(
@@ -30,7 +30,7 @@ async function main() {
   console.log(`✓ High-priority order workflow enqueued: ${workflowId2}\n`);
 
   console.log('='.repeat(60));
-  console.log('Jobs enqueued! Start workers to process them:');
+  console.log('Tasks and workflows enqueued! Start workers to process them:');
   console.log('  currant worker -q notifications -q orders');
   console.log('='.repeat(60));
 }

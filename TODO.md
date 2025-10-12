@@ -1,13 +1,133 @@
 # Currant - TODO List
 
-> **Last Updated**: 2025-10-11
+> **Last Updated**: 2025-10-12
 > **Status**: Active development - Python adapter mature, Node.js in progress
 
 This document tracks missing functionality and planned features for Currant. Items are prioritized based on recent architectural decisions and project maturity needs.
 
+**Recent Updates**:
+- 2025-10-12: Added Priority 1 items for idempotency and rate limiting (see IDEMPOTENCY_DESIGN.md and RESEARCH_FINDINGS.md)
+- 2025-10-11: Initial CLI architecture and observability priorities
+
+**Quick Summary of New Priority 1 Work**:
+- Rename "task" → "task" throughout codebase
+- Implement task_id (idempotency key) with optional UUID generation
+- Add result storage (automatic based on return value)
+- Implement "Allow Duplicate Failed Only" policy (like Temporal)
+- Add retention configuration per queue (default: tasks=7d, workflows=30d)
+- Implement queue-level rate limiting (token bucket, zero-cost when disabled)
+- Unify Tasks and tasks (drop @task decorator)
+- Enable task queue routing for rate limiting
+
+**Total Priority 1 Items**: 12 major items with ~60+ subtasks
+
 ---
 
-## **Priority 1: CLI Architecture & Configuration (Critical)**
+## **Priority 1: Idempotency & Rate Limiting (Critical - NEW)**
+
+These are foundational features needed for production readiness. Full design in `.claude/IDEMPOTENCY_DESIGN.md`.
+
+### Terminology Change: Task → Task
+
+**1. Rename "task" to "task" throughout codebase**
+- [ ] Rename `@currant.task` → `@currant.task` in Python adapter
+- [ ] Update all documentation (README, docstrings, comments)
+- [ ] Update CLI help text
+- [ ] Rename functions: `enqueue_job` → `enqueue_task`, etc.
+- [ ] Keep internal database columns as-is for now (can rename later)
+- [ ] Drop `@currant.task` concept - Tasks are just tasks
+
+### Idempotency Implementation
+
+**2. Database schema for idempotency**
+- [ ] Add `task_id VARCHAR(255)` column to executions table
+- [ ] Add `result JSONB` column to executions table
+- [ ] Create unique index: `idx_task_id_active` (with status filter for failed/cancelled/timed_out)
+- [ ] Create index: `idx_executions_retention` for cleanup queries
+- [ ] Migration script for schema changes
+- [ ] Update Rust types in `core/src/types.rs`
+
+**3. Task ID generation and deduplication**
+- [ ] Generate UUID for `task_id` if not provided by user
+- [ ] Implement duplicate detection on enqueue (PostgreSQL `ON CONFLICT`)
+- [ ] Return existing execution for duplicates (pending/running/completed)
+- [ ] Allow retry for failed/cancelled/timed_out (new execution with same task_id)
+- [ ] Store result JSONB on task completion (if function returns value)
+- [ ] Return cached result for duplicate requests
+
+**4. ID reuse policy (hardcoded for v1)**
+- [ ] Implement "Allow Duplicate Failed Only" behavior
+- [ ] Block duplicates for: pending, running, completed
+- [ ] Allow duplicates for: failed, cancelled, timed_out
+- [ ] Clear error messages for each case
+- [ ] Tests for all status combinations
+
+**5. Retention configuration**
+- [ ] Add `retention` field to queue config (TOML + programmatic)
+- [ ] Default retention: tasks=7d, workflows=30d
+- [ ] Parse duration strings ("7d", "30d", "365d", "0" for immediate)
+- [ ] Background cleanup task (runs hourly)
+- [ ] Per-queue retention cleanup logic
+- [ ] Tests for retention cleanup
+
+**6. Task API updates**
+- [ ] Add `task_id` parameter to `enqueue()` (optional)
+- [ ] Add `task_id` parameter to `execute_activity()` (optional)
+- [ ] Return execution handle with result retrieval
+- [ ] Update Python adapter API
+- [ ] Update Node adapter API (when implemented)
+- [ ] Documentation and examples
+
+### Rate Limiting Implementation
+
+**7. Queue configuration for rate limiting**
+- [ ] Add `rate_limit` field to queue config (e.g., "100/sec", "1000/min")
+- [ ] Parse rate limit strings into tokens + duration
+- [ ] Store queue config in database or load from currant.toml
+- [ ] Zero-cost check: if no rate_limit, skip all rate limiting logic
+- [ ] Tests for config parsing
+
+**8. Token bucket rate limiter**
+- [ ] Create `rate_limits` table (queue, tokens, last_refill)
+- [ ] Implement token bucket algorithm in Rust
+- [ ] Check rate limit before claiming task (if queue has rate_limit)
+- [ ] Update tokens atomically on successful claim
+- [ ] Refill tokens based on elapsed time
+- [ ] Tests for rate limiting behavior
+
+**9. Rate limiting optimizations**
+- [ ] Fast path: direct claim if queue has no rate_limit
+- [ ] Slow path: check rate_limit table first, then claim
+- [ ] Partial index for fast claims: `WHERE status = 'pending'`
+- [ ] Target performance: 500-1000 tasks/sec per worker (with rate limiting)
+- [ ] Performance benchmarks
+
+**10. Queue auto-creation**
+- [ ] Allow tasks to reference queue by string (no pre-definition needed)
+- [ ] Queues auto-create on first use
+- [ ] Apply config from currant.toml if exists
+- [ ] Default config if not in currant.toml
+- [ ] Tests for auto-creation
+
+### Tasks = Tasks Unification
+
+**11. Unify Tasks and tasks**
+- [ ] Remove `@currant.task` decorator
+- [ ] Tasks can be called standalone or from workflows
+- [ ] Add `parent_workflow_id` column to executions (nullable)
+- [ ] Tasks called from workflows populate `parent_workflow_id`
+- [ ] `execution_type` field: 'task' or 'workflow_task' (or keep as 'task'/'task' internally)
+- [ ] Tests for both usage patterns
+
+**12. Queue routing for Tasks**
+- [ ] Tasks declare queue via decorator: `@currant.task(queue="stripe-api")`
+- [ ] Tasks use task's queue (not workflow's queue)
+- [ ] Rate limiting applies to task tasks
+- [ ] Tests for cross-queue task calls
+
+---
+
+## **Priority 2: CLI Architecture & Configuration (Critical)**
 
 These items reflect recent architectural decisions (2025-10-11) that need implementation.
 
@@ -214,9 +334,9 @@ Bring Node.js adapter to parity with Python.
 
 **24. Node.js end-to-end tests**
 - [ ] Worker E2E tests (similar to Python's test suite)
-- [ ] Job execution tests
+- [ ] Task execution tests
 - [ ] Workflow execution tests
-- [ ] Activity coordination tests
+- [ ] Task coordination tests
 - [ ] Signal handling tests
 - [ ] Failover tests
 
@@ -289,7 +409,7 @@ These are planned but not actively worked on until Python/Node are mature.
 **33. Workflow testing utilities**
 - Not started
 - Helpers for testing workflows in isolation
-- Mock activities, time controls
+- Mock Tasks, time controls
 
 **34. Additional language adapters**
 - Not started until Python/Node reach maturity
@@ -309,20 +429,36 @@ See `.claude/CONTEXT.md` for detailed architectural decisions including:
 - Version management strategy
 - Observability design principles
 
+See `.claude/IDEMPOTENCY_DESIGN.md` for complete idempotency design including:
+- Task ID (idempotency key) behavior
+- Retention and deduplication windows
+- ID reuse policy ("Allow Duplicate Failed Only")
+- Result storage and caching
+- Rate limiting approach (queue-level, token bucket)
+- Tasks = tasks unification
+- Performance targets and optimizations
+
 See `.claude/TRACING_DESIGN.md` for complete observability design including:
 - Metrics to collect
 - Tracing implementation
 - Cross-language propagation
 - OTLP export strategy
 
+See `.claude/RESEARCH_FINDINGS.md` for competitive analysis including:
+- How Temporal, DBOS, Celery, Sidekiq, BullMQ handle idempotency
+- Rate limiting implementations across platforms
+- 35 prioritized features from mature workflow systems
+- Feature comparison matrix
+
 ### Priority Ordering Rationale
 
-1. **CLI & Config** (Priority 1) - Blocking architectural changes from recent decisions
-2. **Observability** (Priority 2) - Critical for production usage
-3. **Node.js Maturity** (Priority 3) - Second language adapter
-4. **Testing** (Priority 4) - Quality assurance
-5. **Documentation** (Priority 5) - User experience
-6. **Future** (Priority 6) - Nice-to-have features
+1. **Idempotency & Rate Limiting** (Priority 1) - Foundation for production reliability, prevents duplicate operations
+2. **CLI & Config** (Priority 2) - Blocking architectural changes from recent decisions
+3. **Observability** (Priority 3) - Critical for production usage
+4. **Node.js Maturity** (Priority 4) - Second language adapter
+5. **Testing** (Priority 5) - Quality assurance
+6. **Documentation** (Priority 6) - User experience
+7. **Future** (Priority 7) - Nice-to-have features
 
 ### How to Use This Document
 

@@ -39,10 +39,10 @@ See [BUILD.md](BUILD.md) for detailed instructions.
 ## Quick Start
 
 ```typescript
-import { job, activity, workflow, isReplaying } from 'currant';
+import { task, workflow, isReplaying } from 'currant';
 
-// Define a simple job
-const sendEmail = job<[string, string], void>({
+// Define a simple task
+const sendEmail = task<[string, string], void>({
   queue: 'emails',
   retries: 3
 })(async (to: string, subject: string) => {
@@ -50,8 +50,8 @@ const sendEmail = job<[string, string], void>({
   // Email sending logic here
 });
 
-// Define activities for workflow steps
-const chargeCard = activity<[number, string], { transactionId: string }>({
+// Define tasks for workflow steps
+const chargeCard = task<[number, string], { transactionId: string }>({
   retries: 5,
   timeout: 120
 })(async (amount: number, cardToken: string) => {
@@ -59,13 +59,13 @@ const chargeCard = activity<[number, string], { transactionId: string }>({
   return { transactionId: 'txn_123' };
 });
 
-const sendReceipt = activity<[string, number], void>()(
+const sendReceipt = task<[string, number], void>()(
   async (email: string, amount: number) => {
     // Receipt sending logic
   }
 );
 
-// Define a workflow that orchestrates activities
+// Define a workflow that orchestrates tasks
 const processPayment = workflow<[string, number, string], { status: string }>({
   queue: 'payments',
   version: 1,
@@ -75,7 +75,7 @@ const processPayment = workflow<[string, number, string], { status: string }>({
     console.log('Starting payment processing...');
   }
 
-  // Activities are checkpointed and can be replayed
+  // Tasks are checkpointed and can be replayed
   const payment = await chargeCard.run(amount, cardToken);
 
   if (!isReplaying()) {
@@ -94,12 +94,12 @@ await processPayment.queue('user@example.com', 9999, 'tok_visa');
 
 ## Core Concepts
 
-### Jobs
+### Tasks
 
-Jobs are standalone async tasks that run independently:
+Tasks are standalone async units of work that run independently:
 
 ```typescript
-const processImage = job<[string], { url: string }>({
+const processImage = task<[string], { url: string }>({
   queue: 'images',
   retries: 3,
   timeout: 300,
@@ -109,16 +109,16 @@ const processImage = job<[string], { url: string }>({
   return { url: 'https://...' };
 });
 
-// Enqueue the job
-const jobId = await processImage.queue('img_123');
+// Enqueue the task
+const taskId = await processImage.queue('img_123');
 ```
 
-### Activities
+### Workflow Steps
 
-Activities are workflow steps that are automatically checkpointed:
+Tasks can also be workflow steps that are automatically checkpointed:
 
 ```typescript
-const validateOrder = activity<[string, number], { valid: boolean }>({
+const validateOrder = task<[string, number], { valid: boolean }>({
   retries: 3,
   timeout: 60
 })(async (orderId: string, amount: number) => {
@@ -126,13 +126,13 @@ const validateOrder = activity<[string, number], { valid: boolean }>({
   return { valid: true };
 });
 
-// Activities must be called from within a workflow using .run()
+// Tasks must be called from within a workflow using .run()
 const result = await validateOrder.run('order_123', 9999);
 ```
 
 ### Workflows
 
-Workflows orchestrate multiple activities with automatic retry and recovery:
+Workflows orchestrate multiple tasks with automatic retry and recovery:
 
 ```typescript
 const processOrder = workflow<
@@ -143,7 +143,7 @@ const processOrder = workflow<
   version: 1,
   timeout: 600
 })(async (orderId: string, amount: number) => {
-  // Each activity is checkpointed
+  // Each task is checkpointed
   const validation = await validateOrder.run(orderId, amount);
   const payment = await chargePayment.run(orderId, amount);
   const shipment = await shipOrder.run(orderId);
@@ -208,8 +208,7 @@ const processOrder = workflow<[string], any>({
 
 ### Decorators
 
-- `job<TArgs, TReturn>(config)` - Define a standalone job
-- `activity<TArgs, TReturn>(config?)` - Define an activity (workflow step)
+- `task<TArgs, TReturn>(config)` - Define a task (standalone or workflow step)
 - `workflow<TArgs, TReturn>(config)` - Define a workflow
 
 ### Client Functions
@@ -228,7 +227,7 @@ const processOrder = workflow<[string], any>({
 
 See the `examples/` directory for complete examples:
 
-- `examples/simple.ts` - Jobs, activities, and workflows
+- `examples/simple.ts` - Tasks and workflows
 - `examples/signal.ts` - Human-in-the-loop with signals
 - `examples/enqueue.ts` - Enqueuing from imported modules
 

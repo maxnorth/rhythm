@@ -32,22 +32,22 @@ Implemented critical performance optimizations to transform Currant into a profe
 - **Notification latency**: ~50-100ms average → <5ms with NOTIFY
 - **Scalability**: Can now run 1000+ idle workers without DB strain
 
-###2. ✅ Batch Job Claiming (Phase 2)
+###2. ✅ Batch Task Claiming (Phase 2)
 
-**Problem**: Workers claimed 1 job at a time
-- One DB round-trip per job
+**Problem**: Workers claimed 1 task at a time
+- One DB round-trip per task
 - High overhead, especially with network latency
 - Workers could have idle cycles between claims
 
 **Solution**: Implemented batch claiming
-- Workers claim up to `max_concurrent` jobs in one query
-- Single DB round-trip for multiple jobs
+- Workers claim up to `max_concurrent` tasks in one query
+- Single DB round-trip for multiple tasks
 - Better utilization under high load
 
 **Files Changed**:
 - `core/src/executions.rs`:
   - Added `claim_executions_batch()` function
-  - Uses `LIMIT $3` to claim multiple jobs atomically
+  - Uses `LIMIT $3` to claim multiple tasks atomically
   - Returns `Vec<Execution>` instead of `Option<Execution>`
 
 - `python/native/src/lib.rs`:
@@ -60,18 +60,18 @@ Implemented critical performance optimizations to transform Currant into a profe
 - `python/currant/worker.py`:
   - Updated `_try_claim_and_execute()` to use batch claiming
   - Calculates `available_capacity` dynamically
-  - Launches all claimed jobs as concurrent tasks
+  - Launches all claimed tasks as concurrent tasks
   - Replaced `_claim_execution()` with `_claim_executions_batch()`
 
 **Impact**:
 - **Throughput**: 3-5x improvement expected under load
-- **DB queries**: Reduced by 70-90% (10 queries → 1-3 queries for 10 jobs)
+- **DB queries**: Reduced by 70-90% (10 queries → 1-3 queries for 10 tasks)
 - **Worker utilization**: Higher, less idle time between claims
 
 ### 3. ✅ Throughput Calculation Fix
 
 **Problem**: Benchmark measured throughput from after enqueueing completed, not from start
-- Didn't include time to insert jobs into queue
+- Didn't include time to insert tasks into queue
 - Inflated throughput numbers
 
 **Solution**: Changed `start_time` to use `enqueue_start_time`
@@ -86,7 +86,7 @@ Implemented critical performance optimizations to transform Currant into a profe
 
 **Impact**:
 - **Accuracy**: Benchmark now shows realistic system throughput
-- **Transparency**: Users see true cost including job creation
+- **Transparency**: Users see true cost including task creation
 
 ## SQL Optimizations
 
@@ -110,7 +110,7 @@ RETURNING *
 
 **Key Features**:
 - `FOR UPDATE SKIP LOCKED`: Multiple workers don't block each other
-- `LIMIT $3`: Claims up to N jobs atomically
+- `LIMIT $3`: Claims up to N tasks atomically
 - `ORDER BY priority DESC, created_at ASC`: Respects priority and FIFO
 
 ## Expected Performance Gains
@@ -119,12 +119,12 @@ RETURNING *
 |----------|--------|-------|-------------|
 | **Idle DB Load** (100 workers) | 1000+ queries/sec | ~20 queries/sec | 50x reduction |
 | **Notification Latency** | 50-100ms avg | <5ms | 10-20x faster |
-| **Throughput** (10 workers, 1000 jobs) | ~200/sec | 600-1000/sec | 3-5x |
-| **DB Queries per Job** | 1 per job | 0.1-0.3 per job | 3-10x reduction |
+| **Throughput** (10 workers, 1000 tasks) | ~200/sec | 600-1000/sec | 3-5x |
+| **DB Queries per Task** | 1 per task | 0.1-0.3 per task | 3-10x reduction |
 
 ## Remaining Optimizations (Future Work)
 
-### Phase 3: Local Job Queue + Prefetching
+### Phase 3: Local Task Queue + Prefetching
 - Add `asyncio.Queue` as local buffer
 - Separate claimer task to keep queue filled
 - Prefetch when queue <50% full
@@ -148,13 +148,13 @@ To validate improvements:
 ```bash
 # Baseline (with improvements)
 export CURRANT_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
-.venv/bin/python -m currant bench --workers 10 --jobs 1000 --warmup-percent 10
+.venv/bin/python -m currant bench --workers 10 --tasks 1000 --warmup-percent 10
 
 # Throughput test
-.venv/bin/python -m currant bench --workers 50 --jobs 10000 --warmup-percent 10
+.venv/bin/python -m currant bench --workers 50 --tasks 10000 --warmup-percent 10
 
 # Latency test
-.venv/bin/python -m currant bench --workers 10 --jobs 100 --warmup-percent 20
+.venv/bin/python -m currant bench --workers 10 --tasks 100 --warmup-percent 20
 
 # Stress test
 .venv/bin/python -m currant bench --workers 100 --duration 60s
@@ -178,7 +178,7 @@ The improvements maintain Currant's core design principles:
 ## Professional-Grade Features Achieved
 
 1. **Near-Zero Idle Cost**: LISTEN/NOTIFY eliminates polling waste
-2. **Batch Processing**: Reduces per-job overhead dramatically
+2. **Batch Processing**: Reduces per-task overhead dramatically
 3. **Lock-Free Claiming**: `SKIP LOCKED` enables horizontal scaling
 4. **Fair Scheduling**: Priority + FIFO ordering preserved
 5. **Graceful Fallback**: Works even if NOTIFY fails

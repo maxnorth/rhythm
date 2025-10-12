@@ -11,11 +11,11 @@ use crate::types::{CreateExecutionParams, ExecutionType};
 
 pub struct BenchmarkParams {
     pub workers: usize,
-    pub jobs: usize,
+    pub tasks: usize,
     pub workflows: usize,
-    pub job_type: String,
+    pub task_type: String,
     pub payload_size: usize,
-    pub activities_per_workflow: usize,
+    pub tasks_per_workflow: usize,
     pub queues: String,
     pub queue_distribution: Option<String>,
     pub duration: Option<String>,
@@ -49,12 +49,12 @@ impl Default for LatencyMetrics {
 struct BenchmarkMetrics {
     start_time: DateTime<Utc>,
     end_time: DateTime<Utc>,
-    enqueued_jobs: usize,
+    enqueued_tasks: usize,
     enqueued_workflows: usize,
-    completed_jobs: i64,
-    failed_jobs: i64,
-    pending_jobs: i64,
-    job_latency: LatencyMetrics,
+    completed_tasks: i64,
+    failed_tasks: i64,
+    pending_tasks: i64,
+    task_latency: LatencyMetrics,
     workflow_latency: LatencyMetrics,
 }
 
@@ -98,14 +98,14 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
 
     println!("\n📋 Configuration:");
     println!("   Workers: {}", params.workers);
-    println!("   Jobs: {}", params.jobs);
+    println!("   Tasks: {}", params.tasks);
     println!("   Workflows: {}", params.workflows);
-    println!("   Job Type: {}", params.job_type);
+    println!("   Task Type: {}", params.task_type);
     if params.payload_size > 0 {
         println!("   Payload Size: {} bytes", params.payload_size);
     }
     if params.workflows > 0 {
-        println!("   Activities/Workflow: {}", params.activities_per_workflow);
+        println!("   Activities/Workflow: {}", params.tasks_per_workflow);
     }
     println!("   Queues: {}", params.queues);
     if let Some(ref rate) = params.rate {
@@ -122,26 +122,26 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
     sleep(Duration::from_secs(8)).await;
     println!("✓ Workers started");
 
-    // Step 2: Enqueue jobs
+    // Step 2: Enqueue tasks
     println!("\n📬 Enqueueing work...");
     let enqueue_start = Instant::now();
 
-    // Mark the time when first job is enqueued (for finding executions)
+    // Mark the time when first taskis enqueued (for finding executions)
     let enqueue_start_time = Utc::now();
 
-    let enqueued_jobs = enqueue_jobs(&params, &queues, &distribution).await?;
+    let enqueued_tasks = enqueue_tasks(&params, &queues, &distribution).await?;
     let enqueued_workflows = enqueue_workflows(&params, &queues, &distribution).await?;
 
     let enqueue_duration = enqueue_start.elapsed();
-    println!("✓ Enqueued {} jobs and {} workflows in {:.2}s",
-             enqueued_jobs, enqueued_workflows, enqueue_duration.as_secs_f64());
+    println!("✓ Enqueued {} tasks and {} workflows in {:.2}s",
+             enqueued_tasks, enqueued_workflows, enqueue_duration.as_secs_f64());
 
     // Start measuring execution performance AFTER enqueueing
     let execution_start_time = Utc::now();
 
     // Step 3: Wait for completion or timeout
-    println!("\n⏳ Waiting for jobs to complete...");
-    let total_work = enqueued_jobs + enqueued_workflows;
+    println!("\n⏳ Waiting for tasks to complete...");
+    let total_work = enqueued_tasks + enqueued_workflows;
 
     let timeout = if let Some(duration_str) = &params.duration {
         parse_duration(duration_str)?
@@ -151,7 +151,7 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
 
     wait_for_completion(enqueue_start_time, total_work, timeout).await?;
 
-    // Give workflows a moment to finalize after their activities complete
+    // Give workflows a moment to finalize after their tasks complete
     // This ensures workflow executions themselves show as 'completed' in metrics
     if enqueued_workflows > 0 {
         sleep(Duration::from_millis(500)).await;
@@ -164,7 +164,7 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
     let metrics = collect_metrics(
         enqueue_start_time,    // For finding which executions to count and calculating throughput
         end_time,
-        enqueued_jobs,
+        enqueued_tasks,
         enqueued_workflows,
         params.warmup_percent
     ).await?;
@@ -182,17 +182,17 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
 }
 
 fn validate_params(params: &BenchmarkParams) -> Result<()> {
-    if params.jobs == 0 && params.workflows == 0 {
-        return Err(anyhow!("Must specify --jobs or --workflows (or both)"));
+    if params.tasks == 0 && params.workflows == 0 {
+        return Err(anyhow!("Must specify --tasks or --workflows (or both)"));
     }
 
     if params.workers == 0 {
         return Err(anyhow!("Must have at least 1 worker"));
     }
 
-    match params.job_type.as_str() {
+    match params.task_type.as_str() {
         "noop" | "compute" => {},
-        _ => return Err(anyhow!("Invalid job type '{}'. Must be 'noop' or 'compute'", params.job_type)),
+        _ => return Err(anyhow!("Invalid tasktype '{}'. Must be 'noop' or 'compute'", params.task_type)),
     }
 
     Ok(())
@@ -272,34 +272,34 @@ fn spawn_workers(count: usize, queues: &str) -> Result<Vec<Child>> {
     Ok(workers)
 }
 
-async fn enqueue_jobs(
+async fn enqueue_tasks(
     params: &BenchmarkParams,
     queues: &[&str],
     distribution: &[f64],
 ) -> Result<usize> {
-    if params.jobs == 0 {
+    if params.tasks == 0 {
         return Ok(0);
     }
 
-    let function_name = match params.job_type.as_str() {
+    let function_name = match params.task_type.as_str() {
         "noop" => "currant.benchmark.__currant_bench_noop__",
         "compute" => "currant.benchmark.__currant_bench_compute__",
-        _ => return Err(anyhow!("Unknown job type")),
+        _ => return Err(anyhow!("Unknown tasktype")),
     };
 
     let mut kwargs = serde_json::Map::new();
     if params.payload_size > 0 {
         kwargs.insert("payload_size".to_string(), json!(params.payload_size));
     }
-    if params.job_type == "compute" {
+    if params.task_type == "compute" {
         kwargs.insert("iterations".to_string(), json!(params.compute_iterations));
     }
 
-    for i in 0..params.jobs {
+    for i in 0..params.tasks {
         let queue = select_queue(queues, distribution, i);
 
         create_execution(CreateExecutionParams {
-            exec_type: ExecutionType::Job,
+            exec_type: ExecutionType::Task,
             function_name: function_name.to_string(),
             queue: queue.to_string(),
             priority: 5,
@@ -317,7 +317,7 @@ async fn enqueue_jobs(
         }
     }
 
-    Ok(params.jobs)
+    Ok(params.tasks)
 }
 
 async fn enqueue_workflows(
@@ -330,7 +330,7 @@ async fn enqueue_workflows(
     }
 
     let mut kwargs = serde_json::Map::new();
-    kwargs.insert("activity_count".to_string(), json!(params.activities_per_workflow));
+    kwargs.insert("task_count".to_string(), json!(params.tasks_per_workflow));
     if params.payload_size > 0 {
         kwargs.insert("payload_size".to_string(), json!(params.payload_size));
     }
@@ -363,7 +363,7 @@ async fn enqueue_workflows(
 fn select_queue<'a>(queues: &[&'a str], distribution: &[f64], index: usize) -> &'a str {
     // Build cumulative distribution array [0.0, 0.5, 1.0] for 50/50 split
     // For each index, hash it to a pseudo-random value in [0, 1) and select queue
-    // This ensures even distribution regardless of job count
+    // This ensures even distribution regardless of taskcount
 
     // Simple hash function to get deterministic pseudo-random value
     // Using index directly would cause clustering; we need to spread values uniformly
@@ -430,7 +430,7 @@ async fn wait_for_completion(
 async fn collect_metrics(
     start_time: DateTime<Utc>,
     end_time: DateTime<Utc>,
-    enqueued_jobs: usize,
+    enqueued_tasks: usize,
     enqueued_workflows: usize,
     warmup_percent: f64,
 ) -> Result<BenchmarkMetrics> {
@@ -503,7 +503,7 @@ async fn collect_metrics(
     .await?;
 
     // Parse latency metrics by type
-    let mut job_latency = LatencyMetrics::default();
+    let mut task_latency = LatencyMetrics::default();
     let mut workflow_latency = LatencyMetrics::default();
 
     for row in latency_rows {
@@ -517,21 +517,21 @@ async fn collect_metrics(
         };
 
         match row.0.as_str() {
-            "job" => job_latency = metrics,
+            "task" => task_latency = metrics,
             "workflow" => workflow_latency = metrics,
-            _ => {} // Ignore activities
+            _ => {}
         }
     }
 
     Ok(BenchmarkMetrics {
         start_time,
         end_time,
-        enqueued_jobs,
+        enqueued_tasks,
         enqueued_workflows,
-        completed_jobs: counts.0,
-        failed_jobs: counts.1,
-        pending_jobs: counts.2,
-        job_latency,
+        completed_tasks: counts.0,
+        failed_tasks: counts.1,
+        pending_tasks: counts.2,
+        task_latency,
         workflow_latency,
     })
 }
@@ -573,8 +573,8 @@ fn stop_workers(mut workers: Vec<Child>) -> Result<()> {
 
 fn display_report(metrics: &BenchmarkMetrics, warmup_percent: f64) {
     let duration_secs = (metrics.end_time - metrics.start_time).num_milliseconds() as f64 / 1000.0;
-    let total_enqueued = metrics.enqueued_jobs + metrics.enqueued_workflows;
-    let total_completed = metrics.completed_jobs + metrics.failed_jobs;
+    let total_enqueued = metrics.enqueued_tasks + metrics.enqueued_workflows;
+    let total_completed = metrics.completed_tasks + metrics.failed_tasks;
     let throughput = total_completed as f64 / duration_secs;
 
     println!("\n");
@@ -585,30 +585,30 @@ fn display_report(metrics: &BenchmarkMetrics, warmup_percent: f64) {
     println!("⏱️  Duration: {:.2}s", duration_secs);
     println!();
     println!("📋 Work:");
-    println!("   Enqueued: {} jobs, {} workflows ({} total)",
-             metrics.enqueued_jobs, metrics.enqueued_workflows, total_enqueued);
-    println!("   Completed: {}", metrics.completed_jobs);
-    println!("   Failed: {}", metrics.failed_jobs);
-    println!("   Pending: {}", metrics.pending_jobs);
+    println!("   Enqueued: {} tasks, {} workflows ({} total)",
+             metrics.enqueued_tasks, metrics.enqueued_workflows, total_enqueued);
+    println!("   Completed: {}", metrics.completed_tasks);
+    println!("   Failed: {}", metrics.failed_tasks);
+    println!("   Pending: {}", metrics.pending_tasks);
     println!();
-    println!("🚀 Throughput: {:.1} jobs/sec", throughput);
+    println!("🚀 Throughput: {:.1} tasks/sec", throughput);
     println!();
 
-    // Display job latency if any jobs were run
-    if metrics.job_latency.count > 0 {
+    // Display tasklatency if any tasks were run
+    if metrics.task_latency.count > 0 {
         if warmup_percent > 0.0 {
             println!("📈 Job Latency ({} completed, {} after {:.0}% warmup):",
-                     metrics.job_latency.count,
-                     metrics.job_latency.count_after_warmup,
+                     metrics.task_latency.count,
+                     metrics.task_latency.count_after_warmup,
                      warmup_percent);
         } else {
-            println!("📈 Job Latency ({} completed):", metrics.job_latency.count);
+            println!("📈 Job Latency ({} completed):", metrics.task_latency.count);
         }
-        println!("   Average: {:.1}ms", metrics.job_latency.avg_ms);
+        println!("   Average: {:.1}ms", metrics.task_latency.avg_ms);
         println!("   p50: {:.1}ms | p95: {:.1}ms | p99: {:.1}ms",
-                 metrics.job_latency.p50_ms,
-                 metrics.job_latency.p95_ms,
-                 metrics.job_latency.p99_ms);
+                 metrics.task_latency.p50_ms,
+                 metrics.task_latency.p95_ms,
+                 metrics.task_latency.p99_ms);
         println!();
     }
 

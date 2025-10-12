@@ -6,10 +6,10 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Executions table (unified for jobs, activities, and workflows)
+-- Executions table (unified for tasks and workflows)
 CREATE TABLE IF NOT EXISTS executions (
     id TEXT PRIMARY KEY,
-    type TEXT NOT NULL CHECK (type IN ('job', 'activity', 'workflow')),
+    type TEXT NOT NULL CHECK (type IN ('task', 'workflow')),
     function_name TEXT NOT NULL,
     queue TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'suspended', 'completed', 'failed')),
@@ -39,13 +39,7 @@ CREATE TABLE IF NOT EXISTS executions (
     timeout_seconds INTEGER,
 
     -- Worker assignment
-    worker_id TEXT,
-
-    -- Indexes
-    CONSTRAINT valid_workflow_parent CHECK (
-        (type = 'activity' AND parent_workflow_id IS NOT NULL) OR
-        (type != 'activity')
-    )
+    worker_id TEXT
 );
 
 -- Indexes for efficient querying

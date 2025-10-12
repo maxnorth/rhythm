@@ -3,10 +3,10 @@ Example demonstrating workflow signals for human-in-the-loop workflows
 """
 
 import asyncio
-from currant import workflow, activity, wait_for_signal, send_signal
+from currant import workflow, task, wait_for_signal, send_signal
 
 
-@activity()
+@task(queue="documents")
 async def prepare_document(doc_id: str):
     """Prepare a document for review"""
     print(f"[PREPARE] Preparing document {doc_id} for review")
@@ -14,7 +14,7 @@ async def prepare_document(doc_id: str):
     return {"prepared": True, "doc_id": doc_id}
 
 
-@activity()
+@task(queue="documents")
 async def publish_document(doc_id: str):
     """Publish an approved document"""
     print(f"[PUBLISH] Publishing document {doc_id}")
@@ -22,7 +22,7 @@ async def publish_document(doc_id: str):
     return {"published": True, "doc_id": doc_id, "url": f"https://example.com/docs/{doc_id}"}
 
 
-@activity()
+@task(queue="documents")
 async def archive_document(doc_id: str):
     """Archive a rejected document"""
     print(f"[ARCHIVE] Archiving rejected document {doc_id}")

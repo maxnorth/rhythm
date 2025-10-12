@@ -2,7 +2,7 @@
  * Currant - A lightweight durable execution framework using only Postgres
  */
 
-export { job, activity, workflow } from './decorators.js';
+export { task, workflow } from './decorators.js';
 export { sendSignal, getExecutionStatus, cancelExecution } from './client.js';
 export { waitForSignal, getVersion, isReplaying } from './context.js';
 export { Worker, runWorker, type WorkerOptions } from './worker.js';
@@ -10,8 +10,7 @@ export { RustBridge } from './rust-bridge-native.js';
 
 export type {
   ExecutableProxy,
-  JobConfig,
-  ActivityConfig,
+  TaskConfig,
   WorkflowConfig,
   ExecutionConfig,
   SignalPayload,

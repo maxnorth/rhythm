@@ -2,17 +2,17 @@
  * Real-world usage verification test
  */
 
-import { job, activity, workflow, isReplaying } from '../src/index.js';
+import { task, workflow, isReplaying } from '../src/index.js';
 
 console.log('='.repeat(60));
 console.log('Currant Node.js Library - Usage Verification');
 console.log('='.repeat(60));
 
-// Test 1: Basic job definition
-console.log('\n[TEST 1] Basic Job Definition');
+// Test 1: Basic task definition
+console.log('\n[TEST 1] Basic Task Definition');
 console.log('-'.repeat(60));
 
-const sendEmail = job<[string, string], { sent: boolean }>({
+const sendEmail = task<[string, string], { sent: boolean }>({
   queue: 'emails',
   retries: 3,
   timeout: 30,
@@ -21,33 +21,34 @@ const sendEmail = job<[string, string], { sent: boolean }>({
   return { sent: true };
 });
 
-console.log('✓ Job defined:', sendEmail.functionName);
+console.log('✓ Task defined:', sendEmail.functionName);
 console.log('  Queue:', sendEmail.config.queue);
 console.log('  Retries:', sendEmail.config.retries);
 
-// Test 2: Enqueue job
-console.log('\n[TEST 2] Enqueue Job');
+// Test 2: Enqueue task
+console.log('\n[TEST 2] Enqueue Task');
 console.log('-'.repeat(60));
 
 (async () => {
-  const jobId = await sendEmail.queue('user@example.com', 'Welcome to Currant!');
-  console.log('✓ Job enqueued with ID:', jobId);
-  console.log('  Format valid:', /^job_[a-z0-9]+_[a-f0-9]+$/.test(jobId));
+  const taskId = await sendEmail.queue('user@example.com', 'Welcome to Currant!');
+  console.log('✓ Task enqueued with ID:', taskId);
+  console.log('  Format valid:', /^task_[a-z0-9]+_[a-f0-9]+$/.test(taskId));
 
-  // Test 3: Job with options
-  console.log('\n[TEST 3] Job with Custom Priority');
+  // Test 3: Task with options
+  console.log('\n[TEST 3] Task with Custom Priority');
   console.log('-'.repeat(60));
 
   const highPriorityEmail = sendEmail.options({ priority: 10 });
-  const jobId2 = await highPriorityEmail.queue('vip@example.com', 'VIP Welcome');
-  console.log('✓ High-priority job enqueued:', jobId2);
+  const taskId2 = await highPriorityEmail.queue('vip@example.com', 'VIP Welcome');
+  console.log('✓ High-priority task enqueued:', taskId2);
   console.log('  Priority:', (highPriorityEmail as any).config.priority);
 
-  // Test 4: Activity definition
-  console.log('\n[TEST 4] Activity Definition');
+  // Test 4: Task for workflow steps
+  console.log('\n[TEST 4] Task Definition (for workflow steps)');
   console.log('-'.repeat(60));
 
-  const validateOrder = activity<[string, number], { valid: boolean }>({
+  const validateOrder = task<[string, number], { valid: boolean }>({
+    queue: 'orders',
     retries: 5,
     timeout: 60,
   })(async function validateOrder(orderId: string, amount: number) {
@@ -56,25 +57,25 @@ console.log('-'.repeat(60));
     return { valid: true };
   });
 
-  console.log('✓ Activity defined:', validateOrder.functionName);
+  console.log('✓ Task defined:', validateOrder.functionName);
   console.log('  Config:', validateOrder.config);
 
-  // Test 5: Direct activity call (for testing)
-  console.log('\n[TEST 5] Direct Activity Call');
+  // Test 5: Direct task call (for testing)
+  console.log('\n[TEST 5] Direct Task Call');
   console.log('-'.repeat(60));
 
   const result = await validateOrder.call('ORDER-123', 9999);
-  console.log('✓ Activity executed directly:', result);
+  console.log('✓ Task executed directly:', result);
 
   // Test 6: Workflow definition
   console.log('\n[TEST 6] Workflow Definition');
   console.log('-'.repeat(60));
 
-  const chargePayment = activity<[string, number], { txnId: string }>()(
-    async function chargePayment(orderId: string, amount: number) {
-      return { txnId: `txn_${orderId}_${amount}` };
-    }
-  );
+  const chargePayment = task<[string, number], { txnId: string }>({
+    queue: 'orders',
+  })(async function chargePayment(orderId: string, amount: number) {
+    return { txnId: `txn_${orderId}_${amount}` };
+  });
 
   const processOrder = workflow<
     [string, number],
@@ -111,7 +112,7 @@ console.log('-'.repeat(60));
   console.log('✓ Workflow enqueued:', workflowId);
   console.log('  Format valid:', /^wor_[a-z0-9]+_[a-f0-9]+$/.test(workflowId));
 
-  // Test 8: Multiple jobs
+  // Test 8: Multiple tasks
   console.log('\n[TEST 8] Batch Enqueue');
   console.log('-'.repeat(60));
 
@@ -121,7 +122,7 @@ console.log('-'.repeat(60));
     sendEmail.queue('user3@example.com', 'Message 3'),
   ]);
 
-  console.log('✓ Enqueued 3 jobs:');
+  console.log('✓ Enqueued 3 tasks:');
   ids.forEach((id, i) => console.log(`  ${i + 1}. ${id}`));
 
   // Test 9: Type safety verification
@@ -146,8 +147,7 @@ console.log('-'.repeat(60));
   console.log('\n' + '='.repeat(60));
   console.log('VERIFICATION SUMMARY');
   console.log('='.repeat(60));
-  console.log('✓ Job definition and enqueueing: WORKING');
-  console.log('✓ Activity definition: WORKING');
+  console.log('✓ Task definition and enqueueing: WORKING');
   console.log('✓ Workflow definition and enqueueing: WORKING');
   console.log('✓ Type safety: WORKING');
   console.log('✓ Function registry: WORKING');

@@ -59,7 +59,7 @@ This document tracks the migration from pure Python to Rust core + Python adapte
 ## What Stays in Python
 
 ### Core Functionality (Still Python)
-- `decorators.py` - `@job`, `@activity`, `@workflow` decorators
+- `decorators.py` - `@task`, `@workflow` decorators
 - `registry.py` - Function registry for decorated functions
 - `context.py` - Workflow execution context and replay logic
 - `worker.py` - Worker loop orchestration and function execution
@@ -80,7 +80,7 @@ This document tracks the migration from pure Python to Rust core + Python adapte
 ┌─────────────────────────────────────────┐
 │           Python Layer                  │
 │  ┌──────────────────────────────────┐  │
-│  │ Decorators (@job, @workflow)     │  │
+│  │ Decorators (@task, @workflow)     │  │
 │  │ Function Registry                │  │
 │  │ Workflow Replay Logic            │  │
 │  │ Function Execution               │  │

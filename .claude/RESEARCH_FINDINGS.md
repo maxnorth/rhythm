@@ -13,13 +13,13 @@ This document captures features and patterns from mature workflow/task queue sys
 **What**: Ensure operations produce the same result regardless of how many times they execute
 **Why**: Foundation for reliable retry logic and exactly-once semantics
 **Implementation needs**:
-- Request ID tracking for jobs/workflows
+- Request ID tracking for tasks/workflows
 - Deduplication window (e.g., 24 hours)
 - Idempotency keys in execution metadata
 - Database constraints to prevent duplicate execution
 
 **References**:
-- Temporal guarantees "at least once" activity execution but recommends idempotent activities
+- Temporal guarantees "at least once" task execution but recommends idempotent Tasks
 - DBOS transactions commit exactly once, steps retry but never re-execute after completion
 - Kafka uses idempotent producer to prevent duplicates
 
@@ -27,16 +27,16 @@ This document captures features and patterns from mature workflow/task queue sys
 **What**: Document exactly what guarantees Currant provides
 **Why**: Users need to know when to implement idempotency vs rely on framework
 **Guarantees to define**:
-- Jobs: At-least-once? Exactly-once?
+- Tasks: At-least-once? Exactly-once?
 - Workflows: Deterministic replay guarantees
-- Activities: Retry behavior and completion guarantees
+- Tasks: Retry behavior and completion guarantees
 - Database transactions: ACID guarantees during execution
 
 ### 3. **Dead Letter Queue (DLQ)**
-**What**: Queue for jobs that fail after max retry attempts
+**What**: Queue for tasks that fail after max retry attempts
 **Why**: Prevents endless retry loops, provides debugging capability
 **Implementation needs**:
-- Automatic DLQ routing after N retries (configurable per queue/job)
+- Automatic DLQ routing after N retries (configurable per queue/task)
 - DLQ inspection via CLI: `currant dlq list`, `currant dlq inspect <id>`
 - DLQ reprocessing: `currant dlq retry <id>` (fix code, then retry)
 - Failure metadata: error message, stack trace, retry count
@@ -48,7 +48,7 @@ This document captures features and patterns from mature workflow/task queue sys
 **What**: Configurable retry behavior with intelligent backoff
 **Why**: Handle transient failures without overwhelming systems
 **Implementation needs**:
-- Per-job retry configuration (max attempts, backoff strategy)
+- Per-task retry configuration (max attempts, backoff strategy)
 - Per-queue retry defaults
 - Backoff strategies: exponential, linear, fixed
 - Jitter to prevent thundering herd
@@ -56,7 +56,7 @@ This document captures features and patterns from mature workflow/task queue sys
 
 **Example**:
 ```python
-@currant.job(
+@currant.task(
     queue="api-calls",
     retry_policy=RetryPolicy(
         max_attempts=5,
@@ -74,19 +74,19 @@ This document captures features and patterns from mature workflow/task queue sys
 ## Priority 2: Queue Management & Control (HIGH PRIORITY)
 
 ### 5. **Rate Limiting & Concurrency Control**
-**What**: Control throughput and parallelism at queue and job level
+**What**: Control throughput and parallelism at queue and task level
 **Why**: Prevent overwhelming downstream APIs, respect rate limits, resource management
 **Implementation needs**:
-- **Queue-level rate limiting**: max jobs/sec (e.g., 100 jobs/sec for API queue)
+- **Queue-level rate limiting**: max tasks/sec (e.g., 100 tasks/sec for API queue)
 - **Queue-level concurrency**: max concurrent executions (e.g., 10 parallel for DB-heavy queue)
-- **Per-job concurrency**: max parallel executions of specific job type
+- **Per-task concurrency**: max parallel executions of specific task type
 - **Token bucket algorithm** for smooth rate limiting
 - **Leaky bucket algorithm** for burst handling
 
 **Configuration examples**:
 ```toml
 [queues.api-calls]
-rate_limit = "100/sec"        # 100 jobs per second max
+rate_limit = "100/sec"        # 100 tasks per second max
 max_concurrent = 10            # Max 10 parallel executions
 
 [queues.emails]
@@ -100,7 +100,7 @@ max_concurrent = 50
 - Sidekiq: concurrency limits per queue
 
 ### 6. **Queue Prioritization**
-**What**: Execute important jobs before less important ones
+**What**: Execute important tasks before less important ones
 **Why**: Business-critical tasks need faster processing
 **Two levels needed**:
 
@@ -108,7 +108,7 @@ max_concurrent = 50
 - Workers poll queues in priority order or weighted round-robin
 - Example: `--queues high:3,default:2,low:1` (3x more high-priority polls)
 
-**B. Job-level priority** (within a single queue):
+**B. Task-level priority** (within a single queue):
 - Add `priority` column to executions table (integer, higher = more urgent)
 - Modify claim query: `ORDER BY priority DESC, scheduled_at ASC`
 - Ad-hoc priority boost: `currant reprioritize <id> --priority 10`
@@ -122,24 +122,24 @@ max_concurrent = 50
 ```bash
 currant queue list                      # Show all queues with stats
 currant queue inspect <name>            # Detailed queue info
-currant queue pause <name>              # Stop claiming new jobs
+currant queue pause <name>              # Stop claiming new tasks
 currant queue resume <name>             # Resume claiming
 currant queue drain <name>              # Wait for in-flight to complete
-currant queue purge <name>              # Delete all pending jobs
-currant queue move <id> --to <queue>    # Move job to different queue
+currant queue purge <name>              # Delete all pending tasks
+currant queue move <id> --to <queue>    # Move task to different queue
 currant queue stats <name>              # Metrics: depth, throughput, latency
 ```
 
 ### 8. **Queue Metrics & Visibility**
 **What**: Real-time statistics about queue health
 **Metrics needed**:
-- Queue depth (waiting jobs)
-- Processing rate (jobs/sec completed)
+- Queue depth (waiting tasks)
+- Processing rate (tasks/sec completed)
 - Average wait time (time in queue before execution)
 - Average execution time
 - Success/failure rates
 - Worker count per queue
-- Oldest job age
+- Oldest task age
 
 **Export to**: Prometheus, OTLP, CLI, Management UI
 
@@ -222,7 +222,7 @@ async def book_trip(ctx, user_id, trip_details):
 **Why**: Reduce overhead, maximize throughput, optimize resource usage
 **Implementation needs**:
 - Batch size configuration
-- Parallel activity execution within workflows
+- Parallel task execution within workflows
 - Dynamic parallelism (fan-out/fan-in patterns)
 - Batch timeout (don't wait forever for full batch)
 
@@ -230,7 +230,7 @@ async def book_trip(ctx, user_id, trip_details):
 ```python
 @currant.workflow
 async def process_orders(ctx, order_ids):
-    # Fan-out: execute 100 activities in parallel
+    # Fan-out: execute 100 Tasks in parallel
     futures = [
         ctx.execute_activity(process_order, order_id)
         for order_id in order_ids
@@ -241,14 +241,14 @@ async def process_orders(ctx, order_ids):
     return results
 ```
 
-**References**: Spring Batch, Azure Batch, Temporal parallel activities
+**References**: Spring Batch, Azure Batch, Temporal parallel Tasks
 
 ---
 
 ## Priority 4: Scheduling & Time-Based Features (CORE FEATURE)
 
 ### 13. **Cron Scheduling**
-**What**: Recurring jobs based on cron patterns
+**What**: Recurring tasks based on cron patterns
 **Why**: Core feature for periodic tasks (reports, cleanups, syncs)
 **Implementation needs**:
 - Cron expression parsing (unix cron with optional seconds)
@@ -274,17 +274,17 @@ currant.schedule_cron(
 )
 ```
 
-**References**: Celery Beat, Sidekiq-cron, BullMQ repeatable jobs
+**References**: Celery Beat, Sidekiq-cron, BullMQ repeatable tasks
 
 ### 14. **Delayed Execution & Scheduling**
-**What**: Execute job at specific time or after delay
+**What**: Execute task at specific time or after delay
 **Why**: Fundamental scheduling primitive
 **Implementation needs**:
 - `schedule_at(datetime)`: execute at specific time
 - `schedule_in(duration)`: execute after delay
 - Durable sleep (survives restarts)
 - Database-backed delayed set (not memory)
-- Efficient polling of due jobs
+- Efficient polling of due tasks
 
 **Example**:
 ```python
@@ -303,11 +303,11 @@ await currant.schedule_in(
 )
 ```
 
-**References**: BullMQ delayed jobs, Sidekiq scheduled jobs
+**References**: BullMQ delayed tasks, Sidekiq scheduled tasks
 
 ### 15. **Durable Timers & Sleep**
 **What**: Workflows can sleep with state preserved across restarts
-**Why**: Wait periods between activities, timeouts, polling intervals
+**Why**: Wait periods between Tasks, timeouts, polling intervals
 **Implementation needs**:
 - `await ctx.sleep(duration)` in workflows
 - Timer stored in database (wakeup time persisted)
@@ -333,14 +333,14 @@ await currant.schedule_in(
 - Incompatible change detection
 
 **Compatible changes** (safe):
-- Adding new activities
-- Changing activity implementation (if idempotent)
+- Adding new Tasks
+- Changing task implementation (if idempotent)
 - Adding optional parameters
 
 **Incompatible changes** (breaking):
 - Changing workflow logic order
-- Removing activities
-- Changing activity signatures
+- Removing Tasks
+- Changing task signatures
 - Changing branch conditions (determinism violation)
 
 **References**:
@@ -409,7 +409,7 @@ results = currant.search_workflows(
 **Implementation needs**:
 - Failure rate threshold (e.g., pause if >50% fail in 5 min)
 - Circuit states: closed (normal), open (paused), half-open (testing)
-- Auto-recovery: try single job after cooldown, resume if succeeds
+- Auto-recovery: try single task after cooldown, resume if succeeds
 - Manual override: force open/close circuit
 
 **Configuration**:
@@ -426,7 +426,7 @@ circuit_breaker.min_requests = 10          # Need 10+ requests to trigger
 **What**: Execute fallback logic when primary path fails
 **Why**: Continue operation with reduced functionality instead of total failure
 **Implementation needs**:
-- Fallback activities in workflows
+- Fallback Tasks in workflows
 - Timeout-based fallback triggering
 - Error-based fallback triggering
 
@@ -446,9 +446,9 @@ async def get_user_profile(ctx, user_id):
         return await ctx.execute_activity(fetch_from_cache, user_id)
 ```
 
-### 21. **Singleton Jobs (Leader Election)**
-**What**: Ensure only one instance of a job runs across cluster
-**Why**: Maintenance tasks, cron jobs, cleanup operations
+### 21. **Singleton Tasks (Leader Election)**
+**What**: Ensure only one instance of a task runs across cluster
+**Why**: Maintenance tasks, cron tasks, cleanup operations
 **Implementation needs**:
 - Distributed lock acquisition before execution
 - Database-based locking (PostgreSQL advisory locks)
@@ -464,7 +464,7 @@ async def get_user_profile(ctx, user_id):
 
 **Example**:
 ```python
-@currant.job(singleton=True, singleton_timeout="10m")
+@currant.task(singleton=True, singleton_timeout="10m")
 async def cleanup_old_executions():
     # Only one worker in cluster will execute this
     pass
@@ -483,7 +483,7 @@ async def cleanup_old_executions():
 **What**: Tools to test workflows in isolation
 **Why**: Enable unit testing without full infrastructure
 **Features needed**:
-- Mock activity implementation
+- Mock task implementation
 - Time control (fast-forward timers)
 - Deterministic replay testing
 - Workflow history inspection
@@ -494,7 +494,7 @@ async def cleanup_old_executions():
 def test_order_workflow():
     env = WorkflowTestEnvironment()
 
-    # Mock activities
+    # Mock Tasks
     env.mock_activity(charge_payment, return_value={"tx_id": "123"})
     env.mock_activity(send_confirmation_email)
 
@@ -541,7 +541,7 @@ currant dev --ui
 ## Priority 8: Security & Multi-Tenancy (FUTURE)
 
 ### 25. **Authentication & Authorization**
-**What**: Control who can execute jobs, view executions, manage queues
+**What**: Control who can execute tasks, view executions, manage queues
 **Why**: Production deployments need access control
 **Features needed**:
 - API authentication (API keys, JWT)
@@ -565,7 +565,7 @@ currant dev --ui
 **Why**: Security best practices, compliance
 **Features**:
 - Worker isolation (different trust zones)
-- Queue-based routing (route jobs to specific worker pools)
+- Queue-based routing (route tasks to specific worker pools)
 - Namespace isolation
 
 ---
@@ -585,19 +585,19 @@ currant dev --ui
 **What**: System continues operating despite failures
 **Why**: Production reliability
 **Features**:
-- Worker failure detection and job reassignment
+- Worker failure detection and task reassignment
 - Database failover (PostgreSQL HA setup)
 - Zero-downtime deployments
-- Graceful shutdown with job draining
+- Graceful shutdown with task draining
 
 ### 30. **Performance Benchmarking & Regression Testing**
 **What**: Continuous performance validation
 **Why**: Detect performance regressions early
 **Benchmarks needed**:
-- Throughput: jobs/sec at various scales
+- Throughput: tasks/sec at various scales
 - Latency: p50, p95, p99 claim times
 - Concurrency: performance under high parallelism
-- Long-running: workflows with 10K+ activities
+- Long-running: workflows with 10K+ Tasks
 - Large tables: performance with millions of executions
 - Cluster mode: multi-worker coordination overhead
 
@@ -654,7 +654,7 @@ currant dev --ui
 | P3 | Workflow Patterns (Saga, Child Workflows, Continue-As-New) | No | High | High |
 | P4 | Scheduling (Cron, Delays, Timers) | Yes | Medium | Critical |
 | P5 | Operational (Versioning, Search, Monitoring UI) | No | High | High |
-| P6 | Resilience (Circuit Breaker, Singleton Jobs) | No | Medium | Medium |
+| P6 | Resilience (Circuit Breaker, Singleton Tasks) | No | Medium | Medium |
 | P7 | Developer Experience (Testing, Local Dev) | No | Medium | High |
 | P8 | Security (Auth, Secrets, Multi-Tenancy) | No | High | Medium |
 | P9 | Performance (Scalability, HA, Benchmarking) | No | Ongoing | High |
@@ -668,7 +668,7 @@ currant dev --ui
 - Workflow replay (deterministic execution)
 - Worker coordination (claim/heartbeat)
 - Basic queue support
-- Activity execution
+- Task execution
 - Signal handling
 - Python adapter (mature)
 - Database-backed durability

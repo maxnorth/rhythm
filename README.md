@@ -7,7 +7,7 @@ A lightweight durable execution framework using only Postgres. No external orche
 - **Truly self-contained** - Only depends on Postgres, no external Conductor/orchestrator
 - **Durable execution** - Workflows survive crashes and automatically resume
 - **Queue-first design** - All work is queued by default
-- **Unified platform** - Handle both simple async jobs (Celery-style) and complex workflows (Temporal-style)
+- **Unified platform** - Handle both simple async tasks (Celery-style) and complex workflows (Temporal-style)
 - **Transparent replay** - Temporal-style deterministic replay for workflows
 - **Worker failover** - Automatic recovery via heartbeat-based coordination through Postgres
 - **LISTEN/NOTIFY** - Fast task pickup with Postgres pub/sub
@@ -32,27 +32,27 @@ export WORKFLOWS_DATABASE_URL="postgresql://localhost/workflows"
 workflows migrate
 ```
 
-### 2. Define Jobs and Workflows
+### 2. Define Tasks and Workflows
 
 ```python
 # app.py
-from workflows import job, activity, workflow, send_signal, wait_for_signal
+from currant import task, task, workflow, send_signal, wait_for_signal
 
-# Simple async job
-@job(queue="emails", retries=3)
+# Simple async task
+@task(queue="emails", retries=3)
 async def send_email(to: str, subject: str, body: str):
     # Your email sending logic
     print(f"Sending email to {to}")
     return {"sent": True}
 
-# Activity (workflow step)
-@activity(retries=3, timeout=60)
+# Task (workflow step)
+@task(retries=3, timeout=60)
 async def charge_card(amount: int, card_token: str):
     # Your payment logic
     print(f"Charging ${amount}")
     return {"transaction_id": "txn_123", "amount": amount}
 
-@activity()
+@task()
 async def send_receipt(email: str, amount: int):
     print(f"Sending receipt for ${amount} to {email}")
 
@@ -76,13 +76,13 @@ import asyncio
 from app import send_email, process_order
 
 async def main():
-    # Enqueue a job
-    job_id = await send_email.queue(
+    # Enqueue a task
+    task_id = await send_email.queue(
         to="user@example.com",
         subject="Welcome",
         body="Thanks for signing up!"
     )
-    print(f"Job enqueued: {job_id}")
+    print(f"Task enqueued: {task_id}")
 
     # Enqueue a workflow
     workflow_id = await process_order.queue(
@@ -158,12 +158,12 @@ Override execution options at queue time:
 
 ```python
 # Override queue and priority
-job_id = await send_email.options(
+task_id = await send_email.options(
     queue="high-priority",
     priority=10
 ).queue(to="vip@example.com", subject="Urgent", body="...")
 
-# Override timeout for activity
+# Override timeout for task
 @workflow(queue="orders", version=1)
 async def risky_order(order_id: str):
     # Give extra time for this charge
@@ -227,12 +227,12 @@ Unlike DBOS which requires a separate Conductor service, workflows achieves work
 
 Workflows use Temporal-style deterministic replay:
 
-1. Workflow calls `activity.run()` → activity execution created, workflow suspended
-2. Worker picks up activity, executes it, stores result
-3. Workflow is re-queued with activity result in history
+1. Workflow calls `task.run()` → task execution created, workflow suspended
+2. Worker picks up task, executes it, stores result
+3. Workflow is re-queued with task result in history
 4. Worker re-executes workflow function from the beginning
-5. Previous activities return cached results instantly
-6. Workflow continues to next activity or completes
+5. Previous Tasks return cached results instantly
+6. Workflow continues to next task or completes
 
 This is completely transparent to developers - just write normal async code.
 
@@ -240,13 +240,13 @@ This is completely transparent to developers - just write normal async code.
 
 ```
 ┌─────────────┐
-│  Client     │ - Enqueues jobs/workflows
+│  Client     │ - Enqueues tasks/workflows
 └──────┬──────┘
        │
        v
 ┌─────────────────────────────────────┐
 │         Postgres Database           │
-│  • executions (jobs/workflows)      │
+│  • executions (tasks/workflows)     │
 │  • worker_heartbeats                │
 │  • workflow_signals                 │
 │  • LISTEN/NOTIFY channels           │

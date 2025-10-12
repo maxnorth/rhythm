@@ -40,8 +40,7 @@ fn create_execution_sync(
     let runtime = get_runtime();
 
     let exec_type = match exec_type.as_str() {
-        "job" => ExecutionType::Job,
-        "activity" => ExecutionType::Activity,
+        "task" => ExecutionType::Task,
         "workflow" => ExecutionType::Workflow,
         _ => {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
@@ -194,16 +193,16 @@ fn get_execution_sync(execution_id: String) -> PyResult<Option<String>> {
     }
 }
 
-/// Get workflow activities
+/// Get workflow child tasks
 #[pyfunction]
-fn get_workflow_activities_sync(workflow_id: String) -> PyResult<String> {
+fn get_workflow_tasks_sync(workflow_id: String) -> PyResult<String> {
     let runtime = get_runtime();
 
-    let activities = runtime
-        .block_on(executions::get_workflow_activities(&workflow_id))
+    let child_tasks = runtime
+        .block_on(executions::get_workflow_tasks(&workflow_id))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
-    serde_json::to_string(&activities)
+    serde_json::to_string(&child_tasks)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
@@ -309,7 +308,7 @@ fn currant_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(suspend_workflow_sync, m)?)?;
     m.add_function(wrap_pyfunction!(resume_workflow_sync, m)?)?;
     m.add_function(wrap_pyfunction!(get_execution_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(get_workflow_activities_sync, m)?)?;
+    m.add_function(wrap_pyfunction!(get_workflow_tasks_sync, m)?)?;
     m.add_function(wrap_pyfunction!(update_heartbeat_sync, m)?)?;
     m.add_function(wrap_pyfunction!(stop_worker_sync, m)?)?;
     m.add_function(wrap_pyfunction!(recover_dead_workers_sync, m)?)?;

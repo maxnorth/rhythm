@@ -6,8 +6,7 @@ use serde_json::Value as JsonValue;
 #[sqlx(type_name = "text", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum ExecutionType {
-    Job,
-    Activity,
+    Task,
     Workflow,
 }
 

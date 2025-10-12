@@ -1,11 +1,11 @@
 /**
- * Simple example demonstrating jobs, activities, and workflows
+ * Simple example demonstrating tasks and workflows
  */
 
-import { job, activity, workflow, isReplaying } from '../src/index.js';
+import { task, workflow, isReplaying } from '../src/index.js';
 
-// Simple job that runs independently
-const sendNotification = job<[string, string], { sent: boolean; user_id: string }>({
+// Simple task that runs independently
+const sendNotification = task<[string, string], { sent: boolean; user_id: string }>({
   name: 'sendNotification',
   queue: 'notifications',
   retries: 3,
@@ -15,9 +15,10 @@ const sendNotification = job<[string, string], { sent: boolean; user_id: string 
   return { sent: true, user_id: userId };
 });
 
-// Activities that are called from workflows
-const validateOrder = activity<[string, number], { valid: boolean; order_id: string }>({
+// Tasks that are called from workflows
+const validateOrder = task<[string, number], { valid: boolean; order_id: string }>({
   name: 'validateOrder',
+  queue: 'orders',
   retries: 3,
   timeout: 60,
 })(async (orderId: string, amount: number) => {
@@ -31,11 +32,12 @@ const validateOrder = activity<[string, number], { valid: boolean; order_id: str
   return { valid: true, order_id: orderId };
 });
 
-const chargePayment = activity<
+const chargePayment = task<
   [string, number, string],
   { success: boolean; transaction_id: string; amount: number }
 >({
   name: 'chargePayment',
+  queue: 'orders',
   retries: 5,
   timeout: 120,
 })(async (orderId: string, amount: number, paymentMethod: string) => {
@@ -52,16 +54,17 @@ const chargePayment = activity<
   };
 });
 
-const sendConfirmationEmail = activity<[string, string, number], { sent: boolean; email: string }>(
-  { name: 'sendConfirmationEmail' }
+const sendConfirmationEmail = task<[string, string, number], { sent: boolean; email: string }>(
+  { name: 'sendConfirmationEmail', queue: 'orders' }
 )(async (email: string, orderId: string, amount: number) => {
   console.log(`[EMAIL] Sending confirmation to ${email} for order ${orderId} ($${amount})`);
   await new Promise((resolve) => setTimeout(resolve, 200));
   return { sent: true, email: email };
 });
 
-const updateInventory = activity<[string, string[]], { updated: boolean; item_count: number }>({
+const updateInventory = task<[string, string[]], { updated: boolean; item_count: number }>({
   name: 'updateInventory',
+  queue: 'orders',
 })(async (orderId: string, items: string[]) => {
     console.log(`[INVENTORY] Updating inventory for order ${orderId}: ${items.length} items`);
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -135,12 +138,12 @@ const processOrderWorkflow = workflow<
 
 async function main() {
   console.log('='.repeat(60));
-  console.log('Enqueuing example jobs and workflows');
+  console.log('Enqueuing example tasks and workflows');
   console.log('='.repeat(60) + '\n');
 
-  // Enqueue a simple notification job
-  const jobId = await sendNotification.queue('user_123', 'Your order has been confirmed!');
-  console.log(`✓ Notification job enqueued: ${jobId}\n`);
+  // Enqueue a simple notification task
+  const taskId = await sendNotification.queue('user_123', 'Your order has been confirmed!');
+  console.log(`✓ Notification task enqueued: ${taskId}\n`);
 
   // Enqueue an order processing workflow
   const workflowId = await processOrderWorkflow.queue(
@@ -159,7 +162,7 @@ async function main() {
   console.log(`✓ High-priority order workflow enqueued: ${workflowId2}\n`);
 
   console.log('='.repeat(60));
-  console.log('Jobs enqueued! Start workers to process them:');
+  console.log('Tasks and workflows enqueued! Start workers to process them:');
   console.log('  currant worker -q notifications');
   console.log('  currant worker -q orders');
   console.log('='.repeat(60));

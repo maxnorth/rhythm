@@ -19,8 +19,7 @@ pub async fn create_execution(
     parent_workflow_id: Option<String>,
 ) -> Result<String> {
     let exec_type = match exec_type.as_str() {
-        "job" => ExecutionType::Job,
-        "activity" => ExecutionType::Activity,
+        "task" => ExecutionType::Task,
         "workflow" => ExecutionType::Workflow,
         _ => return Err(Error::from_reason("Invalid execution type")),
     };
@@ -119,14 +118,14 @@ pub async fn get_execution(execution_id: String) -> Result<Option<String>> {
     }
 }
 
-/// Get workflow activities
+/// Get workflow child tasks
 #[napi]
-pub async fn get_workflow_activities(workflow_id: String) -> Result<String> {
-    let activities = executions::get_workflow_activities(&workflow_id)
+pub async fn get_workflow_tasks(workflow_id: String) -> Result<String> {
+    let child_tasks = executions::get_workflow_tasks(&workflow_id)
         .await
         .map_err(|e| Error::from_reason(e.to_string()))?;
 
-    serde_json::to_string(&activities).map_err(|e| Error::from_reason(e.to_string()))
+    serde_json::to_string(&child_tasks).map_err(|e| Error::from_reason(e.to_string()))
 }
 
 /// Update worker heartbeat

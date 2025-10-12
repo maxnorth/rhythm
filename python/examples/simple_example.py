@@ -1,13 +1,13 @@
 """
-Simple example demonstrating jobs, activities, and workflows
+Simple example demonstrating tasks and workflows
 """
 
 import asyncio
-from currant import job, activity, workflow, is_replaying
+from currant import task, workflow, is_replaying
 
 
-# Simple job that runs independently
-@job(queue="notifications", retries=3)
+# Simple task that runs independently
+@task(queue="notifications", retries=3)
 async def send_notification(user_id: str, message: str):
     """Send a notification to a user"""
     print(f"[NOTIFICATION] Sending to user {user_id}: {message}")
@@ -15,8 +15,8 @@ async def send_notification(user_id: str, message: str):
     return {"sent": True, "user_id": user_id}
 
 
-# Activities that are called from currant
-@activity(retries=3, timeout=60)
+# Tasks that are called from workflows
+@task(queue="validation", retries=3, timeout=60)
 async def validate_order(order_id: str, amount: int):
     """Validate an order"""
     print(f"[VALIDATE] Validating order {order_id} for ${amount}")
@@ -28,7 +28,7 @@ async def validate_order(order_id: str, amount: int):
     return {"valid": True, "order_id": order_id}
 
 
-@activity(retries=5, timeout=120)
+@task(queue="payments", retries=5, timeout=120)
 async def charge_payment(order_id: str, amount: int, payment_method: str):
     """Charge the payment"""
     print(f"[CHARGE] Charging ${amount} via {payment_method} for order {order_id}")
@@ -44,7 +44,7 @@ async def charge_payment(order_id: str, amount: int, payment_method: str):
     }
 
 
-@activity()
+@task(queue="notifications")
 async def send_confirmation_email(email: str, order_id: str, amount: int):
     """Send order confirmation email"""
     print(f"[EMAIL] Sending confirmation to {email} for order {order_id} (${amount})")
@@ -52,7 +52,7 @@ async def send_confirmation_email(email: str, order_id: str, amount: int):
     return {"sent": True, "email": email}
 
 
-@activity()
+@task(queue="inventory")
 async def update_inventory(order_id: str, items: list):
     """Update inventory after order"""
     print(f"[INVENTORY] Updating inventory for order {order_id}: {len(items)} items")
@@ -108,15 +108,15 @@ async def process_order_workflow(
 async def main():
     """Enqueue some work"""
     print("=" * 60)
-    print("Enqueuing example jobs and workflows")
+    print("Enqueuing example tasks and workflows")
     print("=" * 60 + "\n")
 
-    # Enqueue a simple notification job
-    job_id = await send_notification.queue(
+    # Enqueue a simple notification task
+    task_id = await send_notification.queue(
         user_id="user_123",
         message="Your order has been confirmed!"
     )
-    print(f"✓ Notification job enqueued: {job_id}\n")
+    print(f"✓ Notification task enqueued: {task_id}\n")
 
     # Enqueue an order processing workflow
     workflow_id = await process_order_workflow.queue(
@@ -141,7 +141,7 @@ async def main():
     print(f"✓ High-priority order workflow enqueued: {workflow_id_2}\n")
 
     print("=" * 60)
-    print("Jobs enqueued! Start workers to process them:")
+    print("Tasks enqueued! Start workers to process them:")
     print("  currant worker -q notifications")
     print("  currant worker -q orders")
     print("=" * 60)

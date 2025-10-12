@@ -1,5 +1,5 @@
 /**
- * Decorators for defining jobs, activities, and workflows
+ * Decorators for defining tasks and workflows
  */
 
 import { queueExecution } from './client.js';
@@ -8,8 +8,7 @@ import { registerFunction } from './registry.js';
 import { settings } from './config.js';
 import type {
   ExecutableProxy,
-  JobConfig,
-  ActivityConfig,
+  TaskConfig,
   WorkflowConfig,
   ExecutionConfig,
 } from './types.js';
@@ -73,7 +72,7 @@ export class BaseExecutableProxy<TArgs extends any[] = any[], TReturn = any>
       );
     }
 
-    return ctx.executeActivity(this as any, args);
+    return ctx.executeTask(this as any, args);
   }
 
   async call(...args: TArgs): Promise<TReturn> {
@@ -81,32 +80,19 @@ export class BaseExecutableProxy<TArgs extends any[] = any[], TReturn = any>
   }
 }
 
-export class JobProxy<TArgs extends any[] = any[], TReturn = any> extends BaseExecutableProxy<
+export class TaskProxy<TArgs extends any[] = any[], TReturn = any> extends BaseExecutableProxy<
   TArgs,
   TReturn
 > {
-  constructor(fn: AsyncFunction<TArgs, TReturn>, config: JobConfig) {
+  constructor(fn: AsyncFunction<TArgs, TReturn>, config: TaskConfig) {
     if (!config.queue) {
-      throw new Error('@job decorator requires a "queue" parameter');
+      throw new Error('@task decorator requires a "queue" parameter');
     }
     const fullConfig = {
       ...config,
       timeout: config.timeout ?? settings.defaultTimeout,
     };
-    super(fn, 'job', fullConfig);
-  }
-}
-
-export class ActivityProxy<TArgs extends any[] = any[], TReturn = any> extends BaseExecutableProxy<
-  TArgs,
-  TReturn
-> {
-  constructor(fn: AsyncFunction<TArgs, TReturn>, config: ActivityConfig) {
-    const fullConfig = {
-      ...config,
-      timeout: config.timeout ?? settings.defaultTimeout,
-    };
-    super(fn, 'activity', fullConfig);
+    super(fn, 'task', fullConfig);
   }
 }
 
@@ -131,19 +117,11 @@ export class WorkflowProxy<TArgs extends any[] = any[], TReturn = any> extends B
 
 // Decorator functions
 
-export function job<TArgs extends any[] = any[], TReturn = any>(
-  config: JobConfig
-): (fn: AsyncFunction<TArgs, TReturn>) => JobProxy<TArgs, TReturn> {
+export function task<TArgs extends any[] = any[], TReturn = any>(
+  config: TaskConfig
+): (fn: AsyncFunction<TArgs, TReturn>) => TaskProxy<TArgs, TReturn> {
   return (fn: AsyncFunction<TArgs, TReturn>) => {
-    return new JobProxy(fn, config);
-  };
-}
-
-export function activity<TArgs extends any[] = any[], TReturn = any>(
-  config: ActivityConfig = {}
-): (fn: AsyncFunction<TArgs, TReturn>) => ActivityProxy<TArgs, TReturn> {
-  return (fn: AsyncFunction<TArgs, TReturn>) => {
-    return new ActivityProxy(fn, config);
+    return new TaskProxy(fn, config);
   };
 }
 

@@ -30,7 +30,7 @@ This document outlines the design considerations for adding distributed tracing 
 - FFI boundary crossings
 
 ### 3. User Code
-- Job/activity/workflow execution
+- Task/task/workflow execution
 - Custom instrumentation via context API
 
 ---
@@ -55,7 +55,7 @@ This document outlines the design considerations for adding distributed tracing 
 
 **Key Challenge**: Maintain trace context across execution boundaries:
 ```
-Python Workflow → Rust Core → PostgreSQL → Rust Core → Python Activity
+Python Workflow → Rust Core → PostgreSQL → Rust Core → Python Task
 ```
 
 **Proposed Solution: Database as Propagation Medium**
@@ -66,9 +66,9 @@ Add columns to `executions` table:
 - `trace_context` (JSONB) - Optional baggage/custom attributes
 
 **Propagation Flow:**
-1. Initial job/workflow receives `trace_id` (from caller or generated)
+1. Initial task/workflow receives `trace_id` (from caller or generated)
 2. Core stores `trace_id` in execution record
-3. When creating child executions (activities), inherit parent's `trace_id`
+3. When creating child executions (Tasks), inherit parent's `trace_id`
 4. Workers pick up executions, read `trace_id`, continue trace in language runtime
 
 **Benefits:**
@@ -160,7 +160,7 @@ worker = Worker(
   - Attributes: payload_size, format (json/pickle)
 
 **User Code (Automatic):**
-- Span per job/activity/workflow execution
+- Span per task/task/workflow execution
 - Name: `{execution_type}.{function_name}`
 - Users can add custom spans via context API (future)
 
@@ -404,7 +404,7 @@ worker = Worker(
 
 **Example:**
 ```python
-@job()
+@task()
 async def process_order(order_id: str):
     with currant.trace.span("validate_order"):
         # custom logic
@@ -502,9 +502,9 @@ async def process_order(order_id: str):
 - [ ] Error rate alerts possible
 
 **Tracing:**
-- [ ] End-to-end trace from workflow → activities
+- [ ] End-to-end trace from workflow → Tasks
 - [ ] Trace survives worker restarts/failovers
-- [ ] Cross-language traces (Python workflow → Node activity)
+- [ ] Cross-language traces (Python workflow → Node task)
 - [ ] Failed executions automatically sampled
 
 **Performance:**

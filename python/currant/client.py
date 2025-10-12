@@ -20,10 +20,10 @@ async def queue_execution(
     parent_workflow_id: Optional[str] = None,
 ) -> str:
     """
-    Enqueue an execution (job, activity, or workflow).
+    Enqueue an execution (task or workflow).
 
     Args:
-        exec_type: Type of execution ('job', 'activity', 'workflow')
+        exec_type: Type of execution ('task', 'workflow')
         function_name: Fully qualified function name
         args: Positional arguments
         kwargs: Keyword arguments
@@ -31,7 +31,7 @@ async def queue_execution(
         priority: Priority (0-10, higher = more urgent)
         max_retries: Maximum retry attempts
         timeout_seconds: Timeout in seconds
-        parent_workflow_id: Parent workflow ID (for activities)
+        parent_workflow_id: Parent workflow ID (for workflow tasks)
 
     Returns:
         Execution ID

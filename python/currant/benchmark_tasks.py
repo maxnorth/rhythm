@@ -1,12 +1,12 @@
-"""Benchmark activity functions - separate module to avoid issues"""
+"""Benchmark task functions - separate module to avoid issues"""
 
 import asyncio
-from currant import activity
+from currant import task
 
 
-@activity()
-async def bench_activity(payload_size: int = 0):
-    """No-op activity for workflow benchmarking.
+@task(queue="default")
+async def bench_task(payload_size: int = 0):
+    """No-op task for workflow benchmarking.
 
     Args:
         payload_size: Size of dummy payload to allocate

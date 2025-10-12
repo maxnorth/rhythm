@@ -1,4 +1,4 @@
-"""Decorators for defining jobs, activities, and workflows"""
+"""Decorators for defining tasks and workflows"""
 
 from typing import Any, Callable, Optional
 import inspect
@@ -9,7 +9,7 @@ from currant.client import queue_execution
 
 
 class ExecutableProxy:
-    """Base proxy for executable functions (jobs, activities, workflows)"""
+    """Base proxy for executable functions (tasks and workflows)"""
 
     def __init__(
         self,
@@ -74,32 +74,23 @@ class ExecutableProxy:
                 f"Use .queue() to run standalone."
             )
 
-        return await ctx.execute_activity(self, args, kwargs)
+        return await ctx.execute_task(self, args, kwargs)
 
     def __call__(self, *args, **kwargs):
         """Direct call - only allowed outside workflow context for testing"""
         return self.fn(*args, **kwargs)
 
 
-class JobProxy(ExecutableProxy):
-    """Proxy for job functions"""
+class TaskProxy(ExecutableProxy):
+    """Proxy for task functions"""
 
     def __init__(self, fn: Callable, queue: str, **config):
         if queue is None:
-            raise ValueError("@job decorator requires a 'queue' parameter")
+            raise ValueError("@task decorator requires a 'queue' parameter")
 
         if "timeout" not in config or config["timeout"] is None:
             config["timeout"] = settings.default_timeout
-        super().__init__(fn, exec_type="job", queue=queue, **config)
-
-
-class ActivityProxy(ExecutableProxy):
-    """Proxy for activity functions"""
-
-    def __init__(self, fn: Callable, **config):
-        if "timeout" not in config or config["timeout"] is None:
-            config["timeout"] = settings.default_timeout
-        super().__init__(fn, exec_type="activity", **config)
+        super().__init__(fn, exec_type="task", queue=queue, **config)
 
 
 class WorkflowProxy(ExecutableProxy):
@@ -122,14 +113,14 @@ class WorkflowProxy(ExecutableProxy):
         self.version = version
 
 
-def job(
+def task(
     queue: str,
     retries: int = None,
     timeout: int = None,
     priority: int = 5,
 ):
     """
-    Decorator for defining a job (standalone async task).
+    Decorator for defining a task (standalone async task).
 
     Args:
         queue: The queue name to execute in
@@ -138,53 +129,18 @@ def job(
         priority: Priority 0-10, higher = more urgent (default: 5)
 
     Example:
-        @job(queue="emails", retries=3)
+        @task(queue="emails", retries=3)
         async def send_email(to: str, subject: str):
             await email_client.send(to, subject)
     """
 
-    def decorator(fn: Callable) -> JobProxy:
+    def decorator(fn: Callable) -> TaskProxy:
         if not inspect.iscoroutinefunction(fn):
-            raise TypeError(f"@job decorated function must be async: {fn.__name__}")
+            raise TypeError(f"@task decorated function must be async: {fn.__name__}")
 
-        return JobProxy(
+        return TaskProxy(
             fn=fn,
             queue=queue,
-            retries=retries,
-            timeout=timeout,
-            priority=priority,
-        )
-
-    return decorator
-
-
-def activity(
-    retries: int = None,
-    timeout: int = None,
-    priority: int = 5,
-):
-    """
-    Decorator for defining an activity (workflow step).
-
-    Activities are called from currant via .run() and inherit the workflow's queue.
-
-    Args:
-        retries: Number of retry attempts (default: 3)
-        timeout: Timeout in seconds (default: 300)
-        priority: Priority 0-10, higher = more urgent (default: 5)
-
-    Example:
-        @activity(retries=3)
-        async def charge_card(amount: int, card_token: str):
-            return await payment_api.charge(amount, card_token)
-    """
-
-    def decorator(fn: Callable) -> ActivityProxy:
-        if not inspect.iscoroutinefunction(fn):
-            raise TypeError(f"@activity decorated function must be async: {fn.__name__}")
-
-        return ActivityProxy(
-            fn=fn,
             retries=retries,
             timeout=timeout,
             priority=priority,

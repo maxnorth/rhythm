@@ -14,7 +14,7 @@ pub enum Commands {
     /// Run database migrations
     Migrate,
 
-    /// Run a worker to process jobs and workflows
+    /// Run a worker to process tasks and workflows
     Worker {
         /// Queue(s) to process (can specify multiple)
         #[arg(short = 'q', long = "queue", required = true)]
@@ -80,25 +80,25 @@ pub enum Commands {
         #[arg(long, default_value = "10")]
         workers: usize,
 
-        /// Number of jobs to enqueue
+        /// Number of tasks to enqueue
         #[arg(long, default_value = "0")]
-        jobs: usize,
+        tasks: usize,
 
         /// Number of workflows to enqueue
         #[arg(long, default_value = "0")]
         workflows: usize,
 
-        /// Job type: noop, compute
+        /// Task type: noop, compute
         #[arg(long, default_value = "noop")]
-        job_type: String,
+        task_type: String,
 
         /// Payload size in bytes
         #[arg(long, default_value = "0")]
         payload_size: usize,
 
-        /// Activities per workflow
+        /// Tasks per workflow
         #[arg(long, default_value = "3")]
-        activities_per_workflow: usize,
+        tasks_per_workflow: usize,
 
         /// Queues to use (comma-separated)
         #[arg(long, default_value = "default")]
@@ -112,11 +112,11 @@ pub enum Commands {
         #[arg(long)]
         duration: Option<String>,
 
-        /// Target job enqueue rate (jobs/sec)
+        /// Target task enqueue rate (tasks/sec)
         #[arg(long)]
         rate: Option<f64>,
 
-        /// Compute iterations for compute job type
+        /// Compute iterations for compute task type
         #[arg(long, default_value = "1000")]
         compute_iterations: usize,
 
@@ -290,11 +290,11 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
 
         Commands::Bench {
             workers,
-            jobs,
+            tasks,
             workflows,
-            job_type,
+            task_type,
             payload_size,
-            activities_per_workflow,
+            tasks_per_workflow,
             queues,
             queue_distribution,
             duration,
@@ -304,11 +304,11 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
         } => {
             let params = benchmark::BenchmarkParams {
                 workers,
-                jobs,
+                tasks,
                 workflows,
-                job_type,
+                task_type,
                 payload_size,
-                activities_per_workflow,
+                tasks_per_workflow,
                 queues,
                 queue_distribution,
                 duration,

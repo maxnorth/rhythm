@@ -20,7 +20,7 @@ workflows/
 ├── python/            # Python adapter
 │   └── currant/
 │       ├── rust_bridge.py   # Rust FFI wrapper
-│       ├── decorators.py    # @job, @activity, @workflow
+│       ├── decorators.py    # @task, @workflow
 │       ├── client.py        # .queue(), send_signal()
 │       ├── worker.py        # Python worker loop
 │       └── context.py       # Workflow context
@@ -55,7 +55,7 @@ The Rust core (`core/`) handles all heavy lifting:
 
 The Python adapter (`python/`) provides an idiomatic Python API:
 
-- **Decorators**: `@job`, `@activity`, `@workflow`
+- **Decorators**: `@task`, `@workflow`
 - **Function Registry**: Track decorated functions for execution
 - **Worker Loop**: Claim from Rust → Execute Python function → Report back to Rust
 - **Workflow Replay**: Handle `WorkflowSuspendException` for checkpointing
@@ -90,7 +90,7 @@ Python Worker Loop:
 
   3. If WorkflowSuspendException raised:
      - Call RustBridge.suspend_workflow(workflow_id, checkpoint)
-     - Create child activity execution
+     - Create child task execution
      - Continue loop
 
   4. On success:
@@ -102,15 +102,15 @@ Python Worker Loop:
 
 **Workflow Replay:**
 ```
-Workflow calls activity.run()
+Workflow calls task.run()
   → Python raises WorkflowSuspendException
   → Worker catches it
-  → Worker calls Rust to create activity execution and suspend workflow
-  → Activity completes (separate execution)
+  → Worker calls Rust to create task execution and suspend workflow
+  → Task completes (separate execution)
   → Worker calls Rust to resume workflow
   → Workflow re-executes from beginning
-  → Previous activities return cached results from checkpoint
-  → Workflow continues to next activity or completes
+  → Previous tasks return cached results from checkpoint
+  → Workflow continues to next task or completes
 ```
 
 ## Building

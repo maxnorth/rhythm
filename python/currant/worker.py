@@ -1,4 +1,4 @@
-"""Worker implementation for executing jobs, activities, and workflows"""
+"""Worker implementation for executing tasks and workflows"""
 
 import asyncio
 import asyncpg
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class Worker:
-    """Worker that polls for and executes jobs, activities, and workflows"""
+    """Worker that polls for and executes tasks and workflows"""
 
     def __init__(self, queues: list[str], worker_id: Optional[str] = None):
         self.worker_id = worker_id or generate_id("worker")
@@ -39,7 +39,7 @@ class Worker:
         self.notify_conn: Optional[asyncpg.Connection] = None
         self.notify_event: asyncio.Event = asyncio.Event()
 
-        # Local job queue for prefetching
+        # Local task queue for prefetching
         self.local_queue: asyncio.Queue = asyncio.Queue(maxsize=settings.worker_max_concurrent * 2)
         self.semaphore: asyncio.Semaphore = asyncio.Semaphore(settings.worker_max_concurrent)
 
@@ -163,19 +163,19 @@ class Worker:
         RustBridge.update_heartbeat(self.worker_id, self.queues)
 
     async def _listener_loop(self):
-        """Pull jobs from local queue and execute them"""
+        """Pull tasks from local queue and execute them"""
         logger.info(f"Worker {self.worker_id} executing from local queue")
 
         while self.running:
             try:
-                # Wait for a job from the local queue (with timeout)
+                # Wait for a task from the local queue (with timeout)
                 execution = await asyncio.wait_for(self.local_queue.get(), timeout=1.0)
 
                 # Execute with semaphore for concurrency control
                 asyncio.create_task(self._execute_with_semaphore(execution))
 
             except asyncio.TimeoutError:
-                # No jobs in queue, just loop again
+                # No tasks in queue, just loop again
                 continue
             except asyncio.CancelledError:
                 break
@@ -184,7 +184,7 @@ class Worker:
                 await asyncio.sleep(1)
 
     async def _claimer_loop(self):
-        """Continuously claim jobs and fill the local queue"""
+        """Continuously claim tasks and fill the local queue"""
         logger.info(f"Worker {self.worker_id} starting claimer loop")
 
         while self.running:
@@ -198,7 +198,7 @@ class Worker:
                     for execution in claimed:
                         await self.local_queue.put(execution)
 
-                    # If we claimed fewer than requested, no more jobs available
+                    # If we claimed fewer than requested, no more tasks available
                     # Wait for notification before trying again
                     if len(claimed) < queue_space:
                         if self.notify_conn:
@@ -305,7 +305,7 @@ class Worker:
                 self.current_executions -= 1
 
     async def _execute(self, execution: Execution):
-        """Execute a job, activity, or workflow"""
+        """Execute a task or workflow"""
         try:
             logger.info(f"Executing {execution.type} {execution.id}: {execution.function_name}")
 
@@ -323,7 +323,7 @@ class Worker:
             await self._handle_execution_failure(execution, e)
 
     async def _execute_function(self, execution: Execution, fn):
-        """Execute a simple function (job or activity)"""
+        """Execute a simple task function"""
         try:
             # Set timeout
             timeout = execution.timeout_seconds or settings.default_timeout
@@ -370,14 +370,14 @@ class Worker:
     async def _handle_workflow_suspend(
         self, execution: Execution, ctx: WorkflowExecutionContext, commands: list[dict]
     ):
-        """Handle workflow suspension and create activity executions via Rust"""
+        """Handle workflow suspension and create task executions via Rust"""
         logger.info(f"Workflow {execution.id} suspended with {len(commands)} commands")
 
-        # Create activity executions for each command
+        # Create task executions for each command
         for cmd in commands:
-            if cmd["type"] == "activity":
+            if cmd["type"] == "task":
                 RustBridge.create_execution(
-                    exec_type="activity",
+                    exec_type="task",
                     function_name=cmd["name"],
                     queue=execution.queue,  # Inherit workflow's queue
                     priority=cmd["config"].get("priority", 5),
@@ -400,7 +400,7 @@ class Worker:
 
         RustBridge.suspend_workflow(execution.id, new_checkpoint)
 
-        logger.info(f"Workflow {execution.id} suspended and activities created")
+        logger.info(f"Workflow {execution.id} suspended and child tasks created")
 
     async def _complete_execution(self, execution: Execution, result: any):
         """Mark execution as completed via Rust"""
@@ -410,13 +410,13 @@ class Worker:
         async with self.completion_lock:
             self.completion_queue.append((execution.id, result))
 
-        # If this is an activity, resume parent workflow
+        # If this is a workflow task, resume parent workflow
         if execution.parent_workflow_id:
             await self._resume_parent_workflow(execution, result)
 
-    async def _resume_parent_workflow(self, activity_execution: Execution, result: any):
-        """Resume parent workflow after activity completion"""
-        workflow_id = activity_execution.parent_workflow_id
+    async def _resume_parent_workflow(self, task_execution: Execution, result: any):
+        """Resume parent workflow after task completion"""
+        workflow_id = task_execution.parent_workflow_id
 
         # Get workflow checkpoint
         workflow_dict = RustBridge.get_execution(workflow_id)
@@ -429,10 +429,10 @@ class Worker:
 
         history.append(
             {
-                "type": "activity",
-                "name": activity_execution.function_name,
+                "type": "task",
+                "name": task_execution.function_name,
                 "result": result,
-                "activity_execution_id": activity_execution.id,
+                "task_execution_id": task_execution.id,
             }
         )
 

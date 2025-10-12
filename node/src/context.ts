@@ -4,7 +4,7 @@
 
 import { AsyncLocalStorage } from 'async_hooks';
 import type { Checkpoint, HistoryEvent, SignalPayload } from './types.js';
-import type { ActivityProxy } from './decorators.js';
+import type { TaskProxy } from './decorators.js';
 import { generateId } from './utils.js';
 
 const workflowContextStorage = new AsyncLocalStorage<WorkflowExecutionContext>();
@@ -52,37 +52,37 @@ export class WorkflowExecutionContext {
     return null;
   }
 
-  async executeActivity(activityProxy: ActivityProxy<any, any>, args: any[]): Promise<any> {
+  async executeTask(taskProxy: TaskProxy<any, any>, args: any[]): Promise<any> {
     const historyEvent = this.getNextHistoryEvent();
 
     if (historyEvent) {
       // REPLAY MODE: return cached result
-      if (historyEvent.type !== 'activity') {
-        throw new Error('History mismatch: expected activity');
+      if (historyEvent.type !== 'task') {
+        throw new Error('History mismatch: expected task');
       }
-      if (historyEvent.name !== activityProxy.functionName) {
+      if (historyEvent.name !== taskProxy.functionName) {
         throw new Error(
-          `History mismatch: expected ${activityProxy.functionName}, got ${historyEvent.name}`
+          `History mismatch: expected ${taskProxy.functionName}, got ${historyEvent.name}`
         );
       }
 
-      console.debug(`Replaying activity ${activityProxy.functionName}`);
+      console.debug(`Replaying task ${taskProxy.functionName}`);
       return historyEvent.result;
     } else {
       // NEW STEP: we've finished replaying, now executing new steps
       this._isReplaying = false;
-      const activityExecutionId = generateId('act');
+      const taskExecutionId = generateId('task');
 
-      console.debug(`Suspending workflow to execute activity ${activityProxy.functionName}`);
+      console.debug(`Suspending workflow to execute task ${taskProxy.functionName}`);
 
-      // Record command to execute this activity
+      // Record command to execute this task
       this.newCommands.push({
-        type: 'activity',
-        activity_execution_id: activityExecutionId,
-        name: activityProxy.functionName,
+        type: 'task',
+        task_execution_id: taskExecutionId,
+        name: taskProxy.functionName,
         args: args,
         kwargs: {},
-        config: activityProxy.config,
+        config: taskProxy.config,
       });
 
       // Suspend workflow execution

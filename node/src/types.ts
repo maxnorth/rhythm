@@ -20,7 +20,7 @@ export interface ExecutableProxy<TArgs extends any[] = any[], TReturn = any> {
   config: ExecutionConfig;
 }
 
-export interface JobConfig extends ExecutionConfig {
+export interface TaskConfig extends ExecutionConfig {
   queue: string;
 }
 
@@ -29,15 +29,13 @@ export interface WorkflowConfig extends ExecutionConfig {
   version?: number;
 }
 
-export interface ActivityConfig extends ExecutionConfig {}
-
 export interface SignalPayload {
   [key: string]: any;
 }
 
 export interface ExecutionStatus {
   id: string;
-  type: 'job' | 'activity' | 'workflow';
+  type: 'task' | 'workflow';
   function_name: string;
   queue: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'suspended';
@@ -52,7 +50,7 @@ export interface ExecutionStatus {
 }
 
 export interface HistoryEvent {
-  type: 'activity' | 'signal' | 'version';
+  type: 'task' | 'signal' | 'version';
   [key: string]: any;
 }
 

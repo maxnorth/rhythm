@@ -74,8 +74,8 @@ echo "👷 Starting worker..."
 currant worker -q notifications -q orders -m examples.simple_example &
 WORKER_PID=$!
 
-# Wait for worker to process jobs
-echo "⏳ Waiting for jobs to complete..."
+# Wait for worker to process tasks
+echo "⏳ Waiting for tasks to complete..."
 sleep 5
 
 # Kill worker
@@ -87,6 +87,6 @@ echo "✓ E2E Test Complete!"
 echo "=========================================="
 echo
 echo "Check the output above for:"
-echo "  - Jobs enqueued successfully"
-echo "  - Worker claimed and executed jobs"
+echo "  - Tasks enqueued successfully"
+echo "  - Worker claimed and executed tasks"
 echo "  - Workflow steps completed"

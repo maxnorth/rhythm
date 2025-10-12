@@ -8,18 +8,18 @@ from examples.simple_example import send_notification, process_order_workflow
 
 async def main():
     print("=" * 60)
-    print("Manual Test - Enqueue Jobs")
+    print("Manual Test - Enqueue Tasks and Workflows")
     print("=" * 60)
     print()
 
-    # Enqueue a simple job
-    print("1. Enqueuing notification job...")
+    # Enqueue a simple task
+    print("1. Enqueuing notification task...")
     try:
-        job_id = await send_notification.queue(
+        task_id = await send_notification.queue(
             user_id="test_user_123",
             message="Test notification from manual test"
         )
-        print(f"   ✓ Job enqueued: {job_id}")
+        print(f"   ✓ Task enqueued: {task_id}")
     except Exception as e:
         print(f"   ✗ Failed: {e}")
         sys.exit(1)
@@ -43,7 +43,7 @@ async def main():
 
     print()
     print("=" * 60)
-    print("Success! Jobs enqueued.")
+    print("Success! Tasks and workflows enqueued.")
     print("=" * 60)
     print()
     print("Now start a worker in another terminal:")

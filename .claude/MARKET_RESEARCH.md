@@ -68,7 +68,7 @@
 #### 3. Developer Experience
 
 **Workflow discovery limitations** (validated):
-- Quote: "cluster does not have a registry for all the workflows and activities" ([source](https://h4s.one/blog/2024/temporal/))
+- Quote: "cluster does not have a registry for all the workflows and Tasks" ([source](https://h4s.one/blog/2024/temporal/))
 - Quote: "No UI to invoke or discover workflows. If your organization wants to try Temporal, be prepared to build tooling around it" ([same source](https://h4s.one/blog/2024/temporal/))
 - Runtime visualization exists ([Timeline View](https://temporal.io/blog/lets-visualize-a-workflow)) but no ahead-of-time DAG view
 
@@ -268,7 +268,7 @@ Currant is **not a company**. No cloud service to sell, no revenue model requiri
 - ETL, exactly-once processing
 - Airflow alternative
 
-### 6. Background Jobs
+### 6. Background Tasks
 - Async tasks, cron replacement
 - Email, reports
 
@@ -281,7 +281,7 @@ Currant is **not a company**. No cloud service to sell, no revenue model requiri
 1. **Complete benchmarks** - Prove performance
 2. **Write 5 tutorials**:
    - 5-minute getting started
-   - Simple job queue
+   - Simple task queue
    - Multi-step workflow
    - E-commerce saga
    - AI agent with retries
