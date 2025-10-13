@@ -135,6 +135,7 @@ pub async fn run_cli_from_args(args: Vec<String>) -> Result<()> {
 /// Internal function that handles CLI commands
 async fn run_cli_with_args(cli: Cli) -> Result<()> {
     use crate::config::Config;
+    use crate::db;
     use crate::executions;
     use crate::signals;
     use std::env;
@@ -150,6 +151,10 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
     // Eagerly load and validate configuration before executing any command
     // This ensures config errors are shown immediately, not after command output
     let _ = Config::load()?;
+
+    // Check if database has been initialized (migrations run)
+    // This prevents confusing errors when trying to use an uninitialized database
+    db::check_initialized().await?;
 
     match cli.command {
         Commands::Status { execution_id } => {

@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use sqlx::postgres::{PgPool, PgPoolOptions};
+use sqlx::Row;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
 
@@ -65,6 +66,39 @@ pub async fn migrate() -> Result<()> {
         .run(pool.as_ref())
         .await
         .context("Failed to run migrations")?;
+
+    Ok(())
+}
+
+/// Check if the database has been initialized (migrations have been run)
+/// Returns Ok(()) if initialized, or an error with helpful message if not
+pub async fn check_initialized() -> Result<()> {
+    let pool = get_pool().await?;
+
+    // Check if the executions table exists (primary table created by migrations)
+    let result = sqlx::query(
+        r#"
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND table_name = 'executions'
+        )
+        "#,
+    )
+    .fetch_one(pool.as_ref())
+    .await
+    .context("Failed to check database initialization")?;
+
+    let exists: bool = result.get(0);
+
+    if !exists {
+        anyhow::bail!(
+            "Currant database has not been initialized\n\n\
+            Please run migrations first using your language adapter:\n\
+              Python: python -m currant migrate\n\
+              Node:   npx currant migrate"
+        );
+    }
 
     Ok(())
 }

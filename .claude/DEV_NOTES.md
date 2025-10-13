@@ -33,13 +33,23 @@ python/.venv/bin/python -m currant <command>
 
 Default connection string:
 ```
-postgresql://workflows:workflows@localhost/workflows
+postgresql://currant@localhost/currant
 ```
 
 Started via:
 ```bash
 docker compose up -d
 ```
+
+### Reset Database
+
+When asked to "reset the database", use this command:
+```bash
+docker compose down -v && docker compose up -d
+```
+
+This drops the postgres volume (wiping all data) and restarts with a fresh database.
+After resetting, you must run migrations again before using the database.
 
 ## Common Development Tasks
 
