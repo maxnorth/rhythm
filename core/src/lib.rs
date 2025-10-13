@@ -1,5 +1,6 @@
 pub mod benchmark;
 pub mod cli;
+pub mod config;
 pub mod db;
 pub mod executions;
 pub mod signals;

@@ -9,6 +9,14 @@ use currant_core::cli;
 async fn main() {
     if let Err(e) = cli::run_cli().await {
         eprintln!("Error: {}", e);
+
+        // Print error chain for better debugging
+        let mut source = e.source();
+        while let Some(err) = source {
+            eprintln!("\nCaused by: {}", err);
+            source = err.source();
+        }
+
         std::process::exit(1);
     }
 }

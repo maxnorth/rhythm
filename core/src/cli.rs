@@ -5,6 +5,14 @@ use clap::{Parser, Subcommand};
 #[command(name = "currant")]
 #[command(about = "Currant - A lightweight durable execution framework", long_about = None)]
 pub struct Cli {
+    /// Path to config file (overrides default search)
+    #[arg(long, global = true)]
+    pub config: Option<String>,
+
+    /// Database URL (overrides config file and env vars)
+    #[arg(long, global = true)]
+    pub database_url: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -126,8 +134,22 @@ pub async fn run_cli_from_args(args: Vec<String>) -> Result<()> {
 
 /// Internal function that handles CLI commands
 async fn run_cli_with_args(cli: Cli) -> Result<()> {
+    use crate::config::Config;
     use crate::executions;
     use crate::signals;
+    use std::env;
+
+    // Apply CLI overrides to environment before any database operations
+    if let Some(config_path) = &cli.config {
+        env::set_var("CURRANT_CONFIG_PATH", config_path);
+    }
+    if let Some(database_url) = &cli.database_url {
+        env::set_var("CURRANT_DATABASE_URL", database_url);
+    }
+
+    // Eagerly load and validate configuration before executing any command
+    // This ensures config errors are shown immediately, not after command output
+    let _ = Config::load()?;
 
     match cli.command {
         Commands::Status { execution_id } => {

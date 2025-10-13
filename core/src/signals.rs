@@ -104,8 +104,8 @@ pub async fn consume_signal(signal_id: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executions::{create_execution, CreateExecutionParams};
-    use crate::types::ExecutionType;
+    use crate::executions::create_execution;
+    use crate::types::{CreateExecutionParams, ExecutionType};
 
     #[tokio::test]
     #[ignore] // Requires database

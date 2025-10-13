@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
 use sqlx::postgres::{PgPool, PgPoolOptions};
-use std::env;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
+
+use crate::config::Config;
 
 /// Global database pool (initialized once, reused forever)
 static POOL: OnceLock<Arc<PgPool>> = OnceLock::new();
@@ -24,16 +25,28 @@ pub async fn get_pool() -> Result<Arc<PgPool>> {
         return Ok(pool.clone());
     }
 
-    // Actually initialize the pool
-    let database_url =
-        env::var("CURRANT_DATABASE_URL").context("CURRANT_DATABASE_URL must be set")?;
+    // Load configuration
+    let config = Config::load().context("Failed to load configuration")?;
 
+    // Get database URL (validated by config loading, so safe to unwrap)
+    let database_url = config
+        .database
+        .url
+        .expect("Database URL should be validated by config loading");
+
+    // Actually initialize the pool
     let pool = PgPoolOptions::new()
-        .max_connections(50)  // Increased for better concurrency
-        .min_connections(5)
-        .acquire_timeout(std::time::Duration::from_secs(10))
-        .idle_timeout(std::time::Duration::from_secs(600))
-        .max_lifetime(std::time::Duration::from_secs(1800))
+        .max_connections(config.database.max_connections)
+        .min_connections(config.database.min_connections)
+        .acquire_timeout(std::time::Duration::from_secs(
+            config.database.acquire_timeout_secs,
+        ))
+        .idle_timeout(std::time::Duration::from_secs(
+            config.database.idle_timeout_secs,
+        ))
+        .max_lifetime(std::time::Duration::from_secs(
+            config.database.max_lifetime_secs,
+        ))
         .connect(&database_url)
         .await
         .context("Failed to connect to database")?;

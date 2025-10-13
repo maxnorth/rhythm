@@ -432,61 +432,108 @@ go run cmd/worker/main.go
 
 ### Configuration Management
 
-**Decision (2025-10-11)**: Use config files with environment variable overrides.
+**Decision (2025-10-11, Implemented 2025-10-12)**: Use config files with environment variable overrides. Database URL is **required** - no default provided.
+
+**Implementation**: Core provides `core/src/config.rs` module that handles all configuration loading.
 
 **Priority order** (highest to lowest):
 1. CLI flag: `--database-url postgresql://...` (explicit override for debugging)
 2. Environment variable: `CURRANT_DATABASE_URL` (container-friendly)
 3. Config file: `currant.toml` (default for local dev)
-4. Fallback: `postgresql://localhost/currant`
+4. **Required**: Database URL must be set via one of the above methods
+
+**Why no default URL?** Following best practices from Temporal, Celery, and other production tools:
+- Prevents accidental connections to wrong databases
+- Forces explicit configuration (fail fast)
+- Environment-specific values shouldn't have defaults
+- Clear error message guides users to proper setup
 
 **Config file format** (TOML):
 ```toml
 # currant.toml
 [database]
-url = "postgresql://workflows:workflows@localhost/workflows"
-
-[observability]
-enabled = true
-endpoint = "http://localhost:4317"
+url = "postgresql://localhost/currant"
+max_connections = 50
+min_connections = 5
+acquire_timeout_secs = 10
+idle_timeout_secs = 600
+max_lifetime_secs = 1800
 ```
 
-**Config file location search order**:
-1. `currant.toml` (project root, can commit to repo or gitignore for local overrides)
-2. `~/.config/currant/config.toml` (user-level default)
+**All configurable settings**:
+- `database.url`: PostgreSQL connection string
+- `database.max_connections`: Pool max connections (default: 50)
+- `database.min_connections`: Pool min connections (default: 5)
+- `database.acquire_timeout_secs`: Connection acquire timeout (default: 10)
+- `database.idle_timeout_secs`: Idle connection timeout (default: 600)
+- `database.max_lifetime_secs`: Max connection lifetime (default: 1800)
 
-**Optional**: Load `.env` file if present (many tools do this)
+**Environment variable mapping**:
+- `CURRANT_DATABASE_URL` → `database.url`
+- `CURRANT_DATABASE_MAX_CONNECTIONS` → `database.max_connections`
+- `CURRANT_DATABASE_MIN_CONNECTIONS` → `database.min_connections`
+- `CURRANT_DATABASE_ACQUIRE_TIMEOUT_SECS` → `database.acquire_timeout_secs`
+- `CURRANT_DATABASE_IDLE_TIMEOUT_SECS` → `database.idle_timeout_secs`
+- `CURRANT_DATABASE_MAX_LIFETIME_SECS` → `database.max_lifetime_secs`
+- `CURRANT_CONFIG_PATH` → Override config file location
+
+**Config file location search order**:
+1. `CURRANT_CONFIG_PATH` env var (if set)
+2. `currant.toml` (project root, can commit to repo or gitignore for local overrides)
+3. `~/.config/currant/config.toml` (user-level default)
+
+**`.env` file support**: Automatically loaded if present in project root (using `dotenvy` crate)
 
 **Benefits**:
 - ✅ No manual env var needed for local dev (config file "just works")
 - ✅ Multi-environment support (dev/staging/prod via different configs)
-- ✅ Multi-language support (Python, Node, Go all read same config file)
+- ✅ Multi-language support (Python, Node, Go can all read same TOML file)
 - ✅ Container-friendly (env vars work in Docker/K8s)
 - ✅ Production debugging (can override with `--database-url`)
+- ✅ All settings are configurable at every layer
 
-**Language-specific notes**:
-- **Python/Node/Ruby**: Adapters load config and pass to core
-- **Go/Rust**: Users can use `LoadConfigFromEnv()` helper or build their own config loading
+**Usage in Rust**:
+```rust
+use currant_core::config::Config;
 
-**Example (Go):**
-```go
-func main() {
-    // Option 1: Load from env vars (reads CURRANT_* variables)
-    config := currant.LoadConfigFromEnv()
+// Load with full priority chain
+let config = Config::load()?;
 
-    // Option 2: Explicit
-    config := currant.Config{
-        DatabaseURL: "postgresql://...",
-        Queues: []string{"default"},
-    }
+// Load from specific file
+let config = Config::from_file("currant.toml")?;
 
-    // Option 3: Load from config file
-    config := currant.LoadConfig("currant.toml")
-
-    worker := currant.NewWorker(config)
-    worker.Run()
-}
+// Use builder for programmatic overrides
+let config = Config::builder()
+    .database_url(Some("postgresql://...".to_string()))
+    .max_connections(Some(100))
+    .build()?;
 ```
+
+**Global CLI integration**:
+```bash
+# Use default config search
+currant bench --tasks 1000
+
+# Override config file location
+currant --config /path/to/currant.toml bench --tasks 1000
+
+# Override database URL directly
+currant --database-url postgresql://prod/db bench --tasks 1000
+```
+
+**Future extensibility pattern**:
+When adding new features (e.g., observability), add new config sections:
+```toml
+[observability]
+endpoint = "http://localhost:4317"
+sample_rate = 0.1
+```
+
+Then update `core/src/config.rs`:
+1. Add new struct (e.g., `ObservabilityConfig`)
+2. Add field to `Config` struct: `pub observability: Option<ObservabilityConfig>`
+3. Add env var mappings in `apply_env_vars()`
+4. Add CLI flags if needed (e.g., `--observability-endpoint`)
 
 **No version coordination file needed**: Migration always runs from language adapter (which knows its own version), so no `.currant/config.toml` version field is required.
 
