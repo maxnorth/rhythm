@@ -1,4 +1,4 @@
-use ::currant_core::{cli, db, executions, signals, worker, CreateExecutionParams, ExecutionType};
+use ::currant_core::{benchmark, cli, db, executions, signals, worker, CreateExecutionParams, ExecutionType};
 use pyo3::prelude::*;
 use serde_json::Value as JsonValue;
 use std::sync::OnceLock;
@@ -295,6 +295,50 @@ fn run_cli_sync(args: Vec<String>) -> PyResult<()> {
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
+/// Run a benchmark
+#[pyfunction]
+#[pyo3(signature = (worker_command, workers, tasks, workflows, task_type, payload_size, tasks_per_workflow, queues, compute_iterations, warmup_percent, queue_distribution=None, duration=None, rate=None))]
+#[allow(clippy::too_many_arguments)]
+fn run_benchmark_sync(
+    worker_command: Vec<String>,
+    workers: usize,
+    tasks: usize,
+    workflows: usize,
+    task_type: String,
+    payload_size: usize,
+    tasks_per_workflow: usize,
+    queues: String,
+    compute_iterations: usize,
+    warmup_percent: f64,
+    queue_distribution: Option<String>,
+    duration: Option<String>,
+    rate: Option<f64>,
+) -> PyResult<()> {
+    let runtime = get_runtime();
+
+    let params = benchmark::BenchmarkParams {
+        mode: benchmark::WorkerMode::External {
+            command: worker_command,
+            workers,
+        },
+        tasks,
+        workflows,
+        task_type,
+        payload_size,
+        tasks_per_workflow,
+        queues,
+        queue_distribution,
+        duration,
+        rate,
+        compute_iterations,
+        warmup_percent,
+    };
+
+    runtime
+        .block_on(benchmark::run_benchmark(params))
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+}
+
 /// Python module
 #[pymodule]
 fn currant_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -317,5 +361,6 @@ fn currant_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(consume_signal_sync, m)?)?;
     m.add_function(wrap_pyfunction!(migrate_sync, m)?)?;
     m.add_function(wrap_pyfunction!(run_cli_sync, m)?)?;
+    m.add_function(wrap_pyfunction!(run_benchmark_sync, m)?)?;
     Ok(())
 }

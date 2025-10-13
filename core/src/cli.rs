@@ -74,11 +74,15 @@ pub enum Commands {
         payload: String,
     },
 
-    /// Run performance benchmarks
+    /// Run baseline benchmark (pure Rust, no external workers)
     Bench {
-        /// Number of workers to spawn
-        #[arg(long, default_value = "10")]
-        workers: usize,
+        /// Number of concurrent tokio tasks
+        #[arg(long, default_value = "100")]
+        concurrency: usize,
+
+        /// Microseconds of simulated work per task
+        #[arg(long)]
+        work_delay_us: Option<u64>,
 
         /// Number of tasks to enqueue
         #[arg(long, default_value = "0")]
@@ -144,7 +148,6 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
     use crate::db;
     use crate::executions;
     use crate::signals;
-    use crate::benchmark;
 
     match cli.command {
         Commands::Migrate => {
@@ -289,7 +292,8 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
         }
 
         Commands::Bench {
-            workers,
+            concurrency,
+            work_delay_us,
             tasks,
             workflows,
             task_type,
@@ -302,8 +306,13 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
             compute_iterations,
             warmup_percent,
         } => {
+            use crate::benchmark;
+
             let params = benchmark::BenchmarkParams {
-                workers,
+                mode: benchmark::WorkerMode::Baseline {
+                    concurrency,
+                    work_delay_us,
+                },
                 tasks,
                 workflows,
                 task_type,

@@ -146,3 +146,53 @@ class RustBridge:
         from Python.
         """
         rust.run_cli_sync(args)
+
+    @staticmethod
+    def run_benchmark(
+        worker_command: List[str],
+        workers: int,
+        tasks: int,
+        workflows: int,
+        task_type: str,
+        payload_size: int,
+        tasks_per_workflow: int,
+        queues: str,
+        queue_distribution: Optional[str],
+        duration: Optional[str],
+        rate: Optional[float],
+        compute_iterations: int,
+        warmup_percent: float,
+    ) -> None:
+        """
+        Run a benchmark by calling into Rust.
+
+        Args:
+            worker_command: Command to spawn workers (e.g., ["python", "-m", "currant", "worker"])
+            workers: Number of worker processes to spawn
+            tasks: Number of tasks to enqueue
+            workflows: Number of workflows to enqueue
+            task_type: Type of task ('noop' or 'compute')
+            payload_size: Size of payload in bytes
+            tasks_per_workflow: Number of tasks per workflow
+            queues: Comma-separated queue names
+            queue_distribution: Queue distribution percentages
+            duration: Benchmark duration (e.g., "30s", "5m")
+            rate: Task enqueue rate (tasks/sec)
+            compute_iterations: Iterations for compute task type
+            warmup_percent: Percentage of executions to exclude from metrics
+        """
+        rust.run_benchmark_sync(
+            worker_command=worker_command,
+            workers=workers,
+            tasks=tasks,
+            workflows=workflows,
+            task_type=task_type,
+            payload_size=payload_size,
+            tasks_per_workflow=tasks_per_workflow,
+            queues=queues,
+            queue_distribution=queue_distribution,
+            duration=duration,
+            rate=rate,
+            compute_iterations=compute_iterations,
+            warmup_percent=warmup_percent,
+        )

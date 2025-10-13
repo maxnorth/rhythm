@@ -22,8 +22,60 @@ def main():
     args = sys.argv.copy()
     args[0] = 'currant'
 
-    # Special handling for worker command - needs Python-specific logic
-    if len(args) > 1 and args[1] == "worker":
+    # Check for 'worker bench' subcommand first (more specific)
+    if len(args) > 2 and args[1] == "worker" and args[2] == "bench":
+        # Python handles 'worker bench' subcommand
+        from currant.rust_bridge import RustBridge
+        import argparse
+
+        # Detect Python executable
+        python_cmd = sys.executable or "python"
+
+        # Build worker command: python -m currant worker --import currant.benchmark
+        worker_cmd = [python_cmd, "-m", "currant", "worker", "--import", "currant.benchmark"]
+
+        # Parse benchmark arguments
+        parser = argparse.ArgumentParser(prog='currant worker bench')
+        parser.add_argument('--workers', type=int, default=10)
+        parser.add_argument('--tasks', type=int, default=0)
+        parser.add_argument('--workflows', type=int, default=0)
+        parser.add_argument('--task-type', default='noop')
+        parser.add_argument('--payload-size', type=int, default=0)
+        parser.add_argument('--tasks-per-workflow', type=int, default=3)
+        parser.add_argument('--queues', default='default')
+        parser.add_argument('--queue-distribution', default=None)
+        parser.add_argument('--duration', default=None)
+        parser.add_argument('--rate', type=float, default=None)
+        parser.add_argument('--compute-iterations', type=int, default=1000)
+        parser.add_argument('--warmup-percent', type=float, default=0.0)
+
+        try:
+            bench_args = parser.parse_args(args[3:])  # Skip 'currant', 'worker', and 'bench'
+
+            # Call Rust benchmark function directly
+            RustBridge.run_benchmark(
+                worker_command=worker_cmd,
+                workers=bench_args.workers,
+                tasks=bench_args.tasks,
+                workflows=bench_args.workflows,
+                task_type=bench_args.task_type,
+                payload_size=bench_args.payload_size,
+                tasks_per_workflow=bench_args.tasks_per_workflow,
+                queues=bench_args.queues,
+                compute_iterations=bench_args.compute_iterations,
+                warmup_percent=bench_args.warmup_percent,
+                queue_distribution=bench_args.queue_distribution,
+                duration=bench_args.duration,
+                rate=bench_args.rate,
+            )
+        except KeyboardInterrupt:
+            print("\nInterrupted")
+            sys.exit(130)
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+    elif len(args) > 1 and args[1] == "worker":
+        # Regular worker command - needs Python-specific logic
         import asyncio
         from currant.worker import run_worker
 

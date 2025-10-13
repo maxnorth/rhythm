@@ -6,11 +6,25 @@ use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
 use crate::db::get_pool;
-use crate::executions::create_execution;
+use crate::executions::{claim_execution, complete_execution, create_execution};
 use crate::types::{CreateExecutionParams, ExecutionType};
 
+/// Worker mode for benchmarking
+pub enum WorkerMode {
+    /// Spawn external worker processes (language adapters)
+    External {
+        command: Vec<String>,
+        workers: usize,
+    },
+    /// Run baseline benchmark with internal tokio tasks (no external processes)
+    Baseline {
+        concurrency: usize,
+        work_delay_us: Option<u64>,
+    },
+}
+
 pub struct BenchmarkParams {
-    pub workers: usize,
+    pub mode: WorkerMode,
     pub tasks: usize,
     pub workflows: usize,
     pub task_type: String,
@@ -96,8 +110,21 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
     let queues: Vec<&str> = params.queues.split(',').collect();
     let distribution = parse_distribution(&params.queue_distribution, queues.len())?;
 
+    // Display configuration based on mode
     println!("\n📋 Configuration:");
-    println!("   Workers: {}", params.workers);
+    match &params.mode {
+        WorkerMode::External { command: _, workers } => {
+            println!("   Mode: External Workers");
+            println!("   Workers: {}", workers);
+        }
+        WorkerMode::Baseline { concurrency, work_delay_us } => {
+            println!("   Mode: Baseline (Pure Rust)");
+            println!("   Concurrency: {} tokio tasks", concurrency);
+            if let Some(delay) = work_delay_us {
+                println!("   Work Delay: {}μs", delay);
+            }
+        }
+    }
     println!("   Tasks: {}", params.tasks);
     println!("   Workflows: {}", params.workflows);
     println!("   Task Type: {}", params.task_type);
@@ -112,15 +139,23 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
         println!("   Enqueue Rate: {}/sec", rate);
     }
 
-    // Step 1: Spawn workers with cleanup guard
-    println!("\n🔧 Spawning {} workers...", params.workers);
-    let workers = spawn_workers(params.workers, &params.queues)?;
-    let worker_guard = WorkerGuard::new(workers);
-
-    // Give workers time to start up (Python startup + import can be slow)
-    println!("   Waiting for workers to initialize...");
-    sleep(Duration::from_secs(8)).await;
-    println!("✓ Workers started");
+    // Step 1: Start workers based on mode
+    let _worker_guard = match &params.mode {
+        WorkerMode::External { command, workers } => {
+            println!("\n🔧 Spawning {} external workers...", workers);
+            let spawned_workers = spawn_workers(command, *workers, &params.queues)?;
+            println!("   Waiting for workers to initialize...");
+            sleep(Duration::from_secs(8)).await;
+            println!("✓ Workers started");
+            Some(WorkerGuard::new(spawned_workers))
+        }
+        WorkerMode::Baseline { concurrency, work_delay_us } => {
+            println!("\n🔧 Starting {} baseline workers (tokio tasks)...", concurrency);
+            spawn_baseline_workers(*concurrency, &queues, *work_delay_us).await;
+            println!("✓ Baseline workers started");
+            None
+        }
+    };
 
     // Step 2: Enqueue tasks
     println!("\n📬 Enqueueing work...");
@@ -169,11 +204,14 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
         params.warmup_percent
     ).await?;
 
-    // Step 5: Stop workers (extract from guard to prevent drop cleanup)
-    println!("\n🛑 Stopping workers...");
-    let workers = worker_guard.take();
-    stop_workers(workers)?;
-    println!("✓ Workers stopped");
+    // Step 5: Stop workers (only for external mode)
+    if let Some(guard) = _worker_guard {
+        println!("\n🛑 Stopping workers...");
+        let workers = guard.take();
+        stop_workers(workers)?;
+        println!("✓ Workers stopped");
+    }
+    // Note: Baseline workers (tokio tasks) will be dropped automatically
 
     // Step 6: Display report
     display_report(&metrics, params.warmup_percent);
@@ -186,13 +224,26 @@ fn validate_params(params: &BenchmarkParams) -> Result<()> {
         return Err(anyhow!("Must specify --tasks or --workflows (or both)"));
     }
 
-    if params.workers == 0 {
-        return Err(anyhow!("Must have at least 1 worker"));
+    // Validate mode-specific parameters
+    match &params.mode {
+        WorkerMode::External { command, workers } => {
+            if command.is_empty() {
+                return Err(anyhow!("Worker command cannot be empty"));
+            }
+            if *workers == 0 {
+                return Err(anyhow!("Must have at least 1 worker"));
+            }
+        }
+        WorkerMode::Baseline { concurrency, work_delay_us: _ } => {
+            if *concurrency == 0 {
+                return Err(anyhow!("Concurrency must be at least 1"));
+            }
+        }
     }
 
     match params.task_type.as_str() {
         "noop" | "compute" => {},
-        _ => return Err(anyhow!("Invalid tasktype '{}'. Must be 'noop' or 'compute'", params.task_type)),
+        _ => return Err(anyhow!("Invalid task type '{}'. Must be 'noop' or 'compute'", params.task_type)),
     }
 
     Ok(())
@@ -240,25 +291,59 @@ fn parse_duration(duration_str: &str) -> Result<Duration> {
     }
 }
 
-fn spawn_workers(count: usize, queues: &str) -> Result<Vec<Child>> {
-    let mut workers = Vec::new();
+/// Spawn baseline workers (tokio tasks, not external processes)
+async fn spawn_baseline_workers(concurrency: usize, queues: &[&str], work_delay_us: Option<u64>) {
+    let queues_vec: Vec<String> = queues.iter().map(|s| s.to_string()).collect();
 
-    // Try to detect Python executable - prefer current interpreter
-    let python_cmd = std::env::var("PYTHON")
-        .or_else(|_| std::env::var("VIRTUAL_ENV").map(|venv| format!("{}/bin/python", venv)))
-        .unwrap_or_else(|_| {
-            // Fall back to system python
-            if Command::new("python3").arg("--version").output().is_ok() {
-                "python3".to_string()
-            } else {
-                "python".to_string()
+    for _ in 0..concurrency {
+        let queues_clone = queues_vec.clone();
+        tokio::spawn(async move {
+            loop {
+                // Claim a task
+                match claim_execution("baseline-worker", &queues_clone).await {
+                    Ok(Some(exec)) => {
+                        // Optional work delay to simulate processing
+                        if let Some(delay_us) = work_delay_us {
+                            tokio::time::sleep(Duration::from_micros(delay_us)).await;
+                        }
+
+                        // Complete the task immediately
+                        let result = json!({"status": "completed", "mode": "baseline"});
+                        if let Err(e) = complete_execution(&exec.id, result).await {
+                            eprintln!("Baseline worker error completing execution: {}", e);
+                        }
+                    }
+                    Ok(None) => {
+                        // No work available, sleep briefly
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                    }
+                    Err(e) => {
+                        eprintln!("Baseline worker error claiming execution: {}", e);
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                }
             }
         });
+    }
+}
+
+fn spawn_workers(worker_command: &[String], count: usize, queues: &str) -> Result<Vec<Child>> {
+    let mut workers = Vec::new();
+
+    if worker_command.is_empty() {
+        return Err(anyhow!("Worker command cannot be empty"));
+    }
 
     for i in 0..count {
-        let mut cmd = Command::new(&python_cmd);
-        // Use -u flag for unbuffered output
-        cmd.args(["-u", "-m", "currant", "worker", "--queue", queues, "--import", "currant.benchmark"]);
+        let mut cmd = Command::new(&worker_command[0]);
+
+        // Add remaining command arguments
+        if worker_command.len() > 1 {
+            cmd.args(&worker_command[1..]);
+        }
+
+        // Add queue arguments
+        cmd.args(["--queue", queues]);
 
         let worker = cmd
             .stdout(Stdio::inherit()) // Show worker output for debugging
