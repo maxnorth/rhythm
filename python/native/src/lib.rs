@@ -1,4 +1,4 @@
-use ::currant_core::{benchmark, cli, db, executions, signals, worker, CreateExecutionParams, ExecutionType};
+use ::currant_core::{benchmark, cli, db, executions, init, signals, worker, CreateExecutionParams, ExecutionType};
 use pyo3::prelude::*;
 use serde_json::Value as JsonValue;
 use std::sync::OnceLock;
@@ -22,6 +22,34 @@ fn init_runtime() -> PyResult<()> {
     // Just initialize the global runtime
     let _ = get_runtime();
     Ok(())
+}
+
+/// Initialize Currant with configuration options
+#[pyfunction]
+#[pyo3(signature = (database_url=None, config_path=None, auto_migrate=true, require_initialized=true))]
+fn initialize_sync(
+    database_url: Option<String>,
+    config_path: Option<String>,
+    auto_migrate: bool,
+    require_initialized: bool,
+) -> PyResult<()> {
+    let runtime = get_runtime();
+
+    let mut builder = init::InitBuilder::new()
+        .auto_migrate(auto_migrate)
+        .require_initialized(require_initialized);
+
+    if let Some(url) = database_url {
+        builder = builder.database_url(url);
+    }
+
+    if let Some(path) = config_path {
+        builder = builder.config_path(path);
+    }
+
+    runtime
+        .block_on(builder.init())
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
 /// Create an execution
@@ -343,6 +371,7 @@ fn run_benchmark_sync(
 #[pymodule]
 fn currant_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(init_runtime, m)?)?;
+    m.add_function(wrap_pyfunction!(initialize_sync, m)?)?;
     m.add_function(wrap_pyfunction!(create_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(claim_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(claim_executions_batch_sync, m)?)?;

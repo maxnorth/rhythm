@@ -56,17 +56,17 @@ After resetting, you must run migrations again before using the database.
 ### Run migrations
 ```bash
 cd python
-.venv/bin/python -m currant migrate
+.venv/bin/python -m currant --database-url postgresql://currant@localhost/currant migrate
 ```
 
 ### Run worker
 ```bash
 cd python
-.venv/bin/python -m currant worker --queue default
+.venv/bin/python -m currant --database-url postgresql://currant@localhost/currant worker --queue default
 ```
 
-### Run benchmark (after Step 2 refactoring)
+### Run benchmark
 ```bash
 cd python
-.venv/bin/python -m currant bench --workers 10 --tasks 1000
+.venv/bin/python -m currant --database-url postgresql://currant@localhost/currant worker bench --workers 10 --tasks 1000
 ```

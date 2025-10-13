@@ -15,6 +15,29 @@ class RustBridge:
     """Wrapper around Rust core functions"""
 
     @staticmethod
+    def initialize(
+        database_url: Optional[str] = None,
+        config_path: Optional[str] = None,
+        auto_migrate: bool = True,
+        require_initialized: bool = True,
+    ) -> None:
+        """
+        Initialize Currant with configuration options.
+
+        Args:
+            database_url: Database URL (overrides config file and env vars)
+            config_path: Path to config file (overrides default search)
+            auto_migrate: Whether to automatically run migrations if database is not initialized
+            require_initialized: Whether to fail if database is not initialized (when auto_migrate is False)
+        """
+        rust.initialize_sync(
+            database_url=database_url,
+            config_path=config_path,
+            auto_migrate=auto_migrate,
+            require_initialized=require_initialized,
+        )
+
+    @staticmethod
     def create_execution(
         exec_type: str,
         function_name: str,
