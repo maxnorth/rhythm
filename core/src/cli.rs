@@ -11,25 +11,6 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Run database migrations
-    Migrate,
-
-    /// Run a worker to process tasks and workflows
-    Worker {
-        /// Queue(s) to process (can specify multiple)
-        #[arg(short = 'q', long = "queue", required = true)]
-        queues: Vec<String>,
-
-        /// Worker ID (auto-generated if not provided)
-        #[arg(long = "worker-id")]
-        worker_id: Option<String>,
-
-        /// Module(s) to import for function registration
-        /// Note: Module importing is handled by the language adapter
-        #[arg(short = 'm', long = "import")]
-        import_modules: Vec<String>,
-    },
-
     /// Get the status of an execution
     Status {
         /// Execution ID to query
@@ -145,38 +126,10 @@ pub async fn run_cli_from_args(args: Vec<String>) -> Result<()> {
 
 /// Internal function that handles CLI commands
 async fn run_cli_with_args(cli: Cli) -> Result<()> {
-    use crate::db;
     use crate::executions;
     use crate::signals;
 
     match cli.command {
-        Commands::Migrate => {
-            println!("Running database migrations...");
-            db::migrate().await?;
-            println!("✓ Migrations completed successfully");
-        }
-
-        Commands::Worker {
-            queues,
-            worker_id,
-            import_modules,
-        } => {
-            // Note: Module importing must be handled by the language adapter
-            // before calling into Rust worker code
-            println!("Starting worker for queues: {}", queues.join(", "));
-
-            if !import_modules.is_empty() {
-                eprintln!(
-                    "Warning: --import flag specified but module importing must be handled by the language adapter"
-                );
-            }
-
-            // The actual worker implementation will be called from language adapters
-            // This is a placeholder - language adapters should import modules then call worker code
-            eprintln!("Worker command should be invoked from language-specific adapter");
-            std::process::exit(1);
-        }
-
         Commands::Status { execution_id } => {
             match executions::get_execution(&execution_id).await? {
                 Some(exec) => {
