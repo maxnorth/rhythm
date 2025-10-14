@@ -65,3 +65,4 @@ Cargo.lock
 dmypy.json
 
 .signoz/
+.claude/

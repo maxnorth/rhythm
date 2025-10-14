@@ -1,1 +1,0 @@
-Read and review all files matching /Users/maxnorth/Projects/currant/.claude/*.md to understand the project's architectural decisions, design principles, and planned work before proceeding with any tasks.
