@@ -38,5 +38,5 @@ asyncio_mode = "auto"
 
 [tool.maturin]
 python-source = "."
-module-name = "currant_core"
+module-name = "currant.currant_core"
 manifest-path = "native/Cargo.toml"

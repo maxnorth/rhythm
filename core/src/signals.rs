@@ -107,11 +107,24 @@ mod tests {
     use crate::executions::create_execution;
     use crate::types::{CreateExecutionParams, ExecutionType};
 
+    /// Helper function to reset the test database by truncating all tables
+    async fn reset_db() {
+        let pool = crate::db::get_pool().await.unwrap();
+
+        // Single query with multiple truncates - uses only one connection
+        sqlx::query("TRUNCATE TABLE signals, executions CASCADE")
+            .execute(pool.as_ref())
+            .await
+            .unwrap();
+    }
+
     #[tokio::test]
-    #[ignore] // Requires database
     async fn test_send_and_get_signal() {
+        reset_db().await;
+
         // Create a workflow first
         let params = CreateExecutionParams {
+            id: None,
             exec_type: ExecutionType::Workflow,
             function_name: "test.workflow".to_string(),
             queue: "test".to_string(),

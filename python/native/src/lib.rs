@@ -54,6 +54,7 @@ fn initialize_sync(
 
 /// Create an execution
 #[pyfunction]
+#[pyo3(signature = (exec_type, function_name, queue, priority, args, kwargs, max_retries, timeout_seconds=None, parent_workflow_id=None, id=None))]
 fn create_execution_sync(
     exec_type: String,
     function_name: String,
@@ -64,6 +65,7 @@ fn create_execution_sync(
     max_retries: i32,
     timeout_seconds: Option<i32>,
     parent_workflow_id: Option<String>,
+    id: Option<String>,
 ) -> PyResult<String> {
     let runtime = get_runtime();
 
@@ -83,6 +85,7 @@ fn create_execution_sync(
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
 
     let params = CreateExecutionParams {
+        id,
         exec_type,
         function_name,
         queue,

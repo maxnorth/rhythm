@@ -1,4 +1,4 @@
-# Workflows
+# Currant
 
 A lightweight durable execution framework using only Postgres. No external orchestrator needed.
 
@@ -26,13 +26,13 @@ pip install -e .
 
 ```bash
 # Set database URL
-export WORKFLOWS_DATABASE_URL="postgresql://localhost/workflows"
+export CURRANT_DATABASE_URL="postgresql://localhost/currant"
 
 # Run migrations
-workflows migrate
+currant migrate
 ```
 
-### 2. Define Tasks and Workflows
+### 2. Define Tasks and Currant
 
 ```python
 # app.py
@@ -113,7 +113,7 @@ currant worker -q emails -q orders
 
 ### Signals
 
-Workflows can wait for external signals:
+Currant can wait for external signals:
 
 ```python
 @workflow(queue="approvals", version=1)
@@ -128,7 +128,7 @@ async def approval_workflow(document_id: str):
         return {"status": "rejected"}
 
 # Send signal from external system
-from workflows import send_signal
+from currant import send_signal
 
 await send_signal(workflow_id, "approved", {"approved": True, "approver": "user@example.com"})
 ```
@@ -138,7 +138,7 @@ await send_signal(workflow_id, "approved", {"approved": True, "approver": "user@
 Handle workflow evolution with backward compatibility:
 
 ```python
-from workflows import get_version
+from currant import get_version
 
 @workflow(queue="orders", version=2)
 async def process_order(order_id: str, amount: int, email: str, card_token: str):
@@ -175,48 +175,48 @@ async def risky_order(order_id: str):
 
 ```bash
 # Run migrations
-workflows migrate
+currant migrate
 
 # Start worker
 currant worker -q queue_name
 
 # Check execution status
-workflows status <execution_id>
+currant status <execution_id>
 
 # List executions
-workflows list
-workflows list --queue emails --status pending
-workflows list --limit 50
+currant list
+currant list --queue emails --status pending
+currant list --limit 50
 
 # Cancel execution
-workflows cancel <execution_id>
+currant cancel <execution_id>
 ```
 
 ## Configuration
 
-Set via environment variables (prefix with `WORKFLOWS_`):
+Set via environment variables (prefix with `CURRANT_`):
 
 ```bash
 # Database
-export WORKFLOWS_DATABASE_URL="postgresql://localhost/workflows"
+export CURRANT_DATABASE_URL="postgresql://localhost/currant"
 
 # Worker settings
-export WORKFLOWS_WORKER_HEARTBEAT_INTERVAL=5  # seconds
-export WORKFLOWS_WORKER_HEARTBEAT_TIMEOUT=30  # seconds
-export WORKFLOWS_WORKER_POLL_INTERVAL=1  # seconds
-export WORKFLOWS_WORKER_MAX_CONCURRENT=10  # per worker
+export CURRANT_WORKER_HEARTBEAT_INTERVAL=5  # seconds
+export CURRANT_WORKER_HEARTBEAT_TIMEOUT=30  # seconds
+export CURRANT_WORKER_POLL_INTERVAL=1  # seconds
+export CURRANT_WORKER_MAX_CONCURRENT=10  # per worker
 
 # Execution defaults
-export WORKFLOWS_DEFAULT_TIMEOUT=300  # seconds
-export WORKFLOWS_DEFAULT_WORKFLOW_TIMEOUT=3600  # seconds
-export WORKFLOWS_DEFAULT_RETRIES=3
+export CURRANT_DEFAULT_TIMEOUT=300  # seconds
+export CURRANT_DEFAULT_WORKFLOW_TIMEOUT=3600  # seconds
+export CURRANT_DEFAULT_RETRIES=3
 ```
 
 ## How It Works
 
 ### Worker Coordination (No External Orchestrator!)
 
-Unlike DBOS which requires a separate Conductor service, workflows achieves worker failover entirely through Postgres:
+Unlike DBOS which requires a separate Conductor service, currant achieves worker failover entirely through Postgres:
 
 1. **Heartbeats** - Workers update a heartbeat table every 5s
 2. **Dead worker detection** - Workers detect when other workers haven't heartbeat in 30s
@@ -265,7 +265,7 @@ This is completely transparent to developers - just write normal async code.
 
 ## Comparison
 
-| Feature | Workflows | DBOS Transact | Temporal |
+| Feature | Currant | DBOS Transact | Temporal |
 |---------|-----------|---------------|----------|
 | External orchestrator | ❌ None | ✅ Conductor required | ✅ Server required |
 | Database | Postgres only | Postgres only | Any (via adapter) |

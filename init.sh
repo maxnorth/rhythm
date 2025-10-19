@@ -16,28 +16,29 @@ if ! command -v cargo &> /dev/null; then
     exit 1
 fi
 
+if [ ! -d "python/.venv" ]; then
+    python3 -m venv python/.venv
+fi
+source python/.venv/bin/activate
+
 # Check for maturin
 if ! command -v maturin &> /dev/null; then
     echo "Installing maturin..."
     pip install maturin
 fi
 
-# Build Rust core and install Python extension
-echo "Building Rust core..."
-cd core
+# Build and install Python package with Rust extension
+echo "Building Python package with Rust extension..."
+cd python
 maturin develop --release
 cd ..
 
-# Install Python package
-echo "Installing Python package..."
-pip install -e python/
+echo "Running migrations..."
+export CURRANT_DATABASE_URL='postgresql://currant:currant@localhost/currant'
+python -c 'from currant.rust_bridge import RustBridge; RustBridge.migrate()'
 
 echo
-echo "✓ Build complete!"
-echo
-echo "To run migrations:"
-echo "  export CURRANT_DATABASE_URL='postgresql://localhost/workflows'"
-echo "  python -c 'from workflows.rust_bridge import RustBridge; RustBridge.migrate()'"
+echo "✓ Init complete!"
 echo
 echo "To run examples:"
 echo "  python examples/enqueue_example.py"

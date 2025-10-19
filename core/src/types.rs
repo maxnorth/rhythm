@@ -54,6 +54,7 @@ pub struct Execution {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateExecutionParams {
+    pub id: Option<String>,
     pub exec_type: ExecutionType,
     pub function_name: String,
     pub queue: String,

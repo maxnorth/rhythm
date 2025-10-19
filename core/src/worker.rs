@@ -136,9 +136,21 @@ pub async fn get_active_workers() -> Result<Vec<WorkerHeartbeat>> {
 mod tests {
     use super::*;
 
+    /// Helper function to reset the test database by truncating all tables
+    async fn reset_db() {
+        let pool = crate::db::get_pool().await.unwrap();
+
+        // Single query with multiple truncates - uses only one connection
+        sqlx::query("TRUNCATE TABLE worker_heartbeats, signals, executions CASCADE")
+            .execute(pool.as_ref())
+            .await
+            .unwrap();
+    }
+
     #[tokio::test]
-    #[ignore] // Requires database
     async fn test_heartbeat() {
+        reset_db().await;
+
         update_heartbeat("test-worker", &["test".to_string()])
             .await
             .unwrap();
@@ -148,8 +160,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires database
     async fn test_recover_dead_workers() {
+        reset_db().await;
+
         // Create a worker with old heartbeat
         let pool = get_pool().await.unwrap();
         sqlx::query(
@@ -164,7 +177,7 @@ mod tests {
         .await
         .unwrap();
 
-        let recovered = recover_dead_workers(30).await.unwrap();
-        assert!(recovered >= 0);
+        let _recovered = recover_dead_workers(30).await.unwrap();
+        // Test just verifies it doesn't error
     }
 }

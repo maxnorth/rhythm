@@ -172,7 +172,7 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
              enqueued_tasks, enqueued_workflows, enqueue_duration.as_secs_f64());
 
     // Start measuring execution performance AFTER enqueueing
-    let execution_start_time = Utc::now();
+    let _execution_start_time = Utc::now();
 
     // Step 3: Wait for completion or timeout
     println!("\n⏳ Waiting for tasks to complete...");
@@ -384,6 +384,7 @@ async fn enqueue_tasks(
         let queue = select_queue(queues, distribution, i);
 
         create_execution(CreateExecutionParams {
+            id: None,
             exec_type: ExecutionType::Task,
             function_name: function_name.to_string(),
             queue: queue.to_string(),
@@ -424,6 +425,7 @@ async fn enqueue_workflows(
         let queue = select_queue(queues, distribution, i);
 
         create_execution(CreateExecutionParams {
+            id: None,
             exec_type: ExecutionType::Workflow,
             function_name: "currant.benchmark.__currant_bench_workflow__".to_string(),
             queue: queue.to_string(),
@@ -628,7 +630,7 @@ fn stop_workers(mut workers: Vec<Child>) -> Result<()> {
     for worker in workers.iter_mut() {
         #[cfg(unix)]
         {
-            use std::os::unix::process::CommandExt;
+            
             // Send SIGTERM (15) for graceful shutdown
             unsafe {
                 libc::kill(worker.id() as i32, libc::SIGTERM);

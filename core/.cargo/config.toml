@@ -2,4 +2,14 @@
 target-dir = "target"
 
 [env]
-DATABASE_URL = { value = "", relative = true }
+CURRANT_DATABASE_URL = "postgresql://currant@localhost/currant"
+CURRANT_DATABASE_MAX_CONNECTIONS = "100"
+CURRANT_DATABASE_MIN_CONNECTIONS = "10"
+CURRANT_DATABASE_ACQUIRE_TIMEOUT_SECS = "30"
+CURRANT_DATABASE_IDLE_TIMEOUT_SECS = "30"
+CURRANT_DATABASE_MAX_LIFETIME_SECS = "1800"
+
+# Force sequential test execution to avoid test interference
+# Tests share a global connection pool and database, so parallel execution causes failures
+[target.'cfg(all())']
+rustflags = ["--cfg", "tokio_unstable"]

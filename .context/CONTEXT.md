@@ -7,6 +7,32 @@
 **Pre-release**: Currant has not been released yet and has no users.
 **Breaking changes are OK** - Do not add backwards compatibility code or worry about breaking changes. Make clean, direct changes.
 
+## Performance Requirements
+
+⚠️ **CRITICAL**: This project has exceptionally high performance expectations. Performance must be considered at all times during design and implementation.
+
+**Performance Philosophy**:
+- Database operations are the bottleneck - minimize roundtrips
+- Use PostgreSQL's atomic operations (`INSERT ... ON CONFLICT`, `UPDATE ... RETURNING`, etc.) over application-level logic
+- Prefer single-query solutions over multi-query transactions where possible
+- Consider connection pool exhaustion and latency implications
+- Race conditions from multi-query patterns can impact correctness AND performance
+
+**When implementing features**:
+1. Always consider the performance implications of your approach
+2. Use database-level atomic operations when available
+3. Minimize network roundtrips between application and database
+4. Test under realistic concurrent load conditions
+5. Benchmark critical paths before and after changes
+
+**Target Performance Metrics** (baseline mode, pure Rust):
+- 2000-10000+ tasks/sec throughput
+- <10ms P99 latency for task claiming
+- Minimal connection pool contention
+- Scalable to 100+ concurrent workers
+
+**When in doubt**: Ask about performance implications before implementing. It's easier to design for performance upfront than to optimize later.
+
 ## Recent Changes
 
 **2024-10-12**: Simplified execution types to only "task" and "workflow"

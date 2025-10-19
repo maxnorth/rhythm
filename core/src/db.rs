@@ -10,6 +10,7 @@ use crate::config::Config;
 static POOL: OnceLock<Arc<PgPool>> = OnceLock::new();
 static POOL_INIT: OnceLock<Mutex<()>> = OnceLock::new();
 
+
 /// Get or create a database pool (uses global singleton)
 pub async fn get_pool() -> Result<Arc<PgPool>> {
     // Fast path: pool already initialized
@@ -108,7 +109,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    #[ignore] // Requires database to be running
+    #[ignore]
     async fn test_pool_initialization() {
         let pool = get_pool().await.unwrap();
         let result: (i32,) = sqlx::query_as("SELECT 1")

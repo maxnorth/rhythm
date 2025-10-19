@@ -230,19 +230,17 @@ impl ConfigBuilder {
     fn load_from_file(&self) -> Result<Option<Config>> {
         let config_path = if let Some(path) = &self.config_path {
             // Explicit path provided via builder
-            if path.exists() {
-                Some(path.clone())
-            } else {
+            if !path.exists() {
                 anyhow::bail!("Config file not found: {:?}", path);
-            }
+            } 
+            Some(path.clone())
         } else if let Ok(path_str) = env::var("CURRANT_CONFIG_PATH") {
             // Path from environment variable
             let path = PathBuf::from(path_str);
-            if path.exists() {
-                Some(path)
-            } else {
+            if !path.exists() {
                 anyhow::bail!("Config file not found: {:?}", path);
             }
+            Some(path)
         } else {
             // Search default locations
             self.find_config_file()
@@ -394,9 +392,18 @@ mod tests {
 
     #[test]
     fn test_missing_database_url_error() {
+        // Temporarily unset DATABASE_URL for this test
+        let original = std::env::var("CURRANT_DATABASE_URL").ok();
+        std::env::remove_var("CURRANT_DATABASE_URL");
+
         let result = Config::builder().build();
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("Database URL not configured"));
+
+        // Restore original value
+        if let Some(url) = original {
+            std::env::set_var("CURRANT_DATABASE_URL", url);
+        }
     }
 }

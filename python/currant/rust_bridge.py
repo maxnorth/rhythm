@@ -4,10 +4,10 @@ import json
 from typing import Any, Dict, List, Optional
 
 try:
-    import currant_core as rust
+    from currant import currant_core as rust
 except ImportError:
     raise ImportError(
-        "currant_core Rust extension not found. Build it with: cd core && maturin develop"
+        "currant_core Rust extension not found."
     )
 
 
