@@ -25,6 +25,7 @@ use std::sync::OnceLock;
 
 use crate::config::Config;
 use crate::db;
+use crate::workflows::WorkflowFile;
 
 /// Global initialization state
 static INIT_STATE: OnceLock<InitState> = OnceLock::new();
@@ -49,6 +50,9 @@ pub struct InitOptions {
 
     /// Whether to fail if database is not initialized (when auto_migrate is false)
     pub require_initialized: bool,
+
+    /// Workflow files to register during initialization
+    pub workflows: Vec<WorkflowFile>,
 }
 
 impl Default for InitOptions {
@@ -58,6 +62,7 @@ impl Default for InitOptions {
             config_path: None,
             auto_migrate: true,
             require_initialized: true,
+            workflows: Vec::new(),
         }
     }
 }
@@ -96,6 +101,12 @@ impl InitBuilder {
     /// Set whether to require database to be initialized
     pub fn require_initialized(mut self, require: bool) -> Self {
         self.options.require_initialized = require;
+        self
+    }
+
+    /// Add workflow files to register during initialization
+    pub fn workflows(mut self, workflows: Vec<WorkflowFile>) -> Self {
+        self.options.workflows = workflows;
         self
     }
 
@@ -163,6 +174,13 @@ pub async fn initialize(options: InitOptions) -> Result<()> {
             );
         }
         // If neither auto_migrate nor require_initialized, allow uninitialized database
+    }
+
+    // Register workflows after migrations (if any provided)
+    if !options.workflows.is_empty() {
+        crate::workflows::register_workflows(options.workflows)
+            .await
+            .context("Failed to register workflows")?;
     }
 
     // Store initialization state

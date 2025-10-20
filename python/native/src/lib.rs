@@ -1,4 +1,4 @@
-use ::currant_core::{benchmark, cli, db, executions, init, signals, worker, CreateExecutionParams, ExecutionType};
+use ::currant_core::{benchmark, cli, db, executions, init, signals, worker, workflows, CreateExecutionParams, ExecutionType};
 use pyo3::prelude::*;
 use serde_json::Value as JsonValue;
 use std::sync::OnceLock;
@@ -26,12 +26,13 @@ fn init_runtime() -> PyResult<()> {
 
 /// Initialize Currant with configuration options
 #[pyfunction]
-#[pyo3(signature = (database_url=None, config_path=None, auto_migrate=true, require_initialized=true))]
+#[pyo3(signature = (database_url=None, config_path=None, auto_migrate=true, require_initialized=true, workflows_json=None))]
 fn initialize_sync(
     database_url: Option<String>,
     config_path: Option<String>,
     auto_migrate: bool,
     require_initialized: bool,
+    workflows_json: Option<String>,
 ) -> PyResult<()> {
     let runtime = get_runtime();
 
@@ -45,6 +46,32 @@ fn initialize_sync(
 
     if let Some(path) = config_path {
         builder = builder.config_path(path);
+    }
+
+    // Parse workflows if provided
+    if let Some(json) = workflows_json {
+        let workflows_data: Vec<serde_json::Value> = serde_json::from_str(&json)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid workflows JSON: {}", e)))?;
+
+        let mut workflows = Vec::new();
+        for workflow_data in workflows_data {
+            let name = workflow_data["name"]
+                .as_str()
+                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("Workflow missing 'name' field"))?
+                .to_string();
+            let source = workflow_data["source"]
+                .as_str()
+                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("Workflow missing 'source' field"))?
+                .to_string();
+            let file_path = workflow_data["file_path"]
+                .as_str()
+                .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("Workflow missing 'file_path' field"))?
+                .to_string();
+
+            workflows.push(workflows::WorkflowFile { name, source, file_path });
+        }
+
+        builder = builder.workflows(workflows);
     }
 
     runtime
@@ -370,6 +397,33 @@ fn run_benchmark_sync(
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
+/// Start a workflow execution
+#[pyfunction]
+fn start_workflow_sync(workflow_name: String, inputs_json: String) -> PyResult<String> {
+    let runtime = get_runtime();
+
+    let inputs: serde_json::Value = serde_json::from_str(&inputs_json)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid inputs JSON: {}", e)))?;
+
+    runtime
+        .block_on(workflows::start_workflow(&workflow_name, inputs))
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+}
+
+/// Execute a single workflow step
+#[pyfunction]
+fn execute_workflow_step_sync(execution_id: String) -> PyResult<String> {
+    let runtime = get_runtime();
+
+    let result = runtime
+        .block_on(workflows::execute_workflow_step(&execution_id))
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+
+    // Return the result as a string for simplicity
+    let result_str = format!("{:?}", result);
+    Ok(result_str)
+}
+
 /// Python module
 #[pymodule]
 fn currant_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -394,5 +448,7 @@ fn currant_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(migrate_sync, m)?)?;
     m.add_function(wrap_pyfunction!(run_cli_sync, m)?)?;
     m.add_function(wrap_pyfunction!(run_benchmark_sync, m)?)?;
+    m.add_function(wrap_pyfunction!(start_workflow_sync, m)?)?;
+    m.add_function(wrap_pyfunction!(execute_workflow_step_sync, m)?)?;
     Ok(())
 }

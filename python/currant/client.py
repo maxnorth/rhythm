@@ -109,6 +109,28 @@ async def cancel_execution(execution_id: str) -> bool:
         return False
 
 
+async def start_workflow(workflow_name: str, inputs: dict[str, Any]) -> str:
+    """
+    Start a workflow execution.
+
+    Args:
+        workflow_name: Name of the workflow to execute (matches .flow filename)
+        inputs: Input parameters for the workflow
+
+    Returns:
+        Workflow execution ID
+
+    Example:
+        >>> workflow_id = await currant.start_workflow(
+        ...     "processOrder",
+        ...     inputs={"orderId": "order-123", "amount": 99.99}
+        ... )
+    """
+    execution_id = RustBridge.start_workflow(workflow_name, inputs)
+    logger.info(f"Started workflow {workflow_name} with ID {execution_id}")
+    return execution_id
+
+
 async def list_executions(
     queue: Optional[str] = None,
     status: Optional[str] = None,

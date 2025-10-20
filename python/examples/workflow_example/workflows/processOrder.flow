@@ -1,0 +1,4 @@
+task("chargeCard", { "orderId": "order-123", "amount": 99.99 })
+sleep(5)
+task("shipOrder", { "orderId": "order-123" })
+task("sendEmail", { "to": "customer@example.com", "subject": "Order shipped!", "body": "Your order is on the way" })

@@ -309,13 +309,19 @@ class Worker:
         try:
             logger.info(f"Executing {execution.type} {execution.id}: {execution.function_name}")
 
-            # Get the function
-            fn = get_function(execution.function_name)
-
             # Execute based on type
             if execution.type == ExecutionType.WORKFLOW:
-                await self._execute_workflow(execution, fn)
+                # Try to get Python function, but if not found, use DSL executor
+                fn = get_function(execution.function_name, required=False)
+                if fn:
+                    # Python-based workflow (old style)
+                    await self._execute_workflow(execution, fn)
+                else:
+                    # DSL-based workflow
+                    await self._execute_dsl_workflow(execution)
             else:
+                # Regular task - must have Python function
+                fn = get_function(execution.function_name)
                 await self._execute_function(execution, fn)
 
         except Exception as e:
@@ -366,6 +372,29 @@ class Worker:
 
         finally:
             clear_current_workflow_context()
+
+    async def _execute_dsl_workflow(self, execution: Execution):
+        """Execute a DSL-based workflow by calling Rust executor"""
+        logger.info(f"Executing DSL workflow {execution.id}")
+
+        # Call Rust execute_workflow_step
+        result_str = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: __import__('currant').currant_core.execute_workflow_step_sync(execution.id)
+        )
+
+        logger.info(f"DSL workflow step result: {result_str}")
+
+        # Result will be "Suspended", "Completed", or "Continue"
+        # The Rust code handles all state updates, we just need to log
+        if "Completed" in result_str:
+            logger.info(f"DSL workflow {execution.id} completed")
+        elif "Suspended" in result_str:
+            logger.info(f"DSL workflow {execution.id} suspended")
+        elif "Continue" in result_str:
+            # Workflow wants to continue immediately to next step
+            # Schedule it to execute again
+            logger.info(f"DSL workflow {execution.id} continuing to next step")
 
     async def _handle_workflow_suspend(
         self, execution: Execution, ctx: WorkflowExecutionContext, commands: list[dict]

@@ -11,10 +11,12 @@ def register_function(name: str, fn: Callable):
     _FUNCTION_REGISTRY[name] = fn
 
 
-def get_function(name: str) -> Callable:
+def get_function(name: str, required: bool = True) -> Callable:
     """Get a function from the registry"""
     if name not in _FUNCTION_REGISTRY:
-        raise ValueError(f"Function '{name}' not found in registry. Did you import it?")
+        if required:
+            raise ValueError(f"Function '{name}' not found in registry. Did you import it?")
+        return None
     return _FUNCTION_REGISTRY[name]
 
 

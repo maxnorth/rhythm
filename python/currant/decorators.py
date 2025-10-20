@@ -23,7 +23,9 @@ class ExecutableProxy:
     ):
         self.fn = fn
         self.exec_type = exec_type
-        self.function_name = f"{fn.__module__}.{fn.__qualname__}"
+        # Use just the function name without module prefix
+        # This allows DSL workflows to reference tasks by simple name
+        self.function_name = fn.__name__
 
         # Store configuration
         self.config = {

@@ -4,9 +4,11 @@ pub mod config;
 pub mod db;
 pub mod executions;
 pub mod init;
+pub mod interpreter;
 pub mod signals;
 pub mod types;
 pub mod worker;
+pub mod workflows;
 
 // Re-export main types
 pub use types::*;

@@ -43,6 +43,9 @@ config = "0.14"
 toml = "0.8"
 dotenvy = "0.15"
 
+# Cryptography
+sha2 = "0.10"
+
 # Unix system calls
 libc = "0.2"
 

@@ -11,13 +11,6 @@ Idempotency guarantees ensure that duplicate task/workflow invocations don't cau
 - Worker crashes (task executes but crashes before completion)
 - Application logic retries (intentional retry after failure)
 
-## Terminology Change: Task → Task
-
-**Decision**: Rename "task" to "task" throughout codebase
-- `@currant.task` → `@currant.task`
-- Drop `@currant.task` - workflow steps are just tasks called from workflows
-- Database columns may keep internal naming for now, expose as "task" in API
-
 ## Core Design Decisions
 
 ### 1. Task ID (Idempotency Key)

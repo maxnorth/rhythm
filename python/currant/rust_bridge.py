@@ -20,6 +20,7 @@ class RustBridge:
         config_path: Optional[str] = None,
         auto_migrate: bool = True,
         require_initialized: bool = True,
+        workflows: Optional[List[Dict[str, str]]] = None,
     ) -> None:
         """
         Initialize Currant with configuration options.
@@ -29,12 +30,18 @@ class RustBridge:
             config_path: Path to config file (overrides default search)
             auto_migrate: Whether to automatically run migrations if database is not initialized
             require_initialized: Whether to fail if database is not initialized (when auto_migrate is False)
+            workflows: List of workflow files to register (each with name, source, file_path)
         """
+        workflows_json = None
+        if workflows:
+            workflows_json = json.dumps(workflows)
+
         rust.initialize_sync(
             database_url=database_url,
             config_path=config_path,
             auto_migrate=auto_migrate,
             require_initialized=require_initialized,
+            workflows_json=workflows_json,
         )
 
     @staticmethod
@@ -219,3 +226,22 @@ class RustBridge:
             compute_iterations=compute_iterations,
             warmup_percent=warmup_percent,
         )
+
+    @staticmethod
+    def start_workflow(workflow_name: str, inputs: dict) -> str:
+        """
+        Start a workflow execution.
+
+        Args:
+            workflow_name: Name of the workflow to execute
+            inputs: Input parameters for the workflow
+
+        Returns:
+            Workflow execution ID
+        """
+        inputs_json = json.dumps(inputs)
+        return rust.start_workflow_sync(
+            workflow_name=workflow_name,
+            inputs_json=inputs_json,
+        )
+

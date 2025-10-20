@@ -9,17 +9,16 @@ This document tracks missing functionality and planned features for Currant. Ite
 - 2025-10-12: Added Priority 1 items for idempotency and rate limiting (see IDEMPOTENCY_DESIGN.md and RESEARCH_FINDINGS.md)
 - 2025-10-11: Initial CLI architecture and observability priorities
 
-**Quick Summary of New Priority 1 Work**:
-- Rename "task" → "task" throughout codebase
+**Quick Summary of Priority 1 Work**:
 - Implement task_id (idempotency key) with optional UUID generation
 - Add result storage (automatic based on return value)
 - Implement "Allow Duplicate Failed Only" policy (like Temporal)
 - Add retention configuration per queue (default: tasks=7d, workflows=30d)
 - Implement queue-level rate limiting (token bucket, zero-cost when disabled)
-- Unify Tasks and tasks (drop @task decorator)
-- Enable task queue routing for rate limiting
+- Unify Activities and tasks (drop @activity decorator)
+- Enable activity queue routing for rate limiting
 
-**Total Priority 1 Items**: 12 major items with ~60+ subtasks
+**Total Priority 1 Items**: 11 major items with ~50+ subtasks
 
 ---
 
@@ -27,19 +26,9 @@ This document tracks missing functionality and planned features for Currant. Ite
 
 These are foundational features needed for production readiness. Full design in `.claude/IDEMPOTENCY_DESIGN.md`.
 
-### Terminology Change: Task → Task
-
-**1. Rename "task" to "task" throughout codebase**
-- [ ] Rename `@currant.task` → `@currant.task` in Python adapter
-- [ ] Update all documentation (README, docstrings, comments)
-- [ ] Update CLI help text
-- [ ] Rename functions: `enqueue_job` → `enqueue_task`, etc.
-- [ ] Keep internal database columns as-is for now (can rename later)
-- [ ] Drop `@currant.task` concept - Tasks are just tasks
-
 ### Idempotency Implementation
 
-**2. Database schema for idempotency**
+**1. Database schema for idempotency**
 - [ ] Add `task_id VARCHAR(255)` column to executions table
 - [ ] Add `result JSONB` column to executions table
 - [ ] Create unique index: `idx_task_id_active` (with status filter for failed/cancelled/timed_out)
@@ -47,7 +36,7 @@ These are foundational features needed for production readiness. Full design in 
 - [ ] Migration script for schema changes
 - [ ] Update Rust types in `core/src/types.rs`
 
-**3. Task ID generation and deduplication**
+**2. Task ID generation and deduplication**
 - [ ] Generate UUID for `task_id` if not provided by user
 - [ ] Implement duplicate detection on enqueue (PostgreSQL `ON CONFLICT`)
 - [ ] Return existing execution for duplicates (pending/running/completed)
@@ -55,14 +44,14 @@ These are foundational features needed for production readiness. Full design in 
 - [ ] Store result JSONB on task completion (if function returns value)
 - [ ] Return cached result for duplicate requests
 
-**4. ID reuse policy (hardcoded for v1)**
+**3. ID reuse policy (hardcoded for v1)**
 - [ ] Implement "Allow Duplicate Failed Only" behavior
 - [ ] Block duplicates for: pending, running, completed
 - [ ] Allow duplicates for: failed, cancelled, timed_out
 - [ ] Clear error messages for each case
 - [ ] Tests for all status combinations
 
-**5. Retention configuration**
+**4. Retention configuration**
 - [ ] Add `retention` field to queue config (TOML + programmatic)
 - [ ] Default retention: tasks=7d, workflows=30d
 - [ ] Parse duration strings ("7d", "30d", "365d", "0" for immediate)
@@ -70,7 +59,7 @@ These are foundational features needed for production readiness. Full design in 
 - [ ] Per-queue retention cleanup logic
 - [ ] Tests for retention cleanup
 
-**6. Task API updates**
+**5. Task API updates**
 - [ ] Add `task_id` parameter to `enqueue()` (optional)
 - [ ] Add `task_id` parameter to `execute_activity()` (optional)
 - [ ] Return execution handle with result retrieval
@@ -80,14 +69,14 @@ These are foundational features needed for production readiness. Full design in 
 
 ### Rate Limiting Implementation
 
-**7. Queue configuration for rate limiting**
+**6. Queue configuration for rate limiting**
 - [ ] Add `rate_limit` field to queue config (e.g., "100/sec", "1000/min")
 - [ ] Parse rate limit strings into tokens + duration
 - [ ] Store queue config in database or load from currant.toml
 - [ ] Zero-cost check: if no rate_limit, skip all rate limiting logic
 - [ ] Tests for config parsing
 
-**8. Token bucket rate limiter**
+**7. Token bucket rate limiter**
 - [ ] Create `rate_limits` table (queue, tokens, last_refill)
 - [ ] Implement token bucket algorithm in Rust
 - [ ] Check rate limit before claiming task (if queue has rate_limit)
@@ -95,14 +84,14 @@ These are foundational features needed for production readiness. Full design in 
 - [ ] Refill tokens based on elapsed time
 - [ ] Tests for rate limiting behavior
 
-**9. Rate limiting optimizations**
+**8. Rate limiting optimizations**
 - [ ] Fast path: direct claim if queue has no rate_limit
 - [ ] Slow path: check rate_limit table first, then claim
 - [ ] Partial index for fast claims: `WHERE status = 'pending'`
 - [ ] Target performance: 500-1000 tasks/sec per worker (with rate limiting)
 - [ ] Performance benchmarks
 
-**10. Queue auto-creation**
+**9. Queue auto-creation**
 - [ ] Allow tasks to reference queue by string (no pre-definition needed)
 - [ ] Queues auto-create on first use
 - [ ] Apply config from currant.toml if exists
@@ -111,7 +100,7 @@ These are foundational features needed for production readiness. Full design in 
 
 ### Tasks = Tasks Unification
 
-**11. Unify Tasks and tasks**
+**10. Unify Activities and tasks**
 - [ ] Remove `@currant.task` decorator
 - [ ] Tasks can be called standalone or from workflows
 - [ ] Add `parent_workflow_id` column to executions (nullable)
@@ -119,7 +108,7 @@ These are foundational features needed for production readiness. Full design in 
 - [ ] `execution_type` field: 'task' or 'workflow_task' (or keep as 'task'/'task' internally)
 - [ ] Tests for both usage patterns
 
-**12. Queue routing for Tasks**
+**11. Queue routing for Activities**
 - [ ] Tasks declare queue via decorator: `@currant.task(queue="stripe-api")`
 - [ ] Tasks use task's queue (not workflow's queue)
 - [ ] Rate limiting applies to task tasks
