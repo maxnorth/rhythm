@@ -13,22 +13,21 @@ workflows/
 │   │   ├── db.rs            # Database pooling
 │   │   ├── executions.rs    # Execution management
 │   │   ├── worker.rs        # Worker coordination
-│   │   └── signals.rs       # Workflow signals
+│   │   ├── workflows.rs     # DSL workflow registration
+│   │   └── interpreter/     # DSL parser & executor
 │   ├── migrations/          # SQL migrations
 │   └── Cargo.toml
 │
 ├── python/            # Python adapter
 │   └── currant/
 │       ├── rust_bridge.py   # Rust FFI wrapper
-│       ├── decorators.py    # @task, @workflow
-│       ├── client.py        # .queue(), send_signal()
+│       ├── decorators.py    # @task decorator
+│       ├── client.py        # start_workflow(), send_signal()
 │       ├── worker.py        # Python worker loop
-│       └── context.py       # Workflow context
+│       └── init.py          # DSL workflow registration
 │
 └── examples/          # Example applications
-    ├── simple_example.py
-    ├── signal_example.py
-    └── enqueue_example.py
+    └── workflow_example/    # DSL workflow example
 ```
 
 ## Architecture
@@ -48,6 +47,10 @@ The Rust core (`core/`) handles all heavy lifting:
 - `executions.rs`: All execution CRUD operations
 - `worker.rs`: Worker heartbeat and failover logic
 - `signals.rs`: Workflow signal management
+- `workflows.rs`: DSL workflow registration and starting
+- `interpreter/`: DSL parser and execution engine
+  - `parser.rs`: Parse `.flow` files to AST
+  - `executor.rs`: Tree-walking interpreter for workflow execution
 - `types.rs`: Shared data structures
 - `lib.rs`: PyO3 bindings exposing Rust functions to Python
 
@@ -55,19 +58,18 @@ The Rust core (`core/`) handles all heavy lifting:
 
 The Python adapter (`python/`) provides an idiomatic Python API:
 
-- **Decorators**: `@task`, `@workflow`
+- **Decorators**: `@task` for defining async tasks
 - **Function Registry**: Track decorated functions for execution
-- **Worker Loop**: Claim from Rust → Execute Python function → Report back to Rust
-- **Workflow Replay**: Handle `WorkflowSuspendException` for checkpointing
-- **Context Management**: `wait_for_signal()`, `get_version()`, workflow context
+- **Worker Loop**: Claim from Rust → Execute Python task or delegate DSL workflow to Rust → Report back
+- **DSL Workflow Integration**: Delegates workflow execution to Rust core
 - **Serialization**: Convert Python args/kwargs/results to/from JSON
 
 **Key modules:**
 - `rust_bridge.py`: Thin wrapper around Rust FFI, handles JSON serialization
-- `decorators.py`: Decorator implementations, function registry
-- `client.py`: Client API (`.queue()`, `send_signal()`)
+- `decorators.py`: `@task` decorator, function registry
+- `client.py`: Client API (`start_workflow()`, `send_signal()`)
 - `worker.py`: Worker loop implementation
-- `context.py`: Workflow execution context
+- `init.py`: DSL workflow registration helper
 
 ### Communication Flow
 
@@ -86,31 +88,32 @@ Python Worker Loop:
      → Rust: SELECT ... FOR UPDATE SKIP LOCKED
      → Returns execution JSON
 
-  2. Deserialize and execute Python function
+  2. Check execution type:
+     - If task: Execute Python function
+     - If workflow: Delegate to Rust (DSL workflow)
 
-  3. If WorkflowSuspendException raised:
-     - Call RustBridge.suspend_workflow(workflow_id, checkpoint)
-     - Create child task execution
-     - Continue loop
-
-  4. On success:
+  3. On success:
      Call RustBridge.complete_execution(execution_id, result)
 
-  5. On failure:
+  4. On failure:
      Call RustBridge.fail_execution(execution_id, error, retry)
 ```
 
-**Workflow Replay:**
+**DSL Workflow Execution:**
 ```
-Workflow calls task.run()
-  → Python raises WorkflowSuspendException
-  → Worker catches it
-  → Worker calls Rust to create task execution and suspend workflow
-  → Task completes (separate execution)
-  → Worker calls Rust to resume workflow
-  → Workflow re-executes from beginning
-  → Previous tasks return cached results from checkpoint
-  → Workflow continues to next task or completes
+Worker claims DSL workflow execution:
+  1. Worker detects execution has no Python function (DSL workflow)
+  2. Worker calls RustBridge.execute_workflow_step(execution_id)
+     → Rust loads workflow_execution_context (statement_index, locals, awaiting_task_id)
+     → Rust loads cached parsed_steps from workflow_definitions table
+     → Rust executes current statement:
+        - task(): Creates child task execution, suspends workflow
+        - sleep(): Schedules timer (TODO), advances to next statement
+     → Rust saves updated state (statement_index++, locals)
+  3. If suspended: workflow waits for child task completion
+  4. If completed: workflow marked complete
+  5. When child task completes: workflow re-enters queue
+  6. Worker claims workflow again, resumes from next statement
 ```
 
 ## Building
@@ -169,6 +172,45 @@ python -m currant worker -q orders -q notifications -m examples.simple_example
 # Terminal 2: Enqueue work
 python examples/enqueue_example.py
 ```
+
+## Workflows
+
+Currant uses DSL-based workflows written in `.flow` files.
+
+**Example** (`processOrder.flow`):
+```
+task("chargeCard", { "orderId": "order-123", "amount": 99.99 })
+sleep(5)
+task("shipOrder", { "orderId": "order-123" })
+task("sendEmail", { "to": "customer@example.com", "subject": "Shipped!" })
+```
+
+**Benefits**:
+- Language-agnostic (same DSL works with Python, Node.js, any adapter)
+- Simple flat state serialization (just `{statement_index, locals, awaiting_task_id}`)
+- Inherently deterministic (limited DSL prevents non-determinism)
+- Easy to visualize and debug
+- Cached parsing (parse once, store JSON in database)
+
+**Execution**:
+- Rust core parses `.flow` files to AST, stores in `workflow_definitions` table
+- Tree-walking interpreter executes statement by statement
+- State saved after each step (statement_index, local variables)
+- Suspends when awaiting tasks, resumes when tasks complete
+- No replay needed - just continue from saved position
+
+**Current syntax**:
+- `task("taskName", { "arg": "value" })` - Execute a task
+- `sleep(seconds)` - Sleep (not yet implemented)
+
+**Planned features**:
+- Conditionals: `if (result.success) { ... }`
+- Loops: `for (item in items) { ... }`
+- Expressions: Variables, operators, property access
+
+See [DSL_WORKFLOW_IMPLEMENTATION.md](/Users/maxnorth/Projects/currant/.context/DSL_WORKFLOW_IMPLEMENTATION.md) for complete implementation details.
+
+---
 
 ## Design Decisions
 

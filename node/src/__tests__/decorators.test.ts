@@ -2,7 +2,7 @@
  * Tests for decorators
  */
 
-import { task, workflow } from '../decorators.js';
+import { task } from '../decorators.js';
 import { registry } from '../registry.js';
 
 describe('Decorators', () => {
@@ -51,40 +51,6 @@ describe('Decorators', () => {
 
       const result = await testTask.call(5, 3);
       expect(result).toBe(8);
-    });
-  });
-
-  describe('workflow', () => {
-    it('should create a workflow proxy', () => {
-      const testWorkflow = workflow<[string], { status: string }>({
-        queue: 'test-workflows',
-        version: 1,
-      })(async function testWorkflow() {
-        return { status: 'completed' };
-      });
-
-      expect(testWorkflow).toBeDefined();
-      expect(testWorkflow.functionName).toBe('testWorkflow');
-      expect(testWorkflow.version).toBe(1);
-    });
-
-    it('should throw error if queue is missing', () => {
-      expect(() => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        workflow<[string], any>({ version: 1 } as any)(async function testWorkflow2() {
-          return { status: 'completed' };
-        });
-      }).toThrow('@workflow decorator requires a "queue" parameter');
-    });
-
-    it('should default version to 1', () => {
-      const testWorkflow = workflow<[string], { status: string }>({
-        queue: 'test-workflows',
-      })(async function testWorkflow3() {
-        return { status: 'completed' };
-      });
-
-      expect(testWorkflow.version).toBe(1);
     });
   });
 

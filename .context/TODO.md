@@ -1,11 +1,13 @@
 # Currant - TODO List
 
-> **Last Updated**: 2025-10-12
-> **Status**: Active development - Python adapter mature, Node.js in progress
+> **Last Updated**: 2025-10-20
+> **Status**: DSL workflows implemented, Python @workflow removed, Node.js in progress
 
 This document tracks missing functionality and planned features for Currant. Items are prioritized based on recent architectural decisions and project maturity needs.
 
 **Recent Updates**:
+- 2025-10-20: **Completed DSL workflow pivot** - Removed Python @workflow decorator, Python/Node now DSL-only
+- 2025-10-20: Added DSL Workflow Completion as Priority 1 (control flow, expressions, error handling)
 - 2025-10-12: Added Priority 1 items for idempotency and rate limiting (see IDEMPOTENCY_DESIGN.md and RESEARCH_FINDINGS.md)
 - 2025-10-11: Initial CLI architecture and observability priorities
 
@@ -18,11 +20,76 @@ This document tracks missing functionality and planned features for Currant. Ite
 - Unify Activities and tasks (drop @activity decorator)
 - Enable activity queue routing for rate limiting
 
-**Total Priority 1 Items**: 11 major items with ~50+ subtasks
+**Total Priority 1 Items**: 12 major items with ~60+ subtasks
 
 ---
 
-## **Priority 1: Idempotency & Rate Limiting (Critical - NEW)**
+## **Priority 1: DSL Workflow Completion (Critical - NEW)**
+
+The basic DSL implementation is working but needs core features to be production-ready.
+
+### Control Flow
+
+**1. Implement if/else conditionals**
+- [ ] Parser: Add if/else statement parsing
+- [ ] AST: Define IfStatement struct with condition, then_branch, else_branch
+- [ ] Executor: Implement conditional evaluation
+- [ ] Support comparison operators: `==`, `!=`, `<`, `>`, `<=`, `>=`
+- [ ] Support logical operators: `&&`, `||`, `!`
+- [ ] Tests for conditionals
+
+**2. Implement loops**
+- [ ] Parser: Add while loop parsing
+- [ ] Parser: Add for loop parsing (range-based)
+- [ ] AST: Define WhileStatement and ForStatement
+- [ ] Executor: Implement loop execution with state preservation
+- [ ] Executor: Support break/continue (optional)
+- [ ] Prevent infinite loops (max iterations limit)
+- [ ] Tests for loops
+
+**3. Implement expressions and operators**
+- [ ] Parser: Add arithmetic operators: `+`, `-`, `*`, `/`, `%`
+- [ ] Parser: Add string concatenation
+- [ ] Parser: Add variable references
+- [ ] Executor: Evaluate expressions
+- [ ] Support for accessing nested object properties: `result.status`
+- [ ] Support for array indexing: `items[0]`
+- [ ] Tests for expressions
+
+### Sleep Implementation
+
+**4. Implement sleep scheduling**
+- [ ] Design: Determine sleep storage mechanism (scheduled_executions table or executions.scheduled_at?)
+- [ ] Executor: Store sleep wakeup time when encountering sleep()
+- [ ] Worker: Check for ready-to-wake workflows
+- [ ] Database: Add index for efficient sleep queries
+- [ ] Tests for sleep scheduling
+
+### Error Handling
+
+**5. Implement task error handling**
+- [ ] Design: Task return values include success/error status
+- [ ] Executor: Check task result status
+- [ ] Allow workflows to check: `if (result.success) { ... }`
+- [ ] Tests for error handling patterns
+
+### Usability
+
+**6. Better error messages**
+- [ ] Parser: Clear error messages with line numbers
+- [ ] Executor: Helpful runtime errors (e.g., "Task 'foo' not found")
+- [ ] Validation: Detect undefined variables
+- [ ] Validation: Type checking for task inputs
+
+**7. DSL workflow testing utilities**
+- [ ] Test helper: Mock tasks for workflow testing
+- [ ] Test helper: Fast-forward sleep() calls
+- [ ] Test helper: Inject task results
+- [ ] Documentation and examples
+
+---
+
+## **Priority 2: Idempotency & Rate Limiting (Critical)**
 
 These are foundational features needed for production readiness. Full design in `.claude/IDEMPOTENCY_DESIGN.md`.
 
@@ -116,7 +183,7 @@ These are foundational features needed for production readiness. Full design in 
 
 ---
 
-## **Priority 2: CLI Architecture & Configuration (Critical)**
+## **Priority 3: CLI Architecture & Configuration (Critical)**
 
 These items reflect recent architectural decisions (2025-10-11) that need implementation.
 
@@ -196,7 +263,7 @@ interval = 10
 
 ---
 
-## **Priority 2: Observability System (Metrics & Tracing)**
+## **Priority 4: Observability System (Metrics & Tracing)**
 
 Complete observability implementation as designed in TRACING_DESIGN.md.
 
@@ -309,7 +376,7 @@ Complete observability implementation as designed in TRACING_DESIGN.md.
 
 ---
 
-## **Priority 3: Node.js Adapter Maturity**
+## **Priority 5: Node.js Adapter Maturity**
 
 Bring Node.js adapter to parity with Python.
 
@@ -331,7 +398,7 @@ Bring Node.js adapter to parity with Python.
 
 ---
 
-## **Priority 4: Testing & Quality**
+## **Priority 6: Testing & Quality**
 
 **25. Integration tests for new CLI commands**
 - [ ] Tests for `retry` command
@@ -353,7 +420,7 @@ Bring Node.js adapter to parity with Python.
 
 ---
 
-## **Priority 5: Documentation**
+## **Priority 7: Documentation**
 
 **28. Observability documentation**
 - [ ] How to configure OTLP endpoints
@@ -386,7 +453,7 @@ Bring Node.js adapter to parity with Python.
 
 ---
 
-## **Priority 6: Future Features (Low Priority)**
+## **Priority 8: Future Features (Low Priority)**
 
 These are planned but not actively worked on until Python/Node are mature.
 
@@ -441,13 +508,14 @@ See `.claude/RESEARCH_FINDINGS.md` for competitive analysis including:
 
 ### Priority Ordering Rationale
 
-1. **Idempotency & Rate Limiting** (Priority 1) - Foundation for production reliability, prevents duplicate operations
-2. **CLI & Config** (Priority 2) - Blocking architectural changes from recent decisions
-3. **Observability** (Priority 3) - Critical for production usage
-4. **Node.js Maturity** (Priority 4) - Second language adapter
-5. **Testing** (Priority 5) - Quality assurance
-6. **Documentation** (Priority 6) - User experience
-7. **Future** (Priority 7) - Nice-to-have features
+1. **DSL Workflow Completion** (Priority 1) - Core feature, architectural foundation, blocking adoption
+2. **Idempotency & Rate Limiting** (Priority 2) - Foundation for production reliability, prevents duplicate operations
+3. **CLI & Config** (Priority 3) - Blocking architectural changes from recent decisions
+4. **Observability** (Priority 4) - Critical for production usage
+5. **Node.js Maturity** (Priority 5) - Second language adapter
+6. **Testing** (Priority 6) - Quality assurance
+7. **Documentation** (Priority 7) - User experience
+8. **Future** (Priority 8) - Nice-to-have features
 
 ### How to Use This Document
 

@@ -1,6 +1,6 @@
-"""Decorators for defining tasks and workflows"""
+"""Decorators for defining tasks"""
 
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 import inspect
 
 from currant.config import settings
@@ -9,7 +9,7 @@ from currant.client import queue_execution
 
 
 class ExecutableProxy:
-    """Base proxy for executable functions (tasks and workflows)"""
+    """Base proxy for executable functions (tasks)"""
 
     def __init__(
         self,
@@ -62,24 +62,8 @@ class ExecutableProxy:
             timeout_seconds=self.config["timeout"],
         )
 
-    async def run(self, *args, **kwargs) -> Any:
-        """
-        Run this execution within a workflow context.
-        This will checkpoint and suspend the workflow.
-        """
-        from currant.context import get_current_workflow_context
-
-        ctx = get_current_workflow_context()
-        if ctx is None:
-            raise RuntimeError(
-                f"{self.exec_type}.run() can only be called from within a workflow. "
-                f"Use .queue() to run standalone."
-            )
-
-        return await ctx.execute_task(self, args, kwargs)
-
     def __call__(self, *args, **kwargs):
-        """Direct call - only allowed outside workflow context for testing"""
+        """Direct call - execute the function directly"""
         return self.fn(*args, **kwargs)
 
 
@@ -93,26 +77,6 @@ class TaskProxy(ExecutableProxy):
         if "timeout" not in config or config["timeout"] is None:
             config["timeout"] = settings.default_timeout
         super().__init__(fn, exec_type="task", queue=queue, **config)
-
-
-class WorkflowProxy(ExecutableProxy):
-    """Proxy for workflow functions"""
-
-    def __init__(self, fn: Callable, queue: str, version: int = 1, **config):
-        if queue is None:
-            raise ValueError("@workflow decorator requires a 'queue' parameter")
-
-        if "timeout" not in config or config["timeout"] is None:
-            config["timeout"] = settings.default_workflow_timeout
-
-        super().__init__(
-            fn,
-            exec_type="workflow",
-            queue=queue,
-            version=version,
-            **config,
-        )
-        self.version = version
 
 
 def task(
@@ -144,46 +108,6 @@ def task(
             fn=fn,
             queue=queue,
             retries=retries,
-            timeout=timeout,
-            priority=priority,
-        )
-
-    return decorator
-
-
-def workflow(
-    queue: str,
-    version: int = 1,
-    timeout: int = None,
-    priority: int = 5,
-):
-    """
-    Decorator for defining a workflow (multi-step orchestration).
-
-    Workflows must be deterministic and use replay for recovery.
-
-    Args:
-        queue: The queue name to execute in
-        version: Version number for workflow evolution (default: 1)
-        timeout: Timeout in seconds (default: 3600)
-        priority: Priority 0-10, higher = more urgent (default: 5)
-
-    Example:
-        @workflow(queue="orders", version=1)
-        async def process_order(order_id: str):
-            result = await charge_card.run(amount, token)
-            await send_receipt.run(email, amount)
-            return result
-    """
-
-    def decorator(fn: Callable) -> WorkflowProxy:
-        if not inspect.iscoroutinefunction(fn):
-            raise TypeError(f"@workflow decorated function must be async: {fn.__name__}")
-
-        return WorkflowProxy(
-            fn=fn,
-            queue=queue,
-            version=version,
             timeout=timeout,
             priority=priority,
         )

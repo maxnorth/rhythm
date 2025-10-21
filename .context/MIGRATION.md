@@ -59,10 +59,10 @@ This document tracks the migration from pure Python to Rust core + Python adapte
 ## What Stays in Python
 
 ### Core Functionality (Still Python)
-- `decorators.py` - `@task`, `@workflow` decorators
+- `decorators.py` - `@task` decorator (workflows now use DSL)
 - `registry.py` - Function registry for decorated functions
-- `context.py` - Workflow execution context and replay logic
-- `worker.py` - Worker loop orchestration and function execution
+- `context.py` - Workflow execution context and replay logic (Python workflows only)
+- `worker.py` - Worker loop orchestration, function execution, DSL workflow detection
 - `config.py` - Configuration management
 - `utils.py` - Python utility functions
 - `models.py` - Pydantic data models
@@ -70,9 +70,15 @@ This document tracks the migration from pure Python to Rust core + Python adapte
 ### Why These Stay in Python
 1. **Decorators** - Language-specific syntax
 2. **Function Registry** - Needs access to Python runtime to call decorated functions
-3. **Workflow Context** - Handles `WorkflowSuspendException` for replay (language-specific)
-4. **Worker Loop** - Orchestrates Python async function execution
+3. **Workflow Context** - Handles `WorkflowSuspendException` for replay (Python workflows only)
+4. **Worker Loop** - Orchestrates Python async function execution AND delegates DSL workflows to Rust
 5. **Models** - Used for validation and type hints in Python code
+
+### What Moved to Rust (Added Since Migration)
+- `workflows.rs` - DSL workflow registration and starting
+- `interpreter/parser.rs` - Parse `.flow` files to AST
+- `interpreter/executor.rs` - Tree-walking interpreter for DSL workflows
+- Database tables: `workflow_definitions`, `workflow_execution_context`
 
 ## Architecture Summary
 
@@ -80,10 +86,11 @@ This document tracks the migration from pure Python to Rust core + Python adapte
 ┌─────────────────────────────────────────┐
 │           Python Layer                  │
 │  ┌──────────────────────────────────┐  │
-│  │ Decorators (@task, @workflow)     │  │
+│  │ Decorators (@task)                │  │
 │  │ Function Registry                │  │
-│  │ Workflow Replay Logic            │  │
+│  │ Workflow Replay (Python only)    │  │
 │  │ Function Execution               │  │
+│  │ DSL Workflow Detection           │  │
 │  └──────────────┬───────────────────┘  │
 │                 │                       │
 │  ┌──────────────▼───────────────────┐  │
@@ -100,6 +107,8 @@ This document tracks the migration from pure Python to Rust core + Python adapte
 │  │ Worker Coordination              │  │
 │  │ Heartbeats & Failover            │  │
 │  │ LISTEN/NOTIFY                    │  │
+│  │ DSL Workflow Registration        │  │
+│  │ DSL Parser & Executor            │  │
 │  └──────────────────────────────────┘  │
 └─────────────────────────────────────────┘
 ```

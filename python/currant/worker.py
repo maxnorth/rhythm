@@ -12,12 +12,6 @@ from currant.config import settings
 from currant.rust_bridge import RustBridge
 from currant.models import Execution, ExecutionType, WorkerStatus
 from currant.registry import get_function
-from currant.context import (
-    WorkflowExecutionContext,
-    WorkflowSuspendException,
-    set_current_workflow_context,
-    clear_current_workflow_context,
-)
 from currant.utils import generate_id, calculate_retry_delay
 
 logger = logging.getLogger(__name__)
@@ -311,14 +305,8 @@ class Worker:
 
             # Execute based on type
             if execution.type == ExecutionType.WORKFLOW:
-                # Try to get Python function, but if not found, use DSL executor
-                fn = get_function(execution.function_name, required=False)
-                if fn:
-                    # Python-based workflow (old style)
-                    await self._execute_workflow(execution, fn)
-                else:
-                    # DSL-based workflow
-                    await self._execute_dsl_workflow(execution)
+                # DSL-based workflow
+                await self._execute_dsl_workflow(execution)
             else:
                 # Regular task - must have Python function
                 fn = get_function(execution.function_name)
@@ -345,34 +333,6 @@ class Worker:
         except asyncio.TimeoutError:
             raise TimeoutError(f"Execution timed out after {timeout} seconds")
 
-    async def _execute_workflow(self, execution: Execution, fn):
-        """Execute a workflow with replay support"""
-        # Create workflow context
-        ctx = WorkflowExecutionContext(execution.id, execution.checkpoint)
-        set_current_workflow_context(ctx)
-
-        try:
-            # Set timeout
-            timeout = execution.timeout_seconds or settings.default_workflow_timeout
-
-            # Execute workflow function with timeout
-            result = await asyncio.wait_for(
-                fn(*execution.args, **execution.kwargs), timeout=timeout
-            )
-
-            # If we got here, workflow completed
-            await self._complete_execution(execution, result)
-
-        except WorkflowSuspendException as e:
-            # Workflow suspended - handle commands
-            await self._handle_workflow_suspend(execution, ctx, e.commands)
-
-        except asyncio.TimeoutError:
-            raise TimeoutError(f"Workflow timed out after {timeout} seconds")
-
-        finally:
-            clear_current_workflow_context()
-
     async def _execute_dsl_workflow(self, execution: Execution):
         """Execute a DSL-based workflow by calling Rust executor"""
         logger.info(f"Executing DSL workflow {execution.id}")
@@ -396,41 +356,6 @@ class Worker:
             # Schedule it to execute again
             logger.info(f"DSL workflow {execution.id} continuing to next step")
 
-    async def _handle_workflow_suspend(
-        self, execution: Execution, ctx: WorkflowExecutionContext, commands: list[dict]
-    ):
-        """Handle workflow suspension and create task executions via Rust"""
-        logger.info(f"Workflow {execution.id} suspended with {len(commands)} commands")
-
-        # Create task executions for each command
-        for cmd in commands:
-            if cmd["type"] == "task":
-                RustBridge.create_execution(
-                    exec_type="task",
-                    function_name=cmd["name"],
-                    queue=execution.queue,  # Inherit workflow's queue
-                    priority=cmd["config"].get("priority", 5),
-                    args=cmd["args"],
-                    kwargs=cmd["kwargs"],
-                    max_retries=cmd["config"].get("retries", settings.default_retries),
-                    timeout_seconds=cmd["config"].get("timeout"),
-                    parent_workflow_id=execution.id,
-                )
-
-            elif cmd["type"] == "wait_signal":
-                # Just update checkpoint - signal waiting is passive
-                pass
-
-        # Update workflow checkpoint and suspend
-        new_checkpoint = {
-            "history": ctx.history,
-            "pending_commands": commands,
-        }
-
-        RustBridge.suspend_workflow(execution.id, new_checkpoint)
-
-        logger.info(f"Workflow {execution.id} suspended and child tasks created")
-
     async def _complete_execution(self, execution: Execution, result: any):
         """Mark execution as completed via Rust"""
         logger.info(f"Execution {execution.id} completed successfully")
@@ -438,42 +363,6 @@ class Worker:
         # Add to completion queue for batch processing
         async with self.completion_lock:
             self.completion_queue.append((execution.id, result))
-
-        # If this is a workflow task, resume parent workflow
-        if execution.parent_workflow_id:
-            await self._resume_parent_workflow(execution, result)
-
-    async def _resume_parent_workflow(self, task_execution: Execution, result: any):
-        """Resume parent workflow after task completion"""
-        workflow_id = task_execution.parent_workflow_id
-
-        # Get workflow checkpoint
-        workflow_dict = RustBridge.get_execution(workflow_id)
-        if not workflow_dict:
-            logger.error(f"Parent workflow {workflow_id} not found")
-            return
-
-        checkpoint = workflow_dict.get("checkpoint") or {}
-        history = checkpoint.get("history", [])
-
-        history.append(
-            {
-                "type": "task",
-                "name": task_execution.function_name,
-                "result": result,
-                "task_execution_id": task_execution.id,
-            }
-        )
-
-        checkpoint["history"] = history
-
-        # Suspend workflow with updated checkpoint (this will set status to suspended)
-        RustBridge.suspend_workflow(workflow_id, checkpoint)
-
-        # Immediately resume it (set status back to pending)
-        RustBridge.resume_workflow(workflow_id)
-
-        logger.info(f"Parent workflow {workflow_id} resumed")
 
     async def _handle_execution_failure(self, execution: Execution, error: Exception):
         """Handle execution failure with retry logic via Rust"""

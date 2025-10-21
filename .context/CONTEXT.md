@@ -62,9 +62,9 @@ Currant is a **lightweight durable execution framework** that enables building r
 │  (Any language with FFI)        │
 │  Python ✅  Node.js ✅          │
 │  Future: Go, Rust, etc.         │
-│  - Decorators (@task, @workflow)│
+│  - Decorators (@task)           │
 │  - Worker loops                 │
-│  - Workflow replay logic        │
+│  - DSL workflow integration     │
 └────────────┬────────────────────┘
              │ FFI (PyO3, NAPI-RS, CGO, etc.)
 ┌────────────▼────────────────────┐
@@ -79,6 +79,8 @@ Currant is a **lightweight durable execution framework** that enables building r
 │       PostgreSQL Only           │
 │  - executions table             │
 │  - worker_heartbeats            │
+│  - workflow_definitions         │
+│  - workflow_execution_context   │
 │  - workflow_signals             │
 │  - pg_notify channels           │
 └─────────────────────────────────┘
@@ -95,11 +97,11 @@ Currant is a **lightweight durable execution framework** that enables building r
 - `types.rs` - Shared data structures
 
 **Python Adapter** (`/python/currant`):
-- `decorators.py` - `@task`, `@workflow` decorators
+- `decorators.py` - `@task` decorator
 - `registry.py` - Function registry for decorated functions
 - `worker.py` - Worker loop (claim → execute → report)
-- `client.py` - `.queue()`, `send_signal()` client API
-- `context.py` - Workflow context (`wait_for_signal()`, `get_version()`)
+- `client.py` - `start_workflow()`, `send_signal()` client API
+- `init.py` - DSL workflow registration
 - `rust_bridge.py` - FFI wrapper with JSON serialization
 
 **Node.js Adapter** (`/node`):
@@ -163,23 +165,36 @@ Currant is a **lightweight durable execution framework** that enables building r
 
 **When this might change**: If we need to support languages without good Rust FFI (e.g., PHP, Ruby), we'd add an HTTP API as a fallback.
 
-### 4. Workflow Replay (Temporal-Style)
+### 4. Workflow Execution Models
 
-**Decision**: Use deterministic replay for workflow suspension/resumption.
+**Decision**: Support two workflow models - DSL-based (recommended) and Python replay (legacy).
+
+#### DSL-Based Workflows (Recommended)
 
 **How it works**:
-1. Workflow calls `task.run()` → raises `WorkflowSuspendException`
-2. Worker catches exception, creates task execution, suspends workflow
-3. Task completes (separate execution with parent_workflow_id set)
-4. Workflow resumes, re-executes from beginning
-5. Previous tasks return cached results from checkpoint
-6. Workflow continues to next task or completes
+1. Workflows written in `.flow` files with simple orchestration syntax
+2. Rust core parses DSL to AST, stores in `workflow_definitions` table with cached JSON
+3. Tree-walking interpreter executes statement by statement
+4. State is flat: `{statement_index, locals, awaiting_task_id}`
+5. On `task()`: Creates child execution, suspends workflow, saves state
+6. On task completion: Workflow re-enters queue, resumes from next statement
+7. No replay - just continue from saved position
 
 **Why this approach**:
-- ✅ Transparent to developers (just write normal async code)
-- ✅ No need for custom DSL or workflow graph definitions
-- ✅ Handles arbitrary control flow (if/else, loops)
-- ⚠️ Requires deterministic workflow code (no random(), time.now() in workflow logic)
+- ✅ Language-agnostic (same DSL works with Python, Node.js, any language)
+- ✅ Simpler state management (flat state, no call stack)
+- ✅ Inherently deterministic (limited DSL prevents non-determinism)
+- ✅ Easier to visualize as DAG
+- ✅ No replay complexity
+- ⚠️ Limited expressiveness initially (no conditionals/loops yet - planned)
+
+**Current syntax**:
+```
+task("taskName", { "arg": "value" })
+sleep(5)
+```
+
+**See**: [DSL_WORKFLOW_IMPLEMENTATION.md](/Users/maxnorth/Projects/currant/.context/DSL_WORKFLOW_IMPLEMENTATION.md)
 
 ## Execution Model
 
@@ -187,7 +202,7 @@ Currant is a **lightweight durable execution framework** that enables building r
 
 1. **Task**: Async unit of work
    - Can run standalone (via `.queue()`)
-   - Can run as workflow step (via `.run()` inside workflow)
+   - Can run as workflow step (from DSL workflow or via `.run()` inside Python workflow)
    - Distinguished by `parent_workflow_id` column:
      - NULL = standalone task
      - Set = workflow step
@@ -195,8 +210,10 @@ Currant is a **lightweight durable execution framework** that enables building r
    - Example: Send email, charge payment, validate order
 
 2. **Workflow**: Multi-step orchestration
-   - Coordinates multiple tasks using `.run()`
-   - Survives crashes via checkpointing and deterministic replay
+   - **DSL workflows** (recommended): Written in `.flow` files, executed by tree-walking interpreter
+   - **Python workflows** (legacy): Decorated functions with deterministic replay
+   - Coordinates multiple tasks
+   - Survives crashes via state persistence
    - Example: Order processing, approval flow
 
 ### Queue-First Design
@@ -212,7 +229,7 @@ task_id = await send_email.queue(to="user@example.com", subject="Hi")
 
 **Why**: Decouples producers from workers, enables scaling, built-in reliability.
 
-## Current State (as of 2025-10-06)
+## Current State (as of 2025-10-20)
 
 ### ✅ Implemented
 - Rust core with full execution management
@@ -220,11 +237,26 @@ task_id = await send_email.queue(to="user@example.com", subject="Hi")
 - Node.js adapter (complete, native bindings working, 23 tests passing)
 - Worker coordination and failover
 - Workflow signals
-- Versioning support
+- Versioning support (for Python workflows)
 - CLI tools
 - Migrations
+- **DSL-based workflows** (basic implementation):
+  - Parser for `.flow` files
+  - Workflow registration from filesystem
+  - Tree-walking interpreter
+  - `task()` and `sleep()` statements (sleep not yet scheduled)
+  - Worker integration (auto-detects DSL vs Python workflows)
+  - Flat state serialization
+  - End-to-end working example
 
 ### 📋 Future Roadmap
+- **DSL completion**:
+  - Control flow (if/else, loops)
+  - Expressions and operators
+  - Sleep scheduling implementation
+  - Error handling
+  - Standard library helpers
+  - Better error messages
 - Additional language adapters (Go, Rust native, Ruby, etc.)
 - Distributed tracing integration
 - Metrics and observability
@@ -682,7 +714,7 @@ npx currant bench worker --workers 10 --tasks 1000
 - `__currant_bench_noop__`: Minimal overhead task (tests throughput)
 - `__currant_bench_compute__`: CPU-bound task (tests under load)
 - `__currant_bench_task__`: No-op task (tests workflow coordination)
-- `__currant_bench_workflow__`: Workflow with N tasks (tests end-to-end)
+- `benchWorkflow`: DSL workflow dynamically generated with N tasks (tests end-to-end DSL execution)
 
 **Configuration**:
 - `--workers N`: Number of worker processes to spawn

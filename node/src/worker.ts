@@ -4,12 +4,6 @@
 
 import { RustBridge } from './rust-bridge-native.js';
 import { registry } from './registry.js';
-import {
-  WorkflowExecutionContext,
-  WorkflowSuspendException,
-  runInWorkflowContext,
-  clearCurrentWorkflowContext,
-} from './context.js';
 import { generateId } from './utils.js';
 import { settings } from './config.js';
 
@@ -164,16 +158,16 @@ export class Worker {
     try {
       console.log(`Executing ${execution.type} ${execution.id}: ${execution.function_name}`);
 
-      // Get the function
-      const fn = registry.get(execution.function_name);
-      if (!fn) {
-        throw new Error(`Function not found: ${execution.function_name}`);
-      }
-
       // Execute based on type
       if (execution.type === 'workflow') {
-        await this.executeWorkflow(execution, fn);
+        // DSL workflows are handled by Rust
+        throw new Error('DSL workflows should be executed by Rust core, not Node.js worker');
       } else {
+        // Get the function
+        const fn = registry.get(execution.function_name);
+        if (!fn) {
+          throw new Error(`Function not found: ${execution.function_name}`);
+        }
         await this.executeFunction(execution, fn);
       }
     } catch (error) {
@@ -206,84 +200,15 @@ export class Worker {
     }
   }
 
-  private async executeWorkflow(execution: any, fn: Function): Promise<void> {
-    // Create workflow context
-    const ctx = new WorkflowExecutionContext(execution.id, execution.checkpoint);
-
-    try {
-      const timeout = execution.timeout_seconds || settings.defaultWorkflowTimeout;
-      const timeoutMs = timeout * 1000;
-
-      // Execute workflow function with timeout
-      const result = await runInWorkflowContext(ctx, async () => {
-        return await Promise.race([
-          fn(...execution.args, ...Object.values(execution.kwargs)),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error(`Workflow timed out after ${timeout}s`)),
-              timeoutMs
-            )
-          ),
-        ]);
-      });
-
-      // If we got here, workflow completed
-      await RustBridge.completeExecution(execution.id, result);
-      console.log(`Workflow ${execution.id} completed successfully`);
-    } catch (error) {
-      if (error instanceof WorkflowSuspendException) {
-        // Workflow suspended - handle commands
-        await this.handleWorkflowSuspend(execution, ctx, error.commands);
-      } else {
-        throw error;
-      }
-    } finally {
-      clearCurrentWorkflowContext();
-    }
-  }
-
-  private async handleWorkflowSuspend(
-    execution: any,
-    ctx: WorkflowExecutionContext,
-    commands: any[]
-  ): Promise<void> {
-    console.log(`Workflow ${execution.id} suspended with ${commands.length} commands`);
-
-    // Create task executions for each command
-    for (const cmd of commands) {
-      if (cmd.type === 'task') {
-        await RustBridge.createExecution({
-          execType: 'task',
-          functionName: cmd.name,
-          queue: execution.queue, // Inherit workflow's queue
-          priority: cmd.config.priority || 5,
-          args: cmd.args,
-          kwargs: cmd.kwargs,
-          maxRetries: cmd.config.retries || settings.defaultRetries,
-          timeoutSeconds: cmd.config.timeout,
-          parentWorkflowId: execution.id,
-        });
-      }
-    }
-
-    // Update workflow checkpoint and suspend
-    const newCheckpoint = {
-      history: (ctx as any).history,
-      pending_commands: commands,
-    };
-
-    await RustBridge.suspendWorkflow(execution.id, newCheckpoint);
-    console.log(`Workflow ${execution.id} suspended and tasks created`);
-  }
-
-  private async handleExecutionFailure(execution: any, error: any): Promise<void> {
+  private async handleExecutionFailure(execution: any, error: unknown): Promise<void> {
     const attempt = execution.attempt + 1;
     const maxRetries = execution.max_retries;
 
+    const err = error as Error;
     const errorData = {
-      message: error.message || String(error),
-      type: error.name || 'Error',
-      stack: error.stack,
+      message: err.message || String(error),
+      type: err.name || 'Error',
+      stack: err.stack,
     };
 
     console.error(

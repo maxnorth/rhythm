@@ -375,7 +375,7 @@ currant/
     │   ├── init.py            # Scans .flow files, calls Rust
     │   ├── client.py          # start_workflow() API
     │   ├── worker.py          # Detects & executes DSL workflows
-    │   ├── decorators.py      # @task/@workflow (FIXED: no module prefix)
+    │   ├── decorators.py      # @task
     │   └── registry.py        # get_function(required=False)
     ├── native/src/lib.rs      # PyO3 FFI bindings
     └── examples/workflow_example/

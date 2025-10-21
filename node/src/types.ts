@@ -13,7 +13,6 @@ export interface ExecutionConfig {
 
 export interface ExecutableProxy<TArgs extends any[] = any[], TReturn = any> {
   queue(...args: TArgs): Promise<string>;
-  run(...args: TArgs): Promise<TReturn>;
   options(opts: Partial<ExecutionConfig>): ExecutableProxy<TArgs, TReturn>;
   call(...args: TArgs): Promise<TReturn>;
   functionName: string;
@@ -22,11 +21,6 @@ export interface ExecutableProxy<TArgs extends any[] = any[], TReturn = any> {
 
 export interface TaskConfig extends ExecutionConfig {
   queue: string;
-}
-
-export interface WorkflowConfig extends ExecutionConfig {
-  queue: string;
-  version?: number;
 }
 
 export interface SignalPayload {

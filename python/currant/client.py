@@ -56,6 +56,9 @@ async def send_signal(workflow_id: str, signal_name: str, payload: dict[str, Any
     """
     Send a signal to a workflow.
 
+    NOTE: Currently only supported for future workflow features.
+    DSL workflows do not yet support signals.
+
     Args:
         workflow_id: The workflow execution ID
         signal_name: Name of the signal
@@ -65,7 +68,7 @@ async def send_signal(workflow_id: str, signal_name: str, payload: dict[str, Any
         Signal ID
 
     Example:
-        await send_signal(workflow_id, "approved", {"approved": True, "approver": "user@example.com"})
+        await send_signal(workflow_id, "approved", {"approved": True})
     """
     payload = payload or {}
     signal_id = RustBridge.send_signal(workflow_id, signal_name, payload)

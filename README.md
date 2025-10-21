@@ -6,13 +6,13 @@ A lightweight durable execution framework using only Postgres. No external orche
 
 - **Truly self-contained** - Only depends on Postgres, no external Conductor/orchestrator
 - **Durable execution** - Workflows survive crashes and automatically resume
+- **DSL-based workflows** - Simple `.flow` files for language-agnostic orchestration
 - **Queue-first design** - All work is queued by default
-- **Unified platform** - Handle both simple async tasks (Celery-style) and complex workflows (Temporal-style)
-- **Transparent replay** - Temporal-style deterministic replay for workflows
+- **Unified platform** - Handle both simple async tasks (Celery-style) and complex workflows
 - **Worker failover** - Automatic recovery via heartbeat-based coordination through Postgres
 - **LISTEN/NOTIFY** - Fast task pickup with Postgres pub/sub
-- **Signals** - External systems can send signals to workflows
-- **Versioning** - Workflow evolution with backward compatibility
+- **Signals** - External systems can send signals to workflows (Python workflows)
+- **Versioning** - Workflow evolution with backward compatibility (Python workflows)
 
 ## Installation
 
@@ -32,68 +32,54 @@ export CURRANT_DATABASE_URL="postgresql://localhost/currant"
 currant migrate
 ```
 
-### 2. Define Tasks and Currant
+### 2. Define Tasks and Workflows
 
 ```python
-# app.py
-from currant import task, task, workflow, send_signal, wait_for_signal
+# app.py - Define tasks
+import currant
+from currant import task
 
-# Simple async task
-@task(queue="emails", retries=3)
+# Initialize with workflow paths
+currant.init(
+    database_url="postgresql://localhost/currant",
+    workflow_paths=["./workflows"]
+)
+
+# Define tasks that workflows can call
+@task(queue="payments")
+async def charge_card(order_id: str, amount: float):
+    print(f"💳 Charging ${amount} for order {order_id}")
+    return {"success": True, "transaction_id": "txn_123"}
+
+@task(queue="fulfillment")
+async def ship_order(order_id: str):
+    print(f"📦 Shipping order {order_id}")
+    return {"success": True, "tracking": "TRACK123"}
+
+@task(queue="emails")
 async def send_email(to: str, subject: str, body: str):
-    # Your email sending logic
-    print(f"Sending email to {to}")
+    print(f"📧 Sending email to {to}")
     return {"sent": True}
-
-# Task (workflow step)
-@task(retries=3, timeout=60)
-async def charge_card(amount: int, card_token: str):
-    # Your payment logic
-    print(f"Charging ${amount}")
-    return {"transaction_id": "txn_123", "amount": amount}
-
-@task()
-async def send_receipt(email: str, amount: int):
-    print(f"Sending receipt for ${amount} to {email}")
-
-# Workflow (multi-step orchestration)
-@workflow(queue="orders", version=1, timeout=3600)
-async def process_order(order_id: str, amount: int, email: str, card_token: str):
-    # Charge the card (suspends workflow)
-    charge_result = await charge_card.run(amount, card_token)
-
-    # Send receipt (suspends workflow)
-    await send_receipt.run(email, amount)
-
-    return {"order_id": order_id, "transaction_id": charge_result["transaction_id"]}
 ```
 
-### 3. Enqueue Work
+```
+// workflows/processOrder.flow - Define workflow
+task("charge_card", { "order_id": "order-123", "amount": 99.99 })
+task("ship_order", { "order_id": "order-123" })
+task("send_email", { "to": "customer@example.com", "subject": "Order shipped!" })
+```
+
+### 3. Start Workflows
 
 ```python
-# client.py
-import asyncio
-from app import send_email, process_order
+import currant
 
-async def main():
-    # Enqueue a task
-    task_id = await send_email.queue(
-        to="user@example.com",
-        subject="Welcome",
-        body="Thanks for signing up!"
-    )
-    print(f"Task enqueued: {task_id}")
-
-    # Enqueue a workflow
-    workflow_id = await process_order.queue(
-        order_id="order_123",
-        amount=5000,
-        email="customer@example.com",
-        card_token="tok_visa"
-    )
-    print(f"Workflow enqueued: {workflow_id}")
-
-asyncio.run(main())
+# Start a DSL workflow
+workflow_id = await currant.start_workflow(
+    "processOrder",
+    inputs={"orderId": "order-123", "amount": 99.99}
+)
+print(f"Workflow started: {workflow_id}")
 ```
 
 ### 4. Run Workers
@@ -109,67 +95,38 @@ currant worker -q orders
 currant worker -q emails -q orders
 ```
 
-## Advanced Features
+## Workflow Types
 
-### Signals
+### DSL Workflows (Recommended)
 
-Currant can wait for external signals:
+Language-agnostic workflows defined in `.flow` files:
 
-```python
-@workflow(queue="approvals", version=1)
-async def approval_workflow(document_id: str):
-    # Wait for approval signal (suspends workflow)
-    approval = await wait_for_signal("approved", timeout=86400)  # 24 hours
+**Benefits:**
+- Same workflow works with Python, Node.js, or any language
+- Simple flat state (no complex replay)
+- Easier to visualize and debug
+- Inherently deterministic
 
-    if approval["approved"]:
-        await process_document.run(document_id)
-        return {"status": "approved"}
-    else:
-        return {"status": "rejected"}
-
-# Send signal from external system
-from currant import send_signal
-
-await send_signal(workflow_id, "approved", {"approved": True, "approver": "user@example.com"})
+**Current syntax:**
+```
+task("taskName", { "arg": "value" })
+sleep(5)
 ```
 
-### Workflow Versioning
+**Coming soon:**
+- Conditionals: `if (result.success) { ... }`
+- Loops: `for (item in items) { ... }`
+- Expressions: Variables, operators, property access
 
-Handle workflow evolution with backward compatibility:
+### Task Options
 
+**Dynamic Options** - Override execution options at queue time:
 ```python
-from currant import get_version
-
-@workflow(queue="orders", version=2)
-async def process_order(order_id: str, amount: int, email: str, card_token: str):
-    charge_result = await charge_card.run(amount, card_token)
-
-    # Feature added in version 2
-    if get_version("send_sms", 1, 2) >= 2:
-        await send_sms_notification.run(phone, "Order confirmed!")
-
-    await send_receipt.run(email, amount)
-    return {"order_id": order_id}
-```
-
-### Dynamic Options
-
-Override execution options at queue time:
-
-```python
-# Override queue and priority
+# Override queue and priority for tasks
 task_id = await send_email.options(
     queue="high-priority",
     priority=10
 ).queue(to="vip@example.com", subject="Urgent", body="...")
-
-# Override timeout for task
-@workflow(queue="orders", version=1)
-async def risky_order(order_id: str):
-    # Give extra time for this charge
-    result = await charge_card.options(timeout=120).run(amount, token)
-    return result
-```
 
 ## CLI Commands
 
@@ -223,18 +180,15 @@ Unlike DBOS which requires a separate Conductor service, currant achieves worker
 3. **Work recovery** - Dead workers' executions are reset to pending and re-queued
 4. **LISTEN/NOTIFY** - Workers listen for new work via Postgres pub/sub for instant pickup
 
-### Workflow Replay
+### Workflow Execution
 
-Workflows use Temporal-style deterministic replay:
+DSL workflows use simple state persistence:
 
-1. Workflow calls `task.run()` → task execution created, workflow suspended
-2. Worker picks up task, executes it, stores result
-3. Workflow is re-queued with task result in history
-4. Worker re-executes workflow function from the beginning
-5. Previous Tasks return cached results instantly
-6. Workflow continues to next task or completes
-
-This is completely transparent to developers - just write normal async code.
+1. Parse `.flow` file to AST, store in database
+2. Execute statement by statement (tree-walking interpreter)
+3. On `task()`: Create child execution, save state `{statement_index, locals}`, suspend
+4. When child completes: Resume workflow, continue from next statement
+5. No replay needed - just continue from saved position
 
 ## Architecture
 
@@ -270,10 +224,11 @@ This is completely transparent to developers - just write normal async code.
 | External orchestrator | ❌ None | ✅ Conductor required | ✅ Server required |
 | Database | Postgres only | Postgres only | Any (via adapter) |
 | Queue-first | ✅ Yes | ❌ Sync by default | ✅ Yes |
-| Workflow replay | ✅ Transparent | ✅ Transparent | ✅ Transparent |
+| Workflow style | DSL-based | Python/TS code | Language code |
+| Language-agnostic workflows | ✅ Yes | ❌ No | ❌ No |
 | Worker failover | ✅ Via Postgres | ✅ Via Conductor | ✅ Via Server |
-| Signals | ✅ Yes | ❌ No | ✅ Yes |
-| Versioning | ✅ Yes | ❌ Limited | ✅ Yes |
+| Signals | 🚧 Planned | ❌ No | ✅ Yes |
+| Versioning | 🚧 Planned | ❌ Limited | ✅ Yes |
 
 ## License
 

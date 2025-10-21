@@ -8,6 +8,7 @@ use tokio::time::sleep;
 use crate::db::get_pool;
 use crate::executions::{claim_execution, complete_execution, create_execution};
 use crate::types::{CreateExecutionParams, ExecutionType};
+use crate::workflows::{register_workflows, start_workflow, WorkflowFile};
 
 /// Worker mode for benchmarking
 pub enum WorkerMode {
@@ -106,6 +107,11 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
 
     // Validate parameters
     validate_params(&params)?;
+
+    // If workflows requested, register the benchmark workflow
+    if params.workflows > 0 {
+        register_benchmark_workflow(params.tasks_per_workflow, params.payload_size).await?;
+    }
 
     let queues: Vec<&str> = params.queues.split(',').collect();
     let distribution = parse_distribution(&params.queue_distribution, queues.len())?;
@@ -216,6 +222,30 @@ pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
     // Step 6: Display report
     display_report(&metrics, params.warmup_percent);
 
+    Ok(())
+}
+
+/// Register the benchmark workflow dynamically based on parameters
+async fn register_benchmark_workflow(task_count: usize, payload_size: usize) -> Result<()> {
+    // Generate workflow source with the specified number of task calls
+    let mut workflow_lines = Vec::new();
+    for _ in 0..task_count {
+        workflow_lines.push(format!(
+            r#"task("bench_task", {{ "payload_size": {} }})"#,
+            payload_size
+        ));
+    }
+    let workflow_source = workflow_lines.join("\n");
+
+    println!("📝 Registering benchmark workflow ({} tasks)...", task_count);
+
+    let workflow = WorkflowFile {
+        name: "benchWorkflow".to_string(),
+        source: workflow_source,
+        file_path: "<generated>".to_string(),
+    };
+
+    register_workflows(vec![workflow]).await?;
     Ok(())
 }
 
@@ -367,8 +397,8 @@ async fn enqueue_tasks(
     }
 
     let function_name = match params.task_type.as_str() {
-        "noop" => "currant.benchmark.__currant_bench_noop__",
-        "compute" => "currant.benchmark.__currant_bench_compute__",
+        "noop" => "__currant_bench_noop__",
+        "compute" => "__currant_bench_compute__",
         _ => return Err(anyhow!("Unknown tasktype")),
     };
 
@@ -408,35 +438,25 @@ async fn enqueue_tasks(
 
 async fn enqueue_workflows(
     params: &BenchmarkParams,
-    queues: &[&str],
-    distribution: &[f64],
+    _queues: &[&str],
+    _distribution: &[f64],
 ) -> Result<usize> {
     if params.workflows == 0 {
         return Ok(0);
     }
 
-    let mut kwargs = serde_json::Map::new();
-    kwargs.insert("task_count".to_string(), json!(params.tasks_per_workflow));
+    // DSL workflows use input parameters
+    let mut inputs = serde_json::Map::new();
     if params.payload_size > 0 {
-        kwargs.insert("payload_size".to_string(), json!(params.payload_size));
+        inputs.insert("payload_size".to_string(), json!(params.payload_size));
     }
 
-    for i in 0..params.workflows {
-        let queue = select_queue(queues, distribution, i);
-
-        create_execution(CreateExecutionParams {
-            id: None,
-            exec_type: ExecutionType::Workflow,
-            function_name: "currant.benchmark.__currant_bench_workflow__".to_string(),
-            queue: queue.to_string(),
-            priority: 5,
-            args: json!([]),
-            kwargs: serde_json::Value::Object(kwargs.clone()),
-            max_retries: 3,
-            timeout_seconds: Some(60),
-            parent_workflow_id: None,
-        })
-        .await?;
+    for _i in 0..params.workflows {
+        // Use start_workflow which creates both execution and workflow_execution_context
+        start_workflow(
+            "benchWorkflow",
+            serde_json::Value::Object(inputs.clone())
+        ).await?;
 
         // Rate limiting
         if let Some(rate) = params.rate {

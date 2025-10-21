@@ -1,15 +1,13 @@
 /**
- * Decorators for defining tasks and workflows
+ * Decorators for defining tasks
  */
 
 import { queueExecution } from './client.js';
-import { getCurrentWorkflowContext } from './context.js';
 import { registerFunction } from './registry.js';
 import { settings } from './config.js';
 import type {
   ExecutableProxy,
   TaskConfig,
-  WorkflowConfig,
   ExecutionConfig,
 } from './types.js';
 
@@ -64,17 +62,6 @@ export class BaseExecutableProxy<TArgs extends any[] = any[], TReturn = any>
     });
   }
 
-  async run(...args: TArgs): Promise<TReturn> {
-    const ctx = getCurrentWorkflowContext();
-    if (!ctx) {
-      throw new Error(
-        `${this.execType}.run() can only be called from within a workflow. Use .queue() to run standalone.`
-      );
-    }
-
-    return ctx.executeTask(this as any, args);
-  }
-
   async call(...args: TArgs): Promise<TReturn> {
     return this.fn(...args);
   }
@@ -96,25 +83,6 @@ export class TaskProxy<TArgs extends any[] = any[], TReturn = any> extends BaseE
   }
 }
 
-export class WorkflowProxy<TArgs extends any[] = any[], TReturn = any> extends BaseExecutableProxy<
-  TArgs,
-  TReturn
-> {
-  public version: number;
-
-  constructor(fn: AsyncFunction<TArgs, TReturn>, config: WorkflowConfig) {
-    if (!config.queue) {
-      throw new Error('@workflow decorator requires a "queue" parameter');
-    }
-    const fullConfig = {
-      ...config,
-      timeout: config.timeout ?? settings.defaultWorkflowTimeout,
-    };
-    super(fn, 'workflow', fullConfig);
-    this.version = config.version ?? 1;
-  }
-}
-
 // Decorator functions
 
 export function task<TArgs extends any[] = any[], TReturn = any>(
@@ -122,13 +90,5 @@ export function task<TArgs extends any[] = any[], TReturn = any>(
 ): (fn: AsyncFunction<TArgs, TReturn>) => TaskProxy<TArgs, TReturn> {
   return (fn: AsyncFunction<TArgs, TReturn>) => {
     return new TaskProxy(fn, config);
-  };
-}
-
-export function workflow<TArgs extends any[] = any[], TReturn = any>(
-  config: WorkflowConfig
-): (fn: AsyncFunction<TArgs, TReturn>) => WorkflowProxy<TArgs, TReturn> {
-  return (fn: AsyncFunction<TArgs, TReturn>) => {
-    return new WorkflowProxy(fn, config);
   };
 }
