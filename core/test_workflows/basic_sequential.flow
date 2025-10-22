@@ -1,0 +1,7 @@
+// Test: Basic sequential workflow with await
+// Expected: Tasks execute one after another
+workflow(ctx, inputs) {
+  await task("task1", { "step": 1 })
+  await task("task2", { "step": 2 })
+  await task("task3", { "step": 3 })
+}

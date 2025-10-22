@@ -1,0 +1,3 @@
+workflow(ctx, inputs) {
+  await task("test", { userId: inputs.userId })
+}

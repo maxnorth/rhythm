@@ -1,0 +1,112 @@
+// Workflow DSL Grammar for Pest Parser
+//
+// This grammar defines the syntax for .flow workflow files.
+//
+// Features:
+// - workflow(ctx, inputs) { ... } wrapper
+// - task() statements: await task("name", { ... }) or task("name", { ... })
+// - Variable assignment: let varname = await task(...) or let varname = task(...)
+// - Variable references: use bare identifiers in JSON: { "key": varname }
+// - Input access: inputs.fieldName
+// - sleep() statements
+//
+// Future: if/else, loops, expressions (see TODO.md Priority 1)
+
+// Top-level rule: a workflow is wrapped in workflow(ctx, inputs) { ... }
+workflow = _{ SOI ~ workflow_function ~ EOI }
+
+// workflow(ctx, inputs) { statements }
+workflow_function = {
+    "workflow" ~ "(" ~ identifier ~ "," ~ identifier ~ ")" ~ "{" ~ statement* ~ "}"
+}
+
+// A statement is either a variable assignment, an await task, a fire-and-forget task, or a sleep call
+statement = { assignment | await_statement | task_call | sleep_call }
+
+// let varname = task(...) or let varname = await task(...)
+assignment = {
+    "let" ~ identifier ~ "=" ~ (await_statement | task_call)
+}
+
+// await task("name", { ... }) or await sleep(10) - waits for completion
+await_statement = {
+    "await" ~ (task_call | sleep_call)
+}
+
+// Legacy await_task for backwards compatibility (will be removed)
+await_task = { await_statement }
+
+// task("name") or task("name", { ... }) - fire-and-forget (no await)
+// JSON objects can contain variable references like: { "key": "$varname" }
+task_call = {
+    "task" ~ "(" ~ string ~ ("," ~ json_object)? ~ ")"
+}
+
+// Variable identifier (alphanumeric + underscore)
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+// Member access: inputs.fieldName or ctx.workflowId
+member_access = @{ identifier ~ ("." ~ identifier)+ }
+
+// sleep(10)
+sleep_call = {
+    "sleep" ~ "(" ~ integer ~ ")"
+}
+
+// String literals (double or single quoted)
+// Note: The whole string is atomic (@), including quotes
+// We'll strip quotes in the Rust code
+string = @{
+    "\"" ~ (!("\"" | "\\") ~ ANY | "\\" ~ ANY)* ~ "\""
+    | "'" ~ (!("'" | "\\") ~ ANY | "\\" ~ ANY)* ~ "'"
+}
+
+// JSON object with variable support
+// Variables can be bare identifiers: { "key": varname }
+// Standard JSON values are also supported: { "key": "string", "num": 123 }
+json_object = {
+    "{" ~ (json_pair ~ ("," ~ json_pair)*)? ~ "}"
+}
+
+json_pair = {
+    (string | identifier) ~ ":" ~ json_value
+}
+
+json_value = {
+    json_object
+    | json_array
+    | string
+    | number
+    | boolean
+    | null
+    | member_access  // inputs.fieldName or ctx.workflowId
+    | identifier     // Variable reference (bare identifier)
+}
+
+json_array = {
+    "[" ~ (json_value ~ ("," ~ json_value)*)? ~ "]"
+}
+
+number = @{
+    "-"? ~ (
+        // Hex: 0x1234 or 0X1234
+        "0" ~ ("x" | "X") ~ ASCII_HEX_DIGIT+ ~ ("_" ~ ASCII_HEX_DIGIT+)* |
+        // Binary: 0b1010 or 0B1010
+        "0" ~ ("b" | "B") ~ ASCII_BIN_DIGIT+ ~ ("_" ~ ASCII_BIN_DIGIT+)* |
+        // Decimal with optional underscores: 1_000_000
+        ASCII_DIGIT ~ (ASCII_DIGIT | "_")* ~ ("." ~ (ASCII_DIGIT | "_")*)? |
+        // Decimal starting with dot: .456
+        "." ~ ASCII_DIGIT ~ (ASCII_DIGIT | "_")*
+    ) ~ (("e" | "E") ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+}
+
+boolean = @{ "true" | "false" }
+
+null = @{ "null" }
+
+// Integer literal
+integer = @{ ASCII_DIGIT+ }
+
+// Whitespace and comments (automatically skipped by Pest)
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+COMMENT = _{ "//" ~ (!"\n" ~ ANY)* }

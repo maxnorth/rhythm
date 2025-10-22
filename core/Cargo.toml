@@ -49,6 +49,10 @@ sha2 = "0.10"
 # Unix system calls
 libc = "0.2"
 
+# Parser
+pest = "2.8"
+pest_derive = "2.8"
+
 [dev-dependencies]
 tokio-test = "0.4"
 

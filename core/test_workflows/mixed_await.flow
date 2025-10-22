@@ -1,0 +1,10 @@
+// Test: Mixed await and fire-and-forget
+// Expected: await tasks block, non-await tasks don't
+workflow(ctx, inputs) {
+  await task("init", { "step": 1 })
+  task("background1", { "async": true })
+  task("background2", { "async": true })
+  await task("checkpoint", { "step": 2 })
+  task("background3", { "async": true })
+  await task("finalize", { "step": 3 })
+}

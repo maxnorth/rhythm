@@ -127,7 +127,7 @@ pub fn parse_workflow(source: &str) -> Result<Vec<JsonValue>, ParseError> {
 
     // Rest are statements
     for statement in inner {
-        // The statement is a wrapper - get the inner content
+        // Get the line number of this statement
         let statement_line = statement.as_span().start_pos().line_col().0;
 
         // Check if this statement is on the same line as the previous one
@@ -142,23 +142,20 @@ pub fn parse_workflow(source: &str) -> Result<Vec<JsonValue>, ParseError> {
 
         last_statement_line = Some(statement_line);
 
-        // Unwrap the statement to get the actual content
-        for inner_statement in statement.into_inner() {
-            match inner_statement.as_rule() {
-                Rule::assignment => {
-                    steps.push(parse_assignment(inner_statement)?);
-                }
-                Rule::await_statement | Rule::await_task => {
-                    steps.push(parse_await_statement(inner_statement)?);
-                }
-                Rule::task_call => {
-                    steps.push(parse_task_call(inner_statement, false)?);
-                }
-                Rule::sleep_call => {
-                    steps.push(parse_sleep_call(inner_statement, false)?);
-                }
-                _ => {}
+        match statement.as_rule() {
+            Rule::assignment => {
+                steps.push(parse_assignment(statement)?);
             }
+            Rule::await_task => {
+                steps.push(parse_await_task(statement)?);
+            }
+            Rule::task_call => {
+                steps.push(parse_task_call(statement, false)?);
+            }
+            Rule::sleep_call => {
+                steps.push(parse_sleep_call(statement)?);
+            }
+            _ => {}
         }
     }
 
@@ -173,15 +170,14 @@ fn parse_assignment(pair: pest::iterators::Pair<Rule>) -> Result<JsonValue, Pars
         .ok_or_else(|| ParseError::PestError("assignment requires variable name".to_string()))?;
     let var_name = var_name_pair.as_str().to_string();
 
-    // Get the task expression (either await_statement or task_call)
+    // Get the task expression (either await_task or task_call)
     let task_expr = inner.next()
         .ok_or_else(|| ParseError::PestError("assignment requires task expression".to_string()))?;
 
     // Parse the task (will have await field set appropriately)
     let mut task_json = match task_expr.as_rule() {
-        Rule::await_statement | Rule::await_task => parse_await_statement(task_expr)?,
+        Rule::await_task => parse_await_task(task_expr)?,
         Rule::task_call => parse_task_call(task_expr, false)?,
-        Rule::sleep_call => parse_sleep_call(task_expr, false)?,
         _ => return Err(ParseError::PestError("invalid assignment expression".to_string())),
     };
 
@@ -193,19 +189,15 @@ fn parse_assignment(pair: pest::iterators::Pair<Rule>) -> Result<JsonValue, Pars
     Ok(task_json)
 }
 
-fn parse_await_statement(pair: pest::iterators::Pair<Rule>) -> Result<JsonValue, ParseError> {
+fn parse_await_task(pair: pest::iterators::Pair<Rule>) -> Result<JsonValue, ParseError> {
     let mut inner = pair.into_inner();
 
-    // The inner element can be either task_call or sleep_call
-    let call_pair = inner.next()
-        .ok_or_else(|| ParseError::PestError("await requires a task call or sleep call".to_string()))?;
+    // The inner element is the task_call
+    let task_call_pair = inner.next()
+        .ok_or_else(|| ParseError::PestError("await requires a task call".to_string()))?;
 
-    // Parse with await=true
-    match call_pair.as_rule() {
-        Rule::task_call => parse_task_call(call_pair, true),
-        Rule::sleep_call => parse_sleep_call(call_pair, true),
-        _ => Err(ParseError::PestError("await can only be used with task() or sleep()".to_string())),
-    }
+    // Parse the task call with await=true
+    parse_task_call(task_call_pair, true)
 }
 
 fn parse_task_call(pair: pest::iterators::Pair<Rule>, await_completion: bool) -> Result<JsonValue, ParseError> {
@@ -236,7 +228,7 @@ fn parse_task_call(pair: pest::iterators::Pair<Rule>, await_completion: bool) ->
     }))
 }
 
-fn parse_sleep_call(pair: pest::iterators::Pair<Rule>, await_completion: bool) -> Result<JsonValue, ParseError> {
+fn parse_sleep_call(pair: pest::iterators::Pair<Rule>) -> Result<JsonValue, ParseError> {
     let line = pair.as_span().start_pos().line_col().0;
     let mut inner = pair.into_inner();
 
@@ -256,8 +248,7 @@ fn parse_sleep_call(pair: pest::iterators::Pair<Rule>, await_completion: bool) -
 
     Ok(json!({
         "type": "sleep",
-        "duration": duration,
-        "await": await_completion
+        "duration": duration
     }))
 }
 
@@ -418,14 +409,15 @@ fn parse_json_value(pair: pest::iterators::Pair<Rule>, line: usize) -> Result<Js
         Rule::null => Ok(JsonValue::Null),
         Rule::member_access => {
             // This is a member access like inputs.userId or ctx.workflowId
-            // Store as-is without $ prefix (unlike bare identifiers)
+            // Convert to "$inputs.userId" format
             let member_str = inner.as_str();
-            Ok(JsonValue::String(member_str.to_string()))
+            Ok(JsonValue::String(format!("${}", member_str)))
         }
         Rule::identifier => {
-            // This is a variable reference - use as-is (JavaScript-like syntax, no $ prefix)
+            // This is a variable reference - wrap it in a special format
+            // Use "$varname" to mark it as a variable
             let var_name = inner.as_str();
-            Ok(JsonValue::String(var_name.to_string()))
+            Ok(JsonValue::String(format!("${}", var_name)))
         }
         _ => Err(ParseError::InvalidJson {
             line,
@@ -453,12 +445,10 @@ mod tests {
     #[test]
     fn test_parse_simple_workflow() {
         let source = r#"
-workflow(ctx, inputs) {
-  task("do-something", { "hey": "hello" })
-  sleep(10)
-  task("do-another")
-}
-                "#;
+task("do-something", { "hey": "hello" })
+sleep(10)
+task("do-another")
+        "#;
 
         let result = parse_workflow(source).unwrap();
 
@@ -481,11 +471,9 @@ workflow(ctx, inputs) {
     #[test]
     fn test_parse_await_task() {
         let source = r#"
-workflow(ctx, inputs) {
-  await task("fetch-data", { "id": 123 })
-  task("log", { "msg": "fired and forgotten" })
-}
-                "#;
+await task("fetch-data", { "id": 123 })
+task("log", { "msg": "fired and forgotten" })
+        "#;
 
         let result = parse_workflow(source).unwrap();
 
@@ -505,7 +493,7 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_parse_task_without_inputs() {
-        let source = r#"workflow(ctx, inputs) { task("my-task") }"#;
+        let source = r#"task("my-task")"#;
         let result = parse_workflow(source).unwrap();
 
         assert_eq!(result.len(), 1);
@@ -515,13 +503,11 @@ workflow(ctx, inputs) {
     #[test]
     fn test_parse_empty_lines() {
         let source = r#"
-workflow(ctx, inputs) {
-  task("first")
+task("first")
 
-  task("second")
+task("second")
 
-}
-                "#;
+        "#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result.len(), 2);
     }
@@ -538,7 +524,7 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_parse_error_missing_closing_paren() {
-        let source = r#"workflow(ctx, inputs) { task("foo" }"#;
+        let source = r#"task("foo""#;
         let result = parse_workflow(source);
         assert!(result.is_err());
     }
@@ -546,7 +532,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_parse_error_invalid_json() {
         // Test invalid JSON syntax (missing closing brace)
-        let source = r#"workflow(ctx, inputs) { task("foo", { "key": "value" ) }"#;
+        let source = r#"task("foo", { "key": "value" )"#;
         let result = parse_workflow(source);
 
         assert!(result.is_err());
@@ -555,14 +541,14 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_parse_sleep_non_numeric() {
-        let source = r#"workflow(ctx, inputs) { sleep("not a number") }"#;
+        let source = r#"sleep("not a number")"#;
         let result = parse_workflow(source);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_parse_single_quotes() {
-        let source = r#"workflow(ctx, inputs) { task('my-task') }"#;
+        let source = r#"task('my-task')"#;
         let result = parse_workflow(source).unwrap();
 
         assert_eq!(result[0]["task"], "my-task");
@@ -571,20 +557,18 @@ workflow(ctx, inputs) {
     #[test]
     fn test_parse_comments() {
         let source = r#"
-workflow(ctx, inputs) {
-  // This is a comment
-  task("first")
-  // Another comment
-  sleep(5)
-}
-                "#;
+// This is a comment
+task("first")
+// Another comment
+sleep(5)
+        "#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result.len(), 2);
     }
 
     #[test]
     fn test_parse_nested_json() {
-        let source = r#"workflow(ctx, inputs) { task("process", { "user": { "name": "Alice", "age": 30 }, "count": 5 }) }"#;
+        let source = r#"task("process", { "user": { "name": "Alice", "age": 30 }, "count": 5 })"#;
         let result = parse_workflow(source).unwrap();
 
         assert_eq!(result[0]["inputs"]["user"]["name"], "Alice");
@@ -594,7 +578,7 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_parse_json_with_commas() {
-        let source = r#"workflow(ctx, inputs) { task("send", { "to": "user@example.com", "subject": "Hello", "body": "World" }) }"#;
+        let source = r#"task("send", { "to": "user@example.com", "subject": "Hello", "body": "World" })"#;
         let result = parse_workflow(source).unwrap();
 
         assert_eq!(result[0]["inputs"]["to"], "user@example.com");
@@ -605,11 +589,9 @@ workflow(ctx, inputs) {
     #[test]
     fn test_parse_variable_assignment() {
         let source = r#"
-workflow(ctx, inputs) {
-  let order_id = await task("create_order", { "amount": 100 })
-  let result = task("log", { "msg": "test" })
-}
-                "#;
+let order_id = await task("create_order", { "amount": 100 })
+let result = task("log", { "msg": "test" })
+        "#;
 
         let result = parse_workflow(source).unwrap();
 
@@ -632,12 +614,10 @@ workflow(ctx, inputs) {
     #[test]
     fn test_parse_variable_names() {
         let source = r#"
-workflow(ctx, inputs) {
-  let my_var = task("test")
-  let _private = task("test")
-  let var123 = task("test")
-}
-                "#;
+let my_var = task("test")
+let _private = task("test")
+let var123 = task("test")
+        "#;
 
         let result = parse_workflow(source).unwrap();
 
@@ -651,11 +631,9 @@ workflow(ctx, inputs) {
     fn test_parse_variable_references() {
         // Test bare identifier variable references in JSON
         let source = r#"
-workflow(ctx, inputs) {
-  let order_id = await task("create_order", { "amount": 100 })
-  await task("charge", { "order_id": order_id, "amount": 50 })
-}
-                "#;
+let order_id = await task("create_order", { "amount": 100 })
+await task("charge", { "order_id": order_id, "amount": 50 })
+        "#;
 
         let result = parse_workflow(source).unwrap();
 
@@ -666,28 +644,24 @@ workflow(ctx, inputs) {
         assert_eq!(result[0]["inputs"]["amount"], 100);
 
         // Second task uses order_id as a variable reference
-        // Parser stores bare identifiers as-is (JavaScript-like syntax, no $ prefix)
-        assert_eq!(result[1]["inputs"]["order_id"], "order_id");
+        // Parser converts bare identifiers to "$varname" format
+        assert_eq!(result[1]["inputs"]["order_id"], "$order_id");
         assert_eq!(result[1]["inputs"]["amount"], 50);
     }
 
     #[test]
     fn test_parse_json_all_types() {
-        let source = r#"
-workflow(ctx, inputs) {
-  task("test", {
-    "string": "hello",
-    "number": 42,
-    "float": 3.14,
-    "bool_true": true,
-    "bool_false": false,
-    "null_val": null,
-    "var_ref": my_variable,
-    "nested": { "key": "value" },
-    "array": [1, 2, "three"]
-  })
-}
-                "#;
+        let source = r#"task("test", {
+            "string": "hello",
+            "number": 42,
+            "float": 3.14,
+            "bool_true": true,
+            "bool_false": false,
+            "null_val": null,
+            "var_ref": my_variable,
+            "nested": { "key": "value" },
+            "array": [1, 2, "three"]
+        })"#;
 
         let result = parse_workflow(source).unwrap();
 
@@ -700,7 +674,7 @@ workflow(ctx, inputs) {
         assert_eq!(inputs["bool_true"], true);
         assert_eq!(inputs["bool_false"], false);
         assert_eq!(inputs["null_val"], JsonValue::Null);
-        assert_eq!(inputs["var_ref"], "my_variable");
+        assert_eq!(inputs["var_ref"], "$my_variable");
         assert_eq!(inputs["nested"]["key"], "value");
         assert_eq!(inputs["array"][0], 1);
         assert_eq!(inputs["array"][1], 2);
@@ -713,7 +687,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_trailing_comma_object() {
         // Trailing commas in objects - should this work?
-        let source = r#"workflow(ctx, inputs) { task("t", { "a": 1, }) }"#;
+        let source = r#"task("t", { "a": 1, })"#;
         let result = parse_workflow(source);
         println!("Trailing comma in object: {:?}", result);
         // This might fail - trailing commas aren't standard JSON
@@ -721,14 +695,14 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_edge_trailing_comma_array() {
-        let source = r#"workflow(ctx, inputs) { task("t", { "arr": [1, 2,] }) }"#;
+        let source = r#"task("t", { "arr": [1, 2,] })"#;
         let result = parse_workflow(source);
         println!("Trailing comma in array: {:?}", result);
     }
 
     #[test]
     fn test_edge_empty_array() {
-        let source = r#"workflow(ctx, inputs) { task("t", { "arr": [] }) }"#;
+        let source = r#"task("t", { "arr": [] })"#;
         let result = parse_workflow(source).unwrap();
         assert!(result[0]["inputs"]["arr"].is_array());
         assert_eq!(result[0]["inputs"]["arr"].as_array().unwrap().len(), 0);
@@ -736,24 +710,24 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_edge_array_only_variables() {
-        let source = r#"workflow(ctx, inputs) { task("t", { "arr": [var1, var2, var3] }) }"#;
+        let source = r#"task("t", { "arr": [var1, var2, var3] })"#;
         let result = parse_workflow(source).unwrap();
         let arr = &result[0]["inputs"]["arr"];
-        assert_eq!(arr[0], "var1");
-        assert_eq!(arr[1], "var2");
-        assert_eq!(arr[2], "var3");
+        assert_eq!(arr[0], "$var1");
+        assert_eq!(arr[1], "$var2");
+        assert_eq!(arr[2], "$var3");
     }
 
     #[test]
     fn test_edge_deeply_nested_json() {
-        let source = r#"workflow(ctx, inputs) { task("t", { "a": { "b": { "c": { "d": { "e": { "f": "deep" } } } } } }) }"#;
+        let source = r#"task("t", { "a": { "b": { "c": { "d": { "e": { "f": "deep" } } } } } })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["a"]["b"]["c"]["d"]["e"]["f"], "deep");
     }
 
     #[test]
     fn test_edge_scientific_notation() {
-        let source = r#"workflow(ctx, inputs) { task("t", { "n1": 1e10, "n2": 1e-10, "n3": 1.5E+5 }) }"#;
+        let source = r#"task("t", { "n1": 1e10, "n2": 1e-10, "n3": 1.5E+5 })"#;
         let result = parse_workflow(source).unwrap();
         let inputs = &result[0]["inputs"];
         // Check that scientific notation parses correctly
@@ -764,7 +738,7 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_edge_negative_numbers() {
-        let source = r#"workflow(ctx, inputs) { task("t", { "int": -42, "float": -3.14 }) }"#;
+        let source = r#"task("t", { "int": -42, "float": -3.14 })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["int"], -42);
         assert_eq!(result[0]["inputs"]["float"], -3.14);
@@ -772,28 +746,28 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_edge_no_spaces() {
-        let source = r#"workflow(ctx, inputs) { let x=task("t",{}) }"#;
+        let source = r#"let x=task("t",{})"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["assign_to"], "x");
     }
 
     #[test]
     fn test_edge_unicode_task_name() {
-        let source = r#"workflow(ctx, inputs) { task("😀", {}) }"#;
+        let source = r#"task("😀", {})"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["task"], "😀");
     }
 
     #[test]
     fn test_edge_special_chars_in_task_name() {
-        let source = r#"workflow(ctx, inputs) { task("my-task.name/v1:process", {}) }"#;
+        let source = r#"task("my-task.name/v1:process", {})"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["task"], "my-task.name/v1:process");
     }
 
     #[test]
     fn test_edge_escaped_chars_in_strings() {
-        let source = r#"workflow(ctx, inputs) { task("t", { "msg": "He said \"hello\"", "path": "C:\\Users" }) }"#;
+        let source = r#"task("t", { "msg": "He said \"hello\"", "path": "C:\\Users" })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["msg"], r#"He said "hello""#);
         assert_eq!(result[0]["inputs"]["path"], r"C:\Users");
@@ -803,30 +777,28 @@ workflow(ctx, inputs) {
     fn test_edge_variable_shadowing() {
         // Same variable name assigned twice - later should overwrite
         let source = r#"
-workflow(ctx, inputs) {
-  let x = task("t1", {})
-  let x = task("t2", {})
-  task("t3", { "val": x })
-}
-                "#;
+let x = task("t1", {})
+let x = task("t2", {})
+task("t3", { "val": x })
+        "#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result.len(), 3);
         assert_eq!(result[0]["assign_to"], "x");
         assert_eq!(result[1]["assign_to"], "x");
-        assert_eq!(result[2]["inputs"]["val"], "x");
+        assert_eq!(result[2]["inputs"]["val"], "$x");
         // Note: executor should use the last assigned value
     }
 
     #[test]
     fn test_edge_empty_task_name() {
-        let source = r#"workflow(ctx, inputs) { task("", {}) }"#;
+        let source = r#"task("", {})"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["task"], "");
     }
 
     #[test]
     fn test_edge_empty_string_value() {
-        let source = r#"workflow(ctx, inputs) { task("t", { "msg": "" }) }"#;
+        let source = r#"task("t", { "msg": "" })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["msg"], "");
     }
@@ -834,7 +806,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_task_without_inputs() {
         // Task without second argument should work
-        let source = r#"workflow(ctx, inputs) { task("task_name") }"#;
+        let source = r#"task("task_name")"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["task"], "task_name");
         assert!(result[0]["inputs"].is_object());
@@ -844,12 +816,10 @@ workflow(ctx, inputs) {
     fn test_edge_reserved_word_variable_names() {
         // Reserved words from other languages should work as variable names
         let source = r#"
-workflow(ctx, inputs) {
-  let class = task("t1", {})
-  let import = task("t2", {})
-  let return = task("t3", {})
-}
-                "#;
+let class = task("t1", {})
+let import = task("t2", {})
+let return = task("t3", {})
+        "#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result.len(), 3);
         assert_eq!(result[0]["assign_to"], "class");
@@ -859,7 +829,7 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_edge_nested_empty_structures() {
-        let source = r#"workflow(ctx, inputs) { task("t", { "a": {}, "b": [] }) }"#;
+        let source = r#"task("t", { "a": {}, "b": [] })"#;
         let result = parse_workflow(source).unwrap();
         assert!(result[0]["inputs"]["a"].is_object());
         assert!(result[0]["inputs"]["b"].is_array());
@@ -869,7 +839,7 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_edge_mixed_quote_types() {
-        let source = r#"workflow(ctx, inputs) { task("t", { "key1": 'value1', 'key2': "value2" }) }"#;
+        let source = r#"task("t", { "key1": 'value1', 'key2': "value2" })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["key1"], "value1");
         assert_eq!(result[0]["inputs"]["key2"], "value2");
@@ -878,7 +848,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_number_starting_with_dot() {
         // .5 should be valid (same as 0.5)
-        let source = r#"workflow(ctx, inputs) { task("t", { "val": .5 }) }"#;
+        let source = r#"task("t", { "val": .5 })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["val"], 0.5);
     }
@@ -886,7 +856,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_number_ending_with_dot() {
         // 5. should be valid (same as 5.0)
-        let source = r#"workflow(ctx, inputs) { task("t", { "val": 5. }) }"#;
+        let source = r#"task("t", { "val": 5. })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["val"], 5.0);
     }
@@ -894,14 +864,14 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_negative_number_with_dot() {
         // -.5 should work
-        let source = r#"workflow(ctx, inputs) { task("t", { "val": -.5 }) }"#;
+        let source = r#"task("t", { "val": -.5 })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["val"], -0.5);
     }
 
     #[test]
     fn test_edge_very_large_number() {
-        let source = r#"workflow(ctx, inputs) { task("t", { "val": 999999999999999999999 }) }"#;
+        let source = r#"task("t", { "val": 999999999999999999999 })"#;
         let result = parse_workflow(source);
         // Large numbers might overflow or parse differently
         println!("Very large number: {:?}", result.as_ref().map(|v| &v[0]["inputs"]["val"]));
@@ -909,7 +879,7 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_edge_zero_values() {
-        let source = r#"workflow(ctx, inputs) { task("t", { "int": 0, "float": 0.0 }) }"#;
+        let source = r#"task("t", { "int": 0, "float": 0.0 })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["int"], 0);
         assert_eq!(result[0]["inputs"]["float"], 0.0);
@@ -917,7 +887,7 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_edge_whitespace_only_object() {
-        let source = r#"workflow(ctx, inputs) { task("t", {   }) }"#;
+        let source = r#"task("t", {   })"#;
         let result = parse_workflow(source).unwrap();
         assert!(result[0]["inputs"].is_object());
         assert_eq!(result[0]["inputs"].as_object().unwrap().len(), 0);
@@ -925,14 +895,10 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_edge_multiline_json() {
-        let source = r#"
-workflow(ctx, inputs) {
-  task("t", {
-    "key1": "value1",
-    "key2": "value2"
-  })
-}
-                "#;
+        let source = r#"task("t", {
+            "key1": "value1",
+            "key2": "value2"
+        })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["key1"], "value1");
         assert_eq!(result[0]["inputs"]["key2"], "value2");
@@ -941,7 +907,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_consecutive_commas() {
         // Double comma should fail
-        let source = r#"workflow(ctx, inputs) { task("t", { "a": 1,, "b": 2 }) }"#;
+        let source = r#"task("t", { "a": 1,, "b": 2 })"#;
         let result = parse_workflow(source);
         assert!(result.is_err(), "Consecutive commas should be invalid");
     }
@@ -949,39 +915,35 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_unquoted_variable_value() {
         // Variable as value (unquoted identifier) should work
-        let source = r#"workflow(ctx, inputs) { task("t", { "val": my_var }) }"#;
+        let source = r#"task("t", { "val": my_var })"#;
         let result = parse_workflow(source).unwrap();
-        assert_eq!(result[0]["inputs"]["val"], "my_var");
+        assert_eq!(result[0]["inputs"]["val"], "$my_var");
     }
 
     #[test]
     fn test_edge_tabs_as_whitespace() {
-        let source = "workflow(ctx, inputs) { let\tx\t=\ttask(\"t\",\t{}) }";
+        let source = "let\tx\t=\ttask(\"t\",\t{})";
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["assign_to"], "x");
     }
 
     #[test]
     fn test_edge_trailing_comment() {
-        let source = r#"
-workflow(ctx, inputs) {
-  task("t", {}) // trailing comment
-}
-        "#;
+        let source = r#"task("t", {}) // trailing comment"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result.len(), 1);
     }
 
     #[test]
     fn test_edge_string_with_escapes() {
-        let source = r#"workflow(ctx, inputs) { task("t", { "msg": "\n\t\r" }) }"#;
+        let source = r#"task("t", { "msg": "\n\t\r" })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["msg"], "\n\t\r");
     }
 
     #[test]
     fn test_edge_empty_workflow() {
-        let source = "workflow(ctx, inputs) {}";
+        let source = "";
         let result = parse_workflow(source).unwrap();
         assert_eq!(result.len(), 0);
     }
@@ -989,11 +951,9 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_only_comments() {
         let source = r#"
-workflow(ctx, inputs) {
-  // Just comments
-  // No actual code
-}
-                "#;
+// Just comments
+// No actual code
+        "#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result.len(), 0);
     }
@@ -1001,7 +961,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_hash_comments_disallowed() {
         // Hash comments should be explicitly disallowed
-        let source = r#"workflow(ctx, inputs) { task("t1", {}) # this should fail }"#;
+        let source = r#"task("t1", {}) # this should fail"#;
         let result = parse_workflow(source);
         assert!(result.is_err(), "Hash comments should not be allowed");
 
@@ -1012,7 +972,7 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_edge_windows_line_endings() {
-        let source = "workflow(ctx, inputs) {\r\n  task(\"t1\", {})\r\n  task(\"t2\", {})\r\n}";
+        let source = "task(\"t1\", {})\r\ntask(\"t2\", {})";
         let result = parse_workflow(source).unwrap();
         assert_eq!(result.len(), 2);
     }
@@ -1020,7 +980,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_multiple_statements_one_line() {
         // This should fail - statements must be separated by newlines
-        let source = r#"workflow(ctx, inputs) { let x = task("t1", {}) let y = task("t2", {}) }"#;
+        let source = r#"let x = task("t1", {}) let y = task("t2", {})"#;
         let result = parse_workflow(source);
         assert!(result.is_err(), "Multiple statements on one line should fail");
     }
@@ -1028,7 +988,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_semicolons_disallowed() {
         // Semicolons should be explicitly disallowed (unlike JS)
-        let source = r#"workflow(ctx, inputs) { task("t1", {}); }"#;
+        let source = r#"task("t1", {});"#;
         let result = parse_workflow(source);
         assert!(result.is_err(), "Semicolons should not be allowed");
 
@@ -1040,7 +1000,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_multiple_statements_with_semicolons() {
         // Multiple statements separated by semicolons should fail
-        let source = r#"workflow(ctx, inputs) { task("t1", {}); task("t2", {}) }"#;
+        let source = r#"task("t1", {}); task("t2", {})"#;
         let result = parse_workflow(source);
         assert!(result.is_err(), "Semicolon-separated statements should fail");
     }
@@ -1048,7 +1008,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_hex_numbers() {
         // Hex numbers - now supported!
-        let source = r#"workflow(ctx, inputs) { task("t", { "val": 0x1234, "color": 0xFF00FF }) }"#;
+        let source = r#"task("t", { "val": 0x1234, "color": 0xFF00FF })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["val"], 0x1234);  // 4660
         assert_eq!(result[0]["inputs"]["color"], 0xFF00FF);  // 16711935
@@ -1057,7 +1017,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_binary_numbers() {
         // Binary numbers - now supported!
-        let source = r#"workflow(ctx, inputs) { task("t", { "flags": 0b1010, "mask": 0b11110000 }) }"#;
+        let source = r#"task("t", { "flags": 0b1010, "mask": 0b11110000 })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["flags"], 0b1010);  // 10
         assert_eq!(result[0]["inputs"]["mask"], 0b11110000);  // 240
@@ -1066,7 +1026,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_numbers_with_underscores() {
         // Numbers with underscores - now supported for readability!
-        let source = r#"workflow(ctx, inputs) { task("t", { "big": 1_000_000, "pi": 3.14_15_92 }) }"#;
+        let source = r#"task("t", { "big": 1_000_000, "pi": 3.14_15_92 })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["big"], 1_000_000);
         assert_eq!(result[0]["inputs"]["pi"], 3.141592);
@@ -1075,7 +1035,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_hex_with_underscores() {
         // Combine hex and underscores
-        let source = r#"workflow(ctx, inputs) { task("t", { "addr": 0xDEAD_BEEF }) }"#;
+        let source = r#"task("t", { "addr": 0xDEAD_BEEF })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["addr"], 3735928559i64);
     }
@@ -1083,7 +1043,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_negative_hex() {
         // Negative hex numbers
-        let source = r#"workflow(ctx, inputs) { task("t", { "val": -0xFF }) }"#;
+        let source = r#"task("t", { "val": -0xFF })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["val"], -255);
     }
@@ -1091,7 +1051,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_unquoted_keys() {
         // Unquoted keys (JSON5 style)
-        let source = r#"workflow(ctx, inputs) { task("t", { name: "Alice", age: 30, active: true }) }"#;
+        let source = r#"task("t", { name: "Alice", age: 30, active: true })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["name"], "Alice");
         assert_eq!(result[0]["inputs"]["age"], 30);
@@ -1101,7 +1061,7 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_mixed_quoted_unquoted_keys() {
         // Mix quoted and unquoted keys
-        let source = r#"workflow(ctx, inputs) { task("t", { "user-id": 123, name: "Alice", "is-admin": false }) }"#;
+        let source = r#"task("t", { "user-id": 123, name: "Alice", "is-admin": false })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["user-id"], 123);
         assert_eq!(result[0]["inputs"]["name"], "Alice");
@@ -1111,16 +1071,16 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_unquoted_keys_with_variables() {
         // Unquoted keys with variable values
-        let source = r#"workflow(ctx, inputs) { task("t", { userId: user_id, config: my_config }) }"#;
+        let source = r#"task("t", { userId: user_id, config: my_config })"#;
         let result = parse_workflow(source).unwrap();
-        assert_eq!(result[0]["inputs"]["userId"], "user_id");
-        assert_eq!(result[0]["inputs"]["config"], "my_config");
+        assert_eq!(result[0]["inputs"]["userId"], "$user_id");
+        assert_eq!(result[0]["inputs"]["config"], "$my_config");
     }
 
     #[test]
     fn test_edge_nested_unquoted_keys() {
         // Nested objects with unquoted keys
-        let source = r#"workflow(ctx, inputs) { task("t", { user: { name: "Alice", age: 30 }, count: 5 }) }"#;
+        let source = r#"task("t", { user: { name: "Alice", age: 30 }, count: 5 })"#;
         let result = parse_workflow(source).unwrap();
         assert_eq!(result[0]["inputs"]["user"]["name"], "Alice");
         assert_eq!(result[0]["inputs"]["user"]["age"], 30);
@@ -1135,104 +1095,5 @@ workflow(ctx, inputs) {
         assert!(result.is_ok(), "Showcase workflow failed to parse: {:?}", result.err());
         let steps = result.unwrap();
         assert!(steps.len() > 10, "Expected at least 10 steps in showcase");
-    }
-
-    #[test]
-    fn test_inputs_member_access() {
-        // Test inputs.fieldName syntax (no $ prefix)
-        let source = r#"
-workflow(ctx, inputs) {
-  await task("process", { userId: inputs.userId, orderId: inputs.orderId })
-}
-        "#;
-        let result = parse_workflow(source).unwrap();
-        assert_eq!(result.len(), 1);
-
-        // Member access should NOT have $ prefix (unlike bare identifiers)
-        assert_eq!(result[0]["inputs"]["userId"], "inputs.userId");
-        assert_eq!(result[0]["inputs"]["orderId"], "inputs.orderId");
-    }
-
-    #[test]
-    fn test_ctx_member_access() {
-        // Test ctx.workflowId syntax
-        let source = r#"
-workflow(ctx, inputs) {
-  await task("log", { workflowId: ctx.workflowId })
-}
-        "#;
-        let result = parse_workflow(source).unwrap();
-        assert_eq!(result.len(), 1);
-
-        // ctx.workflowId should be stored as-is
-        assert_eq!(result[0]["inputs"]["workflowId"], "ctx.workflowId");
-    }
-
-    #[test]
-    fn test_mixed_member_access_and_variables() {
-        // Test mixing inputs.*, ctx.*, and bare variable references
-        let source = r#"
-workflow(ctx, inputs) {
-  let result = await task("validate", { userId: inputs.userId })
-  await task("process", {
-    validationResult: result,
-    workflow: ctx.workflowId,
-    order: inputs.orderId
-  })
-}
-        "#;
-        let result = parse_workflow(source).unwrap();
-        assert_eq!(result.len(), 2);
-
-        // First statement: task using inputs.userId
-        assert_eq!(result[0]["inputs"]["userId"], "inputs.userId");  // Member access
-
-        // Second statement: mixed references
-        assert_eq!(result[1]["inputs"]["validationResult"], "result");  // Bare variable reference
-        assert_eq!(result[1]["inputs"]["workflow"], "ctx.workflowId");  // Member access
-        assert_eq!(result[1]["inputs"]["order"], "inputs.orderId");  // Member access
-    }
-
-    #[test]
-    fn test_await_sleep() {
-        // Test await sleep() syntax
-        let source = r#"
-workflow(ctx, inputs) {
-  await task("start", {})
-  await sleep(5)
-  await task("finish", {})
-}
-        "#;
-        let result = parse_workflow(source).unwrap();
-        assert_eq!(result.len(), 3);
-
-        // First task
-        assert_eq!(result[0]["type"], "task");
-        assert_eq!(result[0]["await"], true);
-
-        // Sleep with await
-        assert_eq!(result[1]["type"], "sleep");
-        assert_eq!(result[1]["duration"], 5);
-        assert_eq!(result[1]["await"], true);
-
-        // Last task
-        assert_eq!(result[2]["type"], "task");
-        assert_eq!(result[2]["await"], true);
-    }
-
-    #[test]
-    fn test_sleep_without_await() {
-        // Test that sleep() without await has await=false
-        let source = r#"
-workflow(ctx, inputs) {
-  sleep(10)
-}
-        "#;
-        let result = parse_workflow(source).unwrap();
-        assert_eq!(result.len(), 1);
-
-        assert_eq!(result[0]["type"], "sleep");
-        assert_eq!(result[0]["duration"], 10);
-        assert_eq!(result[0]["await"], false);
     }
 }

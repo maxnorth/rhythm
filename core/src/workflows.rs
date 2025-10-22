@@ -7,8 +7,9 @@ use crate::db;
 use crate::interpreter;
 use crate::types::{ExecutionType, ExecutionStatus};
 
-// Re-export executor functions for convenience
+// Re-export interpreter functions for convenience
 pub use crate::interpreter::executor::{execute_workflow_step, StepResult};
+pub use crate::interpreter::parser::parse_workflow;
 
 /// Represents a workflow file from a language adapter
 #[derive(Debug, Clone)]
@@ -216,5 +217,296 @@ mod tests {
 
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("Failed to parse workflow"));
+    }
+
+    // E2E Tests for various workflow syntax patterns
+
+    #[tokio::test]
+    async fn test_workflow_basic_sequential() {
+        let source = r#"
+await task("task1", { "step": 1 })
+await task("task2", { "step": 2 })
+await task("task3", { "step": 3 })
+        "#;
+
+        let workflow = WorkflowFile {
+            name: "basic_sequential".to_string(),
+            source: source.to_string(),
+            file_path: "test.flow".to_string(),
+        };
+
+        let result = register_workflows(vec![workflow]).await;
+        assert!(result.is_ok(), "Failed to parse basic sequential workflow");
+
+        // Verify the parsed structure
+        let parsed = parse_workflow(source).unwrap();
+        assert_eq!(parsed.len(), 3, "Expected 3 statements");
+
+        for (i, step) in parsed.iter().enumerate() {
+            assert_eq!(step["type"], "task");
+            assert_eq!(step["await"], true);
+            assert_eq!(step["inputs"]["step"], i + 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_workflow_fire_and_forget() {
+        let source = r#"
+task("task1", { "async": true })
+task("task2", { "async": true })
+task("task3", { "async": true })
+        "#;
+
+        let workflow = WorkflowFile {
+            name: "fire_and_forget".to_string(),
+            source: source.to_string(),
+            file_path: "test.flow".to_string(),
+        };
+
+        let result = register_workflows(vec![workflow]).await;
+        assert!(result.is_ok(), "Failed to parse fire-and-forget workflow");
+
+        let parsed = parse_workflow(source).unwrap();
+        assert_eq!(parsed.len(), 3);
+
+        for step in parsed.iter() {
+            assert_eq!(step["type"], "task");
+            assert_eq!(step["await"], false, "Non-awaited tasks should have await=false");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_workflow_mixed_await() {
+        let source = r#"
+await task("init", { "step": 1 })
+task("background1", { "async": true })
+task("background2", { "async": true })
+await task("checkpoint", { "step": 2 })
+task("background3", { "async": true })
+await task("finalize", { "step": 3 })
+        "#;
+
+        let parsed = parse_workflow(source).unwrap();
+        assert_eq!(parsed.len(), 6);
+
+        // Check await patterns
+        assert_eq!(parsed[0]["await"], true);
+        assert_eq!(parsed[1]["await"], false);
+        assert_eq!(parsed[2]["await"], false);
+        assert_eq!(parsed[3]["await"], true);
+        assert_eq!(parsed[4]["await"], false);
+        assert_eq!(parsed[5]["await"], true);
+    }
+
+    #[tokio::test]
+    async fn test_workflow_variables_simple() {
+        let source = r#"
+let user_id = await task("create_user", { "name": "Alice" })
+await task("send_email", { "user_id": user_id, "subject": "Welcome" })
+        "#;
+
+        let parsed = parse_workflow(source).unwrap();
+        assert_eq!(parsed.len(), 2);
+
+        // First task: variable assignment
+        assert_eq!(parsed[0]["type"], "task");
+        assert_eq!(parsed[0]["task"], "create_user");
+        assert_eq!(parsed[0]["assign_to"], "user_id");
+        assert_eq!(parsed[0]["await"], true);
+
+        // Second task: uses variable
+        assert_eq!(parsed[1]["type"], "task");
+        assert_eq!(parsed[1]["task"], "send_email");
+        assert_eq!(parsed[1]["inputs"]["user_id"], "$user_id", "Variable reference should be $user_id");
+        assert_eq!(parsed[1]["inputs"]["subject"], "Welcome");
+    }
+
+    #[tokio::test]
+    async fn test_workflow_variables_multiple() {
+        let source = r#"
+let order_id = await task("create_order", { "amount": 100, "currency": "USD" })
+let payment_id = await task("process_payment", { "order_id": order_id, "method": "card" })
+let receipt_id = await task("generate_receipt", { "order_id": order_id, "payment_id": payment_id })
+await task("send_confirmation", { "order": order_id, "payment": payment_id, "receipt": receipt_id })
+        "#;
+
+        let parsed = parse_workflow(source).unwrap();
+        assert_eq!(parsed.len(), 4);
+
+        // Check variable assignments
+        assert_eq!(parsed[0]["assign_to"], "order_id");
+        assert_eq!(parsed[1]["assign_to"], "payment_id");
+        assert_eq!(parsed[2]["assign_to"], "receipt_id");
+
+        // Check variable usage in second task
+        assert_eq!(parsed[1]["inputs"]["order_id"], "$order_id");
+
+        // Check multiple variables in third task
+        assert_eq!(parsed[2]["inputs"]["order_id"], "$order_id");
+        assert_eq!(parsed[2]["inputs"]["payment_id"], "$payment_id");
+
+        // Check all three variables in final task
+        assert_eq!(parsed[3]["inputs"]["order"], "$order_id");
+        assert_eq!(parsed[3]["inputs"]["payment"], "$payment_id");
+        assert_eq!(parsed[3]["inputs"]["receipt"], "$receipt_id");
+    }
+
+    #[tokio::test]
+    async fn test_workflow_variables_fire_and_forget() {
+        let source = r#"
+let result1 = task("background_job1", { "priority": "low" })
+let result2 = task("background_job2", { "priority": "low" })
+await task("final_task", { "msg": "done" })
+        "#;
+
+        let parsed = parse_workflow(source).unwrap();
+        assert_eq!(parsed.len(), 3);
+
+        // Fire-and-forget with assignment
+        assert_eq!(parsed[0]["assign_to"], "result1");
+        assert_eq!(parsed[0]["await"], false);
+
+        assert_eq!(parsed[1]["assign_to"], "result2");
+        assert_eq!(parsed[1]["await"], false);
+
+        assert_eq!(parsed[2]["await"], true);
+    }
+
+    #[tokio::test]
+    async fn test_workflow_json_all_types() {
+        let source = r#"
+await task("test_types", {
+    "string_val": "hello world",
+    "number_int": 42,
+    "number_float": 3.14159,
+    "bool_true": true,
+    "bool_false": false,
+    "null_val": null,
+    "array_val": [1, 2, "three", true, null],
+    "object_val": {
+        "nested": "value",
+        "count": 10
+    }
+})
+        "#;
+
+        let parsed = parse_workflow(source).unwrap();
+        assert_eq!(parsed.len(), 1);
+
+        let inputs = &parsed[0]["inputs"];
+
+        // Test all JSON types
+        assert_eq!(inputs["string_val"], "hello world");
+        assert_eq!(inputs["number_int"], 42);
+        assert_eq!(inputs["number_float"], 3.14159);
+        assert_eq!(inputs["bool_true"], true);
+        assert_eq!(inputs["bool_false"], false);
+        assert_eq!(inputs["null_val"], serde_json::Value::Null);
+
+        // Test array
+        let array = &inputs["array_val"];
+        assert!(array.is_array());
+        assert_eq!(array[0], 1);
+        assert_eq!(array[1], 2);
+        assert_eq!(array[2], "three");
+        assert_eq!(array[3], true);
+        assert_eq!(array[4], serde_json::Value::Null);
+
+        // Test nested object
+        let obj = &inputs["object_val"];
+        assert!(obj.is_object());
+        assert_eq!(obj["nested"], "value");
+        assert_eq!(obj["count"], 10);
+    }
+
+    #[tokio::test]
+    async fn test_workflow_variables_in_complex_json() {
+        let source = r#"
+let user_id = await task("get_user", { "email": "test@example.com" })
+let config = await task("get_config", { "env": "production" })
+
+await task("process", {
+    "users": [user_id, "user2", "user3"],
+    "settings": {
+        "primary_user": user_id,
+        "config": config,
+        "metadata": {
+            "created_by": user_id
+        }
+    },
+    "mixed": [1, user_id, { "nested": config }, true]
+})
+        "#;
+
+        let parsed = parse_workflow(source).unwrap();
+        assert_eq!(parsed.len(), 3);
+
+        let inputs = &parsed[2]["inputs"];
+
+        // Check variable in array
+        assert_eq!(inputs["users"][0], "$user_id");
+        assert_eq!(inputs["users"][1], "user2");
+        assert_eq!(inputs["users"][2], "user3");
+
+        // Check variables in nested objects
+        assert_eq!(inputs["settings"]["primary_user"], "$user_id");
+        assert_eq!(inputs["settings"]["config"], "$config");
+        assert_eq!(inputs["settings"]["metadata"]["created_by"], "$user_id");
+
+        // Check variables in mixed array with objects
+        assert_eq!(inputs["mixed"][0], 1);
+        assert_eq!(inputs["mixed"][1], "$user_id");
+        assert_eq!(inputs["mixed"][2]["nested"], "$config");
+        assert_eq!(inputs["mixed"][3], true);
+    }
+
+    #[tokio::test]
+    async fn test_workflow_comments_and_whitespace() {
+        let source = r#"
+# This is a comment
+await task("task1", { "step": 1 })
+
+# Another comment
+# Multiple comment lines
+
+await task("task2", { "step": 2 })
+        "#;
+
+        let parsed = parse_workflow(source).unwrap();
+        assert_eq!(parsed.len(), 2, "Comments should be ignored");
+        assert_eq!(parsed[0]["task"], "task1");
+        assert_eq!(parsed[1]["task"], "task2");
+    }
+
+    #[tokio::test]
+    async fn test_workflow_single_quotes() {
+        let source = r#"
+await task('task_with_single_quotes', { 'key': 'value' })
+        "#;
+
+        let parsed = parse_workflow(source).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0]["task"], "task_with_single_quotes");
+        assert_eq!(parsed[0]["inputs"]["key"], "value");
+    }
+
+    #[tokio::test]
+    async fn test_workflow_variable_naming_conventions() {
+        let source = r#"
+let snake_case_var = await task("test1", {})
+let camelCaseVar = await task("test2", {})
+let _private_var = await task("test3", {})
+let var123 = await task("test4", {})
+let _123mixed = await task("test5", {})
+        "#;
+
+        let parsed = parse_workflow(source).unwrap();
+        assert_eq!(parsed.len(), 5);
+
+        assert_eq!(parsed[0]["assign_to"], "snake_case_var");
+        assert_eq!(parsed[1]["assign_to"], "camelCaseVar");
+        assert_eq!(parsed[2]["assign_to"], "_private_var");
+        assert_eq!(parsed[3]["assign_to"], "var123");
+        assert_eq!(parsed[4]["assign_to"], "_123mixed");
     }
 }

@@ -1,0 +1,18 @@
+// Test: Variables used in nested JSON structures
+// Expected: Variable resolution works in arrays and nested objects
+workflow(ctx, inputs) {
+  let user_id = await task("get_user", { "email": "test@example.com" })
+  let config = await task("get_config", { "env": "production" })
+
+  await task("process", {
+      "users": [user_id, "user2", "user3"],
+      "settings": {
+          "primary_user": user_id,
+          "config": config,
+          "metadata": {
+              "created_by": user_id
+          }
+      },
+      "mixed": [1, user_id, { "nested": config }, true]
+  })
+}

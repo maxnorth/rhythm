@@ -1,0 +1,7 @@
+// Test: Fire-and-forget tasks (no await)
+// Expected: All tasks are queued immediately without waiting
+workflow(ctx, inputs) {
+  task("task1", { "async": true })
+  task("task2", { "async": true })
+  task("task3", { "async": true })
+}
