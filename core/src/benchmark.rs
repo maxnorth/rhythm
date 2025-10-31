@@ -232,11 +232,17 @@ async fn register_benchmark_workflow(task_count: usize, payload_size: usize) -> 
     let mut workflow_lines = Vec::new();
     for _ in 0..task_count {
         workflow_lines.push(format!(
-            r#"await task("bench_task", {{ "payload_size": {} }})"#,
+            r#"    await task("bench_task", {{ "payload_size": {} }})"#,
             payload_size
         ));
     }
-    let workflow_source = workflow_lines.join("\n");
+    let task_calls = workflow_lines.join("\n");
+
+    // Wrap in workflow(ctx, inputs) { } syntax
+    let workflow_source = format!(
+        "workflow(ctx, inputs) {{\n{}\n}}",
+        task_calls
+    );
 
     println!("📝 Registering benchmark workflow ({} tasks)...", task_count);
 

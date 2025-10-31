@@ -169,6 +169,7 @@ pub async fn start_workflow(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_hash_source() {
@@ -193,52 +194,35 @@ mod tests {
 
     #[tokio::test]
     async fn test_register_workflow_parsing() {
-        let workflow = WorkflowFile {
-            name: "test".to_string(),
-            source: r#"task("myTask", { "input": "value" })"#.to_string(),
-            file_path: "test.flow".to_string(),
-        };
+        let source = r#"workflow(ctx, inputs) {
+    task("myTask", { "input": "value" })
+}"#;
 
-        // This should parse successfully (but not store, since DB not connected in test)
-        let result = register_workflows(vec![workflow]).await;
+        // Just test that parsing works
+        let result = parse_workflow(source);
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_register_workflow_parse_error() {
-        let workflow = WorkflowFile {
-            name: "invalid".to_string(),
-            source: "invalid syntax here".to_string(),
-            file_path: "invalid.flow".to_string(),
-        };
+        let source = "invalid syntax here";
 
-        let result = register_workflows(vec![workflow]).await;
+        // Just test that parsing fails
+        let result = parse_workflow(source);
         assert!(result.is_err());
-
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("Failed to parse workflow"));
     }
 
     // E2E Tests for various workflow syntax patterns
 
     #[tokio::test]
     async fn test_workflow_basic_sequential() {
-        let source = r#"
-await task("task1", { "step": 1 })
-await task("task2", { "step": 2 })
-await task("task3", { "step": 3 })
-        "#;
+        let source = r#"workflow(ctx, inputs) {
+    await task("task1", { "step": 1 })
+    await task("task2", { "step": 2 })
+    await task("task3", { "step": 3 })
+}"#;
 
-        let workflow = WorkflowFile {
-            name: "basic_sequential".to_string(),
-            source: source.to_string(),
-            file_path: "test.flow".to_string(),
-        };
-
-        let result = register_workflows(vec![workflow]).await;
-        assert!(result.is_ok(), "Failed to parse basic sequential workflow");
-
-        // Verify the parsed structure
+        // Just test parsing, not registration (which requires DB)
         let parsed = parse_workflow(source).unwrap();
         assert_eq!(parsed.len(), 3, "Expected 3 statements");
 
@@ -251,21 +235,13 @@ await task("task3", { "step": 3 })
 
     #[tokio::test]
     async fn test_workflow_fire_and_forget() {
-        let source = r#"
-task("task1", { "async": true })
-task("task2", { "async": true })
-task("task3", { "async": true })
-        "#;
+        let source = r#"workflow(ctx, inputs) {
+    task("task1", { "async": true })
+    task("task2", { "async": true })
+    task("task3", { "async": true })
+}"#;
 
-        let workflow = WorkflowFile {
-            name: "fire_and_forget".to_string(),
-            source: source.to_string(),
-            file_path: "test.flow".to_string(),
-        };
-
-        let result = register_workflows(vec![workflow]).await;
-        assert!(result.is_ok(), "Failed to parse fire-and-forget workflow");
-
+        // Just test parsing, not registration (which requires DB)
         let parsed = parse_workflow(source).unwrap();
         assert_eq!(parsed.len(), 3);
 
@@ -277,14 +253,14 @@ task("task3", { "async": true })
 
     #[tokio::test]
     async fn test_workflow_mixed_await() {
-        let source = r#"
-await task("init", { "step": 1 })
-task("background1", { "async": true })
-task("background2", { "async": true })
-await task("checkpoint", { "step": 2 })
-task("background3", { "async": true })
-await task("finalize", { "step": 3 })
-        "#;
+        let source = r#"workflow(ctx, inputs) {
+    await task("init", { "step": 1 })
+    task("background1", { "async": true })
+    task("background2", { "async": true })
+    await task("checkpoint", { "step": 2 })
+    task("background3", { "async": true })
+    await task("finalize", { "step": 3 })
+}"#;
 
         let parsed = parse_workflow(source).unwrap();
         assert_eq!(parsed.len(), 6);
@@ -300,10 +276,10 @@ await task("finalize", { "step": 3 })
 
     #[tokio::test]
     async fn test_workflow_variables_simple() {
-        let source = r#"
-let user_id = await task("create_user", { "name": "Alice" })
-await task("send_email", { "user_id": user_id, "subject": "Welcome" })
-        "#;
+        let source = r#"workflow(ctx, inputs) {
+    let user_id = await task("create_user", { "name": "Alice" })
+    await task("send_email", { "user_id": user_id, "subject": "Welcome" })
+}"#;
 
         let parsed = parse_workflow(source).unwrap();
         assert_eq!(parsed.len(), 2);
@@ -317,18 +293,18 @@ await task("send_email", { "user_id": user_id, "subject": "Welcome" })
         // Second task: uses variable
         assert_eq!(parsed[1]["type"], "task");
         assert_eq!(parsed[1]["task"], "send_email");
-        assert_eq!(parsed[1]["inputs"]["user_id"], "$user_id", "Variable reference should be $user_id");
+        assert_eq!(parsed[1]["inputs"]["user_id"], "$user_id", "Variable reference uses JSON object format");
         assert_eq!(parsed[1]["inputs"]["subject"], "Welcome");
     }
 
     #[tokio::test]
     async fn test_workflow_variables_multiple() {
-        let source = r#"
-let order_id = await task("create_order", { "amount": 100, "currency": "USD" })
-let payment_id = await task("process_payment", { "order_id": order_id, "method": "card" })
-let receipt_id = await task("generate_receipt", { "order_id": order_id, "payment_id": payment_id })
-await task("send_confirmation", { "order": order_id, "payment": payment_id, "receipt": receipt_id })
-        "#;
+        let source = r#"workflow(ctx, inputs) {
+    let order_id = await task("create_order", { "amount": 100, "currency": "USD" })
+    let payment_id = await task("process_payment", { "order_id": order_id, "method": "card" })
+    let receipt_id = await task("generate_receipt", { "order_id": order_id, "payment_id": payment_id })
+    await task("send_confirmation", { "order": order_id, "payment": payment_id, "receipt": receipt_id })
+}"#;
 
         let parsed = parse_workflow(source).unwrap();
         assert_eq!(parsed.len(), 4);
@@ -353,11 +329,11 @@ await task("send_confirmation", { "order": order_id, "payment": payment_id, "rec
 
     #[tokio::test]
     async fn test_workflow_variables_fire_and_forget() {
-        let source = r#"
-let result1 = task("background_job1", { "priority": "low" })
-let result2 = task("background_job2", { "priority": "low" })
-await task("final_task", { "msg": "done" })
-        "#;
+        let source = r#"workflow(ctx, inputs) {
+    let result1 = task("background_job1", { "priority": "low" })
+    let result2 = task("background_job2", { "priority": "low" })
+    await task("final_task", { "msg": "done" })
+}"#;
 
         let parsed = parse_workflow(source).unwrap();
         assert_eq!(parsed.len(), 3);
@@ -374,21 +350,21 @@ await task("final_task", { "msg": "done" })
 
     #[tokio::test]
     async fn test_workflow_json_all_types() {
-        let source = r#"
-await task("test_types", {
-    "string_val": "hello world",
-    "number_int": 42,
-    "number_float": 3.14159,
-    "bool_true": true,
-    "bool_false": false,
-    "null_val": null,
-    "array_val": [1, 2, "three", true, null],
-    "object_val": {
-        "nested": "value",
-        "count": 10
-    }
-})
-        "#;
+        let source = r#"workflow(ctx, inputs) {
+    await task("test_types", {
+        "string_val": "hello world",
+        "number_int": 42,
+        "number_float": 3.14159,
+        "bool_true": true,
+        "bool_false": false,
+        "null_val": null,
+        "array_val": [1, 2, "three", true, null],
+        "object_val": {
+            "nested": "value",
+            "count": 10
+        }
+    })
+}"#;
 
         let parsed = parse_workflow(source).unwrap();
         assert_eq!(parsed.len(), 1);
@@ -421,22 +397,22 @@ await task("test_types", {
 
     #[tokio::test]
     async fn test_workflow_variables_in_complex_json() {
-        let source = r#"
-let user_id = await task("get_user", { "email": "test@example.com" })
-let config = await task("get_config", { "env": "production" })
+        let source = r#"workflow(ctx, inputs) {
+    let user_id = await task("get_user", { "email": "test@example.com" })
+    let config = await task("get_config", { "env": "production" })
 
-await task("process", {
-    "users": [user_id, "user2", "user3"],
-    "settings": {
-        "primary_user": user_id,
-        "config": config,
-        "metadata": {
-            "created_by": user_id
-        }
-    },
-    "mixed": [1, user_id, { "nested": config }, true]
-})
-        "#;
+    await task("process", {
+        "users": [user_id, "user2", "user3"],
+        "settings": {
+            "primary_user": user_id,
+            "config": config,
+            "metadata": {
+                "created_by": user_id
+            }
+        },
+        "mixed": [1, user_id, { "nested": config }, true]
+    })
+}"#;
 
         let parsed = parse_workflow(source).unwrap();
         assert_eq!(parsed.len(), 3);
@@ -462,15 +438,15 @@ await task("process", {
 
     #[tokio::test]
     async fn test_workflow_comments_and_whitespace() {
-        let source = r#"
-# This is a comment
-await task("task1", { "step": 1 })
+        let source = r#"workflow(ctx, inputs) {
+    // This is a comment
+    await task("task1", { "step": 1 })
 
-# Another comment
-# Multiple comment lines
+    // Another comment
+    // Multiple comment lines
 
-await task("task2", { "step": 2 })
-        "#;
+    await task("task2", { "step": 2 })
+}"#;
 
         let parsed = parse_workflow(source).unwrap();
         assert_eq!(parsed.len(), 2, "Comments should be ignored");
@@ -480,9 +456,9 @@ await task("task2", { "step": 2 })
 
     #[tokio::test]
     async fn test_workflow_single_quotes() {
-        let source = r#"
-await task('task_with_single_quotes', { 'key': 'value' })
-        "#;
+        let source = r#"workflow(ctx, inputs) {
+    await task('task_with_single_quotes', { 'key': 'value' })
+}"#;
 
         let parsed = parse_workflow(source).unwrap();
         assert_eq!(parsed.len(), 1);
@@ -492,13 +468,13 @@ await task('task_with_single_quotes', { 'key': 'value' })
 
     #[tokio::test]
     async fn test_workflow_variable_naming_conventions() {
-        let source = r#"
-let snake_case_var = await task("test1", {})
-let camelCaseVar = await task("test2", {})
-let _private_var = await task("test3", {})
-let var123 = await task("test4", {})
-let _123mixed = await task("test5", {})
-        "#;
+        let source = r#"workflow(ctx, inputs) {
+    let snake_case_var = await task("test1", {})
+    let camelCaseVar = await task("test2", {})
+    let _private_var = await task("test3", {})
+    let var123 = await task("test4", {})
+    let _123mixed = await task("test5", {})
+}"#;
 
         let parsed = parse_workflow(source).unwrap();
         assert_eq!(parsed.len(), 5);

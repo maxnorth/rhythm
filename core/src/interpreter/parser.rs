@@ -275,7 +275,7 @@ fn parse_string(pair: pest::iterators::Pair<Rule>) -> Result<String, ParseError>
 
     // Handle escape sequences
     let mut result = String::with_capacity(content.len());
-    let mut chars = content.chars();
+    let mut chars = content.chars().peekable();
 
     while let Some(ch) = chars.next() {
         if ch == '\\' {
@@ -295,6 +295,10 @@ fn parse_string(pair: pest::iterators::Pair<Rule>) -> Result<String, ParseError>
                 // Trailing backslash - just add it
                 result.push('\\');
             }
+        } else if ch == '$' && chars.peek() == Some(&'$') {
+            // Escape sequence: $$ -> $ (literal dollar sign for strings like "$$99.99" -> "$99.99")
+            chars.next(); // consume the second $
+            result.push('$');
         } else {
             result.push(ch);
         }
@@ -423,9 +427,11 @@ fn parse_json_value(pair: pest::iterators::Pair<Rule>, line: usize) -> Result<Js
             Ok(JsonValue::String(member_str.to_string()))
         }
         Rule::identifier => {
-            // This is a variable reference - use as-is (JavaScript-like syntax, no $ prefix)
+            // This is a variable reference - add $ prefix in JSON to distinguish from literal strings
+            // In .flow files, users write: task("foo", { "key": myVar })
+            // Parser outputs JSON: { "key": "$myVar" } so executor knows it's a variable
             let var_name = inner.as_str();
-            Ok(JsonValue::String(var_name.to_string()))
+            Ok(JsonValue::String(format!("${}", var_name)))
         }
         _ => Err(ParseError::InvalidJson {
             line,
@@ -666,8 +672,8 @@ workflow(ctx, inputs) {
         assert_eq!(result[0]["inputs"]["amount"], 100);
 
         // Second task uses order_id as a variable reference
-        // Parser stores bare identifiers as-is (JavaScript-like syntax, no $ prefix)
-        assert_eq!(result[1]["inputs"]["order_id"], "order_id");
+        // Parser adds $ prefix to distinguish from literal strings
+        assert_eq!(result[1]["inputs"]["order_id"], "$order_id");
         assert_eq!(result[1]["inputs"]["amount"], 50);
     }
 
@@ -700,7 +706,7 @@ workflow(ctx, inputs) {
         assert_eq!(inputs["bool_true"], true);
         assert_eq!(inputs["bool_false"], false);
         assert_eq!(inputs["null_val"], JsonValue::Null);
-        assert_eq!(inputs["var_ref"], "my_variable");
+        assert_eq!(inputs["var_ref"], "$my_variable");
         assert_eq!(inputs["nested"]["key"], "value");
         assert_eq!(inputs["array"][0], 1);
         assert_eq!(inputs["array"][1], 2);
@@ -739,9 +745,9 @@ workflow(ctx, inputs) {
         let source = r#"workflow(ctx, inputs) { task("t", { "arr": [var1, var2, var3] }) }"#;
         let result = parse_workflow(source).unwrap();
         let arr = &result[0]["inputs"]["arr"];
-        assert_eq!(arr[0], "var1");
-        assert_eq!(arr[1], "var2");
-        assert_eq!(arr[2], "var3");
+        assert_eq!(arr[0], "$var1");
+        assert_eq!(arr[1], "$var2");
+        assert_eq!(arr[2], "$var3");
     }
 
     #[test]
@@ -813,7 +819,7 @@ workflow(ctx, inputs) {
         assert_eq!(result.len(), 3);
         assert_eq!(result[0]["assign_to"], "x");
         assert_eq!(result[1]["assign_to"], "x");
-        assert_eq!(result[2]["inputs"]["val"], "x");
+        assert_eq!(result[2]["inputs"]["val"], "$x");
         // Note: executor should use the last assigned value
     }
 
@@ -951,7 +957,7 @@ workflow(ctx, inputs) {
         // Variable as value (unquoted identifier) should work
         let source = r#"workflow(ctx, inputs) { task("t", { "val": my_var }) }"#;
         let result = parse_workflow(source).unwrap();
-        assert_eq!(result[0]["inputs"]["val"], "my_var");
+        assert_eq!(result[0]["inputs"]["val"], "$my_var");
     }
 
     #[test]
@@ -1113,8 +1119,8 @@ workflow(ctx, inputs) {
         // Unquoted keys with variable values
         let source = r#"workflow(ctx, inputs) { task("t", { userId: user_id, config: my_config }) }"#;
         let result = parse_workflow(source).unwrap();
-        assert_eq!(result[0]["inputs"]["userId"], "user_id");
-        assert_eq!(result[0]["inputs"]["config"], "my_config");
+        assert_eq!(result[0]["inputs"]["userId"], "$user_id");
+        assert_eq!(result[0]["inputs"]["config"], "$my_config");
     }
 
     #[test]
@@ -1188,7 +1194,7 @@ workflow(ctx, inputs) {
         assert_eq!(result[0]["inputs"]["userId"], "inputs.userId");  // Member access
 
         // Second statement: mixed references
-        assert_eq!(result[1]["inputs"]["validationResult"], "result");  // Bare variable reference
+        assert_eq!(result[1]["inputs"]["validationResult"], "$result");  // Bare variable reference
         assert_eq!(result[1]["inputs"]["workflow"], "ctx.workflowId");  // Member access
         assert_eq!(result[1]["inputs"]["order"], "inputs.orderId");  // Member access
     }
@@ -1218,6 +1224,20 @@ workflow(ctx, inputs) {
         // Last task
         assert_eq!(result[2]["type"], "task");
         assert_eq!(result[2]["await"], true);
+    }
+
+    #[test]
+    fn test_dollar_sign_escape() {
+        // Test that $$ in literal strings becomes a single $
+        let source = r#"workflow(ctx, inputs) {
+  task("test", { "price": "$$99.99", "note": "Only $$50!" })
+}"#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        // $$ should be unescaped to single $
+        assert_eq!(result[0]["inputs"]["price"], "$99.99");
+        assert_eq!(result[0]["inputs"]["note"], "Only $50!");
     }
 
     #[test]

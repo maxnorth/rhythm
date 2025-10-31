@@ -301,7 +301,7 @@ mod tests {
         let result = resolve_variables(&input, &locals);
         assert_eq!(result, json!("12345"));
 
-        // Non-variable string (no $)
+        // Regular string (not a variable)
         let input = json!("hello");
         let result = resolve_variables(&input, &locals);
         assert_eq!(result, json!("hello"));
@@ -472,7 +472,7 @@ mod tests {
             "amount": 100
         });
 
-        // Test that $ in the middle of strings is preserved
+        // Test that literal $ strings are preserved (no conflict with variable format)
         let input = json!({
             "price": "$amount",
             "currency": "USD$",
@@ -483,8 +483,7 @@ mod tests {
 
         assert_eq!(result["price"], 100);
         assert_eq!(result["currency"], "USD$");
-        // Note: "Cost is $amount dollars" won't be resolved because
-        // our current implementation only resolves strings that START with $
+        // Literal strings with $ are preserved - no conflict!
         assert_eq!(result["note"], "Cost is $amount dollars");
     }
 
