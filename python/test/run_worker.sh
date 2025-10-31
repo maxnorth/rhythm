@@ -9,13 +9,13 @@ if [ -f ".venv/bin/activate" ]; then
 fi
 
 # Set required environment variables
-export CURRANT_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
+export RHYTHM_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
 export PYTHONPATH="${PWD}:${PYTHONPATH}"
 
 # Run the worker
 echo "Starting worker with environment:"
-echo "  CURRANT_DATABASE_URL=$CURRANT_DATABASE_URL"
+echo "  RHYTHM_DATABASE_URL=$RHYTHM_DATABASE_URL"
 echo "  PYTHONPATH=$PYTHONPATH"
 echo ""
 
-currant worker -q notifications -q orders -m examples.simple_example
+rhythm worker -q notifications -q orders -m examples.simple_example

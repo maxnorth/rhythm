@@ -1,5 +1,5 @@
 [package]
-name = "currant-node"
+name = "rhythm-node"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,8 +11,8 @@ crate-type = ["cdylib"]
 napi = { version = "2", features = ["async", "serde-json"] }
 napi-derive = "2"
 
-# Core currant
-currant-core = { path = "../../core" }
+# Core rhythm
+rhythm-core = { path = "../../core" }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }

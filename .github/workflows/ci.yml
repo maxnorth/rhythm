@@ -81,13 +81,13 @@ jobs:
           cd python && pip install -e .
 
       - name: Run ruff (linting)
-        run: cd python && ruff check currant/
+        run: cd python && ruff check rhythm/
 
       - name: Run ruff (formatting)
-        run: cd python && ruff format --check currant/
+        run: cd python && ruff format --check rhythm/
 
       - name: Type check with mypy
-        run: cd python && mypy currant/ --ignore-missing-imports
+        run: cd python && mypy rhythm/ --ignore-missing-imports
         continue-on-error: true
 
   node-checks:

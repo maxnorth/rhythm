@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the design for adding optional Redis backend support to Currant, allowing users to choose between PostgreSQL's durability and Redis's performance on a per-task basis.
+This document outlines the design for adding optional Redis backend support to Rhythm, allowing users to choose between PostgreSQL's durability and Redis's performance on a per-task basis.
 
 **Created:** 2025-10-11
 **Status:** Design phase - not yet implemented
@@ -32,7 +32,7 @@ This document outlines the design for adding optional Redis backend support to C
 
 **PostgreSQL-backed durable queues:**
 - **Temporal:** 8-16 workflows/sec (complex workflow engine)
-- **Currant:** 200 tasks/sec (10-20x faster than Temporal!)
+- **Rhythm:** 200 tasks/sec (10-20x faster than Temporal!)
 - **pg_boss:** 100-500 tasks/sec
 - **Graphile Worker:** 200-1,000 tasks/sec
 
@@ -156,7 +156,7 @@ Claim   → Try Redis ZPOPMIN first (fast path)
 ### Task Decorator Enhancement
 
 ```python
-from currant import task
+from rhythm import task
 
 @task(
     queue: str,
@@ -180,11 +180,11 @@ from currant import task
 
 ```python
 # Environment variables
-CURRANT_DATABASE_URL="postgresql://..."
-CURRANT_REDIS_URL="redis://localhost:6379"  # Optional
+RHYTHM_DATABASE_URL="postgresql://..."
+RHYTHM_REDIS_URL="redis://localhost:6379"  # Optional
 
 # Or in config
-from currant.config import settings
+from rhythm.config import settings
 settings.redis_url = "redis://localhost:6379"
 ```
 
@@ -251,9 +251,9 @@ settings.redis_url = "redis://localhost:6379"
 ```
 1. User calls: track_event.queue(event={...})
 2. create_execution() skips PostgreSQL (or minimal metadata only)
-3. Redis ZADD to currant:queue:analytics:p5
-4. Redis PUBLISH to currant:notify:analytics
-5. Worker subscribed to currant:notify:analytics receives message
+3. Redis ZADD to rhythm:queue:analytics:p5
+4. Redis PUBLISH to rhythm:notify:analytics
+5. Worker subscribed to rhythm:notify:analytics receives message
 6. Worker claims via Redis ZPOPMIN (atomic)
 7. Worker executes, completes via Redis ZREM
 8. No PostgreSQL writes (except maybe final result for history)
@@ -277,30 +277,30 @@ settings.redis_url = "redis://localhost:6379"
 
 ### Queue Storage (Sorted Sets)
 ```
-Key: currant:queue:{queue_name}:p{priority}
+Key: rhythm:queue:{queue_name}:p{priority}
 Score: timestamp (FIFO within priority)
 Members: execution_id
 
 Example:
-currant:queue:emails:p5 → {
+rhythm:queue:emails:p5 → {
   "job_abc123": 1696800000.123,
   "job_def456": 1696800000.456,
 }
 
 Commands:
-- Enqueue: ZADD currant:queue:emails:p5 {timestamp} job_abc123
-- Claim: ZPOPMIN currant:queue:emails:p5 10  (claim 10 tasks)
-- Check size: ZCARD currant:queue:emails:p5
+- Enqueue: ZADD rhythm:queue:emails:p5 {timestamp} job_abc123
+- Claim: ZPOPMIN rhythm:queue:emails:p5 10  (claim 10 tasks)
+- Check size: ZCARD rhythm:queue:emails:p5
 ```
 
 ### Notification (Pub/Sub)
 ```
-Channel: currant:notify:{queue_name}
+Channel: rhythm:notify:{queue_name}
 Message: execution_id
 
 Commands:
-- Notify: PUBLISH currant:notify:emails job_abc123
-- Listen: SUBSCRIBE currant:notify:emails
+- Notify: PUBLISH rhythm:notify:emails job_abc123
+- Listen: SUBSCRIBE rhythm:notify:emails
 ```
 
 ### Priority Handling
@@ -358,21 +358,21 @@ class Worker:
 ### Environment Variables
 ```bash
 # Required
-CURRANT_DATABASE_URL="postgresql://user:pass@localhost/currant"
+RHYTHM_DATABASE_URL="postgresql://user:pass@localhost/rhythm"
 
 # Optional (enables Redis backend)
-CURRANT_REDIS_URL="redis://localhost:6379"
-CURRANT_REDIS_PASSWORD="secret"
-CURRANT_REDIS_DB="0"
+RHYTHM_REDIS_URL="redis://localhost:6379"
+RHYTHM_REDIS_PASSWORD="secret"
+RHYTHM_REDIS_DB="0"
 
 # Redis connection pool settings
-CURRANT_REDIS_MAX_CONNECTIONS="50"
-CURRANT_REDIS_MIN_CONNECTIONS="5"
+RHYTHM_REDIS_MAX_CONNECTIONS="50"
+RHYTHM_REDIS_MIN_CONNECTIONS="5"
 ```
 
 ### Runtime Configuration
 ```python
-from currant.config import Settings
+from rhythm.config import Settings
 
 settings = Settings(
     redis_url="redis://localhost:6379",
@@ -418,9 +418,9 @@ async def noop_redis_fast(): pass
 async def noop_redis_eventual(): pass
 
 # Run benchmarks
-currant bench --workers 5 --tasks 1000 --backend postgres
-currant bench --workers 5 --tasks 1000 --backend redis --durability none
-currant bench --workers 5 --tasks 1000 --backend redis --durability eventual
+rhythm bench --workers 5 --tasks 1000 --backend postgres
+rhythm bench --workers 5 --tasks 1000 --backend redis --durability none
+rhythm bench --workers 5 --tasks 1000 --backend redis --durability eventual
 ```
 
 ---
@@ -434,7 +434,7 @@ currant bench --workers 5 --tasks 1000 --backend redis --durability eventual
 
 ### Opt-In Process
 1. **Install Redis** (optional): `docker run -p 6379:6379 redis`
-2. **Set environment variable**: `CURRANT_REDIS_URL="redis://localhost:6379"`
+2. **Set environment variable**: `RHYTHM_REDIS_URL="redis://localhost:6379"`
 3. **Update tasks selectively**: Add `backend="redis"` to high-throughput tasks
 4. **No worker changes needed**: Workers auto-detect enabled backends
 
@@ -489,14 +489,14 @@ currant bench --workers 5 --tasks 1000 --backend redis --durability eventual
 ## Security Considerations
 
 ### Redis Authentication
-- Require `CURRANT_REDIS_PASSWORD` in production
+- Require `RHYTHM_REDIS_PASSWORD` in production
 - Use Redis ACLs to limit command access
 - TLS encryption for Redis connections
 
 ### Data Isolation
-- Use Redis key prefixes: `currant:queue:{queue_name}`
+- Use Redis key prefixes: `rhythm:queue:{queue_name}`
 - Separate Redis DB per environment (dev/staging/prod)
-- Avoid mixing Currant and other Redis data
+- Avoid mixing Rhythm and other Redis data
 
 ---
 
@@ -566,7 +566,7 @@ currant bench --workers 5 --tasks 1000 --backend redis --durability eventual
 - Celery with Redis: 1,700 tasks/sec (10 workers, threads)
 - Dramatiq with Redis: 4,800 tasks/sec (10 workers, threads)
 - Temporal with PostgreSQL: 8-16 workflows/sec (4 vCores)
-- Currant with PostgreSQL: 200 tasks/sec (5 workers) ← **Current state**
+- Rhythm with PostgreSQL: 200 tasks/sec (5 workers) ← **Current state**
 
 ### Related Reading
 - [Redis Sorted Sets Documentation](https://redis.io/docs/data-types/sorted-sets/)
@@ -578,7 +578,7 @@ currant bench --workers 5 --tasks 1000 --backend redis --durability eventual
 
 ## Conclusion
 
-The Redis backend design provides a clear path to 10-20x performance improvement for high-throughput use cases while maintaining PostgreSQL as the reliable default. The per-task backend selection gives users fine-grained control over the speed/durability tradeoff, making Currant suitable for both critical financial transactions and high-volume analytics workloads.
+The Redis backend design provides a clear path to 10-20x performance improvement for high-throughput use cases while maintaining PostgreSQL as the reliable default. The per-task backend selection gives users fine-grained control over the speed/durability tradeoff, making Rhythm suitable for both critical financial transactions and high-volume analytics workloads.
 
 **Implementation Status:** Design complete, awaiting implementation
 **Next Step:** Phase 1 - Redis pub/sub notifications

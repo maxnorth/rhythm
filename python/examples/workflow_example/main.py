@@ -1,5 +1,5 @@
 """
-Example Python application using Currant workflows
+Example Python application using Rhythm workflows
 
 Project structure:
 workflow_example/
@@ -9,15 +9,15 @@ workflow_example/
   main.py
 """
 
-import currant
+import rhythm
 import asyncio
 import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-# Initialize Currant with workflow paths
-currant.init(
-    database_url="postgresql://currant@localhost/currant",
+# Initialize Rhythm with workflow paths
+rhythm.init(
+    database_url="postgresql://rhythm@localhost/rhythm",
     workflow_paths=[
         "./workflows",           # Main workflows directory
     ]
@@ -25,7 +25,7 @@ currant.init(
 
 
 # Define tasks (these are called from workflows)
-@currant.task(queue="default")
+@rhythm.task(queue="default")
 async def chargeCard(orderId: str, amount: float):
     """Charge customer's payment method"""
     print(f"💳 Charging ${amount} for order {orderId}")
@@ -33,7 +33,7 @@ async def chargeCard(orderId: str, amount: float):
     return {"success": True, "transaction_id": "tx_123456", "amount": amount}
 
 
-@currant.task(queue="default")
+@rhythm.task(queue="default")
 async def shipOrder(orderId: str):
     """Ship the order"""
     print(f"📦 Shipping order {orderId}")
@@ -41,7 +41,7 @@ async def shipOrder(orderId: str):
     return {"success": True, "tracking_number": "TRACK123", "carrier": "UPS"}
 
 
-@currant.task(queue="default")
+@rhythm.task(queue="default")
 async def sendEmail(to: str, subject: str, body: str):
     """Send email notification"""
     print(f"📧 Sending email to {to}: {subject}")
@@ -56,7 +56,7 @@ async def main():
     print("="*60)
 
     # Queue a workflow execution
-    workflow_id = await currant.start_workflow(
+    workflow_id = await rhythm.start_workflow(
         "processOrder",
         inputs={
             "orderId": "order-123",
@@ -72,7 +72,7 @@ async def main():
     print("="*60)
 
     # Start a worker to execute the workflow
-    from currant.worker import Worker
+    from rhythm.worker import Worker
 
     worker = Worker(queues=["default"])
 

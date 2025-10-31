@@ -103,7 +103,7 @@ async function main() {
   console.log('='.repeat(60));
   console.log('Workflow is now waiting for approval signal.');
   console.log('Start a worker and then send a signal:');
-  console.log('  currant worker -q documents\n');
+  console.log('  rhythm worker -q documents\n');
   console.log('To approve:');
   console.log(
     `  node -e "import('./src/index.js').then(m => m.sendSignal('${workflowId}', 'approval_decision', {approved: true, approved_by: 'manager@example.com'}))"`

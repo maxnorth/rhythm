@@ -1,14 +1,14 @@
 [package]
-name = "currant-core"
+name = "rhythm-core"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "currant_core"
+name = "rhythm_core"
 crate-type = ["rlib"]
 
 [[bin]]
-name = "currant"
+name = "rhythm"
 path = "src/bin/main.rs"
 
 [dependencies]

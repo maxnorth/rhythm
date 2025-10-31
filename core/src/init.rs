@@ -1,20 +1,20 @@
-//! Initialization system for Currant
+//! Initialization system for Rhythm
 //!
 //! Provides a centralized initialization API that language adapters should call
-//! before using any other Currant functionality. This ensures proper configuration
+//! before using any other Rhythm functionality. This ensures proper configuration
 //! and database setup.
 //!
 //! # Example
 //!
 //! ```rust
-//! use currant_core::init::{InitOptions, InitBuilder};
+//! use rhythm_core::init::{InitOptions, InitBuilder};
 //!
 //! // Simple initialization (auto-migrate)
 //! InitBuilder::new().init().await?;
 //!
 //! // Custom configuration
 //! InitBuilder::new()
-//!     .database_url("postgresql://localhost/currant")
+//!     .database_url("postgresql://localhost/rhythm")
 //!     .auto_migrate(false)
 //!     .init()
 //!     .await?;
@@ -36,7 +36,7 @@ struct InitState {
     config: Config,
 }
 
-/// Options for initializing Currant
+/// Options for initializing Rhythm
 #[derive(Debug, Clone)]
 pub struct InitOptions {
     /// Database URL (overrides config file and env vars)
@@ -110,7 +110,7 @@ impl InitBuilder {
         self
     }
 
-    /// Initialize Currant with the configured options
+    /// Initialize Rhythm with the configured options
     pub async fn init(self) -> Result<()> {
         initialize(self.options).await
     }
@@ -122,10 +122,10 @@ impl Default for InitBuilder {
     }
 }
 
-/// Initialize Currant with the given options
+/// Initialize Rhythm with the given options
 ///
 /// This function should be called once at the start of your application,
-/// before using any other Currant functionality. It:
+/// before using any other Rhythm functionality. It:
 /// - Applies configuration overrides to environment variables
 /// - Loads and validates configuration
 /// - Checks database initialization
@@ -141,11 +141,11 @@ pub async fn initialize(options: InitOptions) -> Result<()> {
 
     // Apply options to environment variables so they're used by config loading
     if let Some(url) = &options.database_url {
-        std::env::set_var("CURRANT_DATABASE_URL", url);
+        std::env::set_var("RHYTHM_DATABASE_URL", url);
     }
 
     if let Some(path) = &options.config_path {
-        std::env::set_var("CURRANT_CONFIG_PATH", path);
+        std::env::set_var("RHYTHM_CONFIG_PATH", path);
     }
 
     // Load configuration (now with env vars set)
@@ -169,8 +169,8 @@ pub async fn initialize(options: InitOptions) -> Result<()> {
             anyhow::bail!(
                 "Database has not been initialized\n\n\
                 Please run migrations first using your language adapter:\n\
-                  Python: python -m currant migrate\n\
-                  Node:   npx currant migrate"
+                  Python: python -m rhythm migrate\n\
+                  Node:   npx rhythm migrate"
             );
         }
         // If neither auto_migrate nor require_initialized, allow uninitialized database
@@ -193,7 +193,7 @@ pub async fn initialize(options: InitOptions) -> Result<()> {
     Ok(())
 }
 
-/// Check if Currant has been initialized
+/// Check if Rhythm has been initialized
 pub fn is_initialized() -> bool {
     INIT_STATE.get().is_some()
 }
@@ -202,7 +202,7 @@ pub fn is_initialized() -> bool {
 pub fn get_config() -> &'static Config {
     &INIT_STATE
         .get()
-        .expect("Currant not initialized - call init() first")
+        .expect("Rhythm not initialized - call init() first")
         .config
 }
 
@@ -213,7 +213,7 @@ mod tests {
     #[tokio::test]
     async fn test_init_with_defaults() {
         let result = InitBuilder::new()
-            .database_url("postgresql://currant@localhost/currant")
+            .database_url("postgresql://rhythm@localhost/rhythm")
             .init()
             .await;
 
@@ -229,8 +229,8 @@ mod tests {
     #[ignore = "Cannot test without DB URL due to global pool singleton"]
     async fn test_init_without_database_url() {
         // Temporarily unset DATABASE_URL for this test
-        let original = std::env::var("CURRANT_DATABASE_URL").ok();
-        std::env::remove_var("CURRANT_DATABASE_URL");
+        let original = std::env::var("RHYTHM_DATABASE_URL").ok();
+        std::env::remove_var("RHYTHM_DATABASE_URL");
 
         let result = InitBuilder::new().init().await;
         // Should fail because no database URL configured
@@ -238,7 +238,7 @@ mod tests {
 
         // Restore original value
         if let Some(url) = original {
-            std::env::set_var("CURRANT_DATABASE_URL", url);
+            std::env::set_var("RHYTHM_DATABASE_URL", url);
         }
     }
 }

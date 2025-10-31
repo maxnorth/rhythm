@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document captures the complete implementation of Currant's DSL-based workflow system, including all technical decisions, architecture, and learnings from the initial implementation (October 2025).
+This document captures the complete implementation of Rhythm's DSL-based workflow system, including all technical decisions, architecture, and learnings from the initial implementation (October 2025).
 
 ---
 
@@ -201,7 +201,7 @@ pub async fn start_workflow(workflow_name: &str, inputs: JsonValue) -> Result<St
 
 ---
 
-### 6. Worker Integration ([python/currant/worker.py](python/currant/worker.py))
+### 6. Worker Integration ([python/rhythm/worker.py](python/rhythm/worker.py))
 
 **Critical Change**: Workers detect and handle both workflow types
 
@@ -223,7 +223,7 @@ async def _execute_dsl_workflow(self, execution: Execution):
     # Call Rust executor
     result_str = await asyncio.get_event_loop().run_in_executor(
         None,
-        lambda: currant.currant_core.execute_workflow_step_sync(execution.id)
+        lambda: rhythm.rhythm_core.execute_workflow_step_sync(execution.id)
     )
 
     # Result is "Suspended", "Completed", or "Continue"
@@ -245,11 +245,11 @@ async def _execute_dsl_workflow(self, execution: Execution):
 
 ## Python Integration
 
-### Initialization ([python/currant/init.py](python/currant/init.py))
+### Initialization ([python/rhythm/init.py](python/rhythm/init.py))
 
 **User API**:
 ```python
-currant.init(
+rhythm.init(
     database_url="postgresql://...",
     workflow_paths=["./workflows"]
 )
@@ -267,11 +267,11 @@ currant.init(
 - Parsing/storage is universal
 - Clean separation of concerns
 
-### Starting Workflows ([python/currant/client.py](python/currant/client.py:112-131))
+### Starting Workflows ([python/rhythm/client.py](python/rhythm/client.py:112-131))
 
 **User API**:
 ```python
-workflow_id = await currant.start_workflow(
+workflow_id = await rhythm.start_workflow(
     "processOrder",
     inputs={"orderId": "123", "amount": 99.99}
 )
@@ -285,7 +285,7 @@ async def start_workflow(workflow_name: str, inputs: dict) -> str:
     return execution_id
 ```
 
-### Task Registration ([python/currant/decorators.py](python/currant/decorators.py))
+### Task Registration ([python/rhythm/decorators.py](python/rhythm/decorators.py))
 
 **CRITICAL FIX**: Removed module prefix from function names
 
@@ -308,7 +308,7 @@ self.function_name = fn.__name__
 
 **User Code**:
 ```python
-@currant.task(queue="default")
+@rhythm.task(queue="default")
 async def chargeCard(orderId: str, amount: float):
     print(f"💳 Charging ${amount} for order {orderId}")
     return {"success": True, "transaction_id": "tx_123"}
@@ -356,7 +356,7 @@ fn execute_workflow_step_sync(
 ## File Structure
 
 ```
-currant/
+rhythm/
 ├── core/
 │   ├── src/
 │   │   ├── interpreter/
@@ -370,7 +370,7 @@ currant/
 │       ├── 20241019000002_workflow_definitions.sql
 │       └── 20241019000003_workflow_execution_context.sql
 └── python/
-    ├── currant/
+    ├── rhythm/
     │   ├── __init__.py        # Exports: init, start_workflow, task, etc.
     │   ├── init.py            # Scans .flow files, calls Rust
     │   ├── client.py          # start_workflow() API
@@ -753,7 +753,7 @@ if (result.status == "failed") {
 **User Experience**:
 ```python
 # Old style - still works
-@currant.workflow(queue="default")
+@rhythm.workflow(queue="default")
 async def myPythonWorkflow():
     result = await someTask.run()
     return result
@@ -799,7 +799,7 @@ task("someTask", {})
    - Should have done from day 1
 
 3. **Outside-in development**
-   - Start with user API: `currant.init()`, `currant.start_workflow()`
+   - Start with user API: `rhythm.init()`, `rhythm.start_workflow()`
    - Mock the implementation
    - Fill in Rust core last
    - Ensures good UX
@@ -925,7 +925,7 @@ task("someTask", {})
 
 3. **Task not found**:
    - Check: `registry._FUNCTION_REGISTRY` in Python
-   - Check: Function decorated with `@currant.task`
+   - Check: Function decorated with `@rhythm.task`
    - Common cause: Import not executed (task not registered)
 
 4. **Workflow not resuming**:
@@ -1055,13 +1055,13 @@ Before adding any feature, ask:
 - `core/migrations/20241019000003_workflow_execution_context.sql` - Context table
 
 ### Python Integration
-- `python/currant/__init__.py` - Public API exports
-- `python/currant/init.py` - File scanning + init delegation
-- `python/currant/client.py` - start_workflow API
-- `python/currant/worker.py` - DSL workflow detection & execution
-- `python/currant/decorators.py` - @task decorator (no module prefix)
-- `python/currant/registry.py` - get_function(required=False)
-- `python/currant/rust_bridge.py` - RustBridge wrappers
+- `python/rhythm/__init__.py` - Public API exports
+- `python/rhythm/init.py` - File scanning + init delegation
+- `python/rhythm/client.py` - start_workflow API
+- `python/rhythm/worker.py` - DSL workflow detection & execution
+- `python/rhythm/decorators.py` - @task decorator (no module prefix)
+- `python/rhythm/registry.py` - get_function(required=False)
+- `python/rhythm/rust_bridge.py` - RustBridge wrappers
 - `python/native/src/lib.rs` - PyO3 FFI bindings
 
 ### Examples & Tests

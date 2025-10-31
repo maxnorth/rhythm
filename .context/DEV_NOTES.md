@@ -1,6 +1,6 @@
 # Development Notes
 
-> Local development conventions and commands for working on Currant
+> Local development conventions and commands for working on Rhythm
 
 ## Python Development
 
@@ -23,17 +23,17 @@ cd python
 
 ```bash
 # From project root
-python/.venv/bin/python -m currant <command>
+python/.venv/bin/python -m rhythm <command>
 
 # From python/ directory
-.venv/bin/python -m currant <command>
+.venv/bin/python -m rhythm <command>
 ```
 
 ## Database
 
 Default connection string:
 ```
-postgresql://currant@localhost/currant
+postgresql://rhythm@localhost/rhythm
 ```
 
 Started via:
@@ -56,17 +56,17 @@ After resetting, you must run migrations again before using the database.
 ### Run migrations
 ```bash
 cd python
-.venv/bin/python -m currant --database-url postgresql://currant@localhost/currant migrate
+.venv/bin/python -m rhythm --database-url postgresql://rhythm@localhost/rhythm migrate
 ```
 
 ### Run worker
 ```bash
 cd python
-.venv/bin/python -m currant --database-url postgresql://currant@localhost/currant worker --queue default
+.venv/bin/python -m rhythm --database-url postgresql://rhythm@localhost/rhythm worker --queue default
 ```
 
 ### Run benchmark
 ```bash
 cd python
-.venv/bin/python -m currant --database-url postgresql://currant@localhost/currant worker bench --workers 10 --tasks 1000
+.venv/bin/python -m rhythm --database-url postgresql://rhythm@localhost/rhythm worker bench --workers 10 --tasks 1000
 ```

@@ -3,9 +3,9 @@
 from typing import Callable, Optional
 import inspect
 
-from currant.config import settings
-from currant.registry import register_function
-from currant.client import queue_execution
+from rhythm.config import settings
+from rhythm.registry import register_function
+from rhythm.client import queue_execution
 
 
 class ExecutableProxy:

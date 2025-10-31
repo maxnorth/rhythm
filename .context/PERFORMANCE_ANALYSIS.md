@@ -77,7 +77,7 @@ Now measures true end-to-end time including enqueueing.
 - **BullMQ** (Redis): Similar performance
 - **Temporal**: Lower throughput but handles complex workflows
 
-### Current Currant
+### Current Rhythm
 - **27.8 tasks/sec with 5 workers** = 5.5 tasks/sec/worker
 - **~40x slower** than Redis-based systems per worker
 

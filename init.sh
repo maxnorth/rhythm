@@ -34,12 +34,12 @@ maturin develop --release
 cd ..
 
 echo "Running migrations..."
-export CURRANT_DATABASE_URL='postgresql://currant:currant@localhost/currant'
-python -c 'from currant.rust_bridge import RustBridge; RustBridge.migrate()'
+export RHYTHM_DATABASE_URL='postgresql://rhythm:rhythm@localhost/rhythm'
+python -c 'from rhythm.rust_bridge import RustBridge; RustBridge.migrate()'
 
 echo
 echo "✓ Init complete!"
 echo
 echo "To run examples:"
 echo "  python examples/enqueue_example.py"
-echo "  python -m currant worker -q orders -q notifications -m examples.simple_example"
+echo "  python -m rhythm worker -q orders -q notifications -m examples.simple_example"

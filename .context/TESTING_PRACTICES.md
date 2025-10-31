@@ -1,4 +1,4 @@
-# Testing Practices for Currant
+# Testing Practices for Rhythm
 
 > Guidelines and lessons learned for writing effective tests in a multi-language FFI architecture
 
@@ -10,7 +10,7 @@ Tests must adapt to the interface required by language adapters (Python, Node.js
 
 ### Why This Matters
 
-Currant's architecture has three layers:
+Rhythm's architecture has three layers:
 1. **Rust Core** - Performance-critical operations
 2. **FFI Boundary** - Bridge between Rust and language adapters
 3. **Language Adapters** - Python, Node.js, etc.

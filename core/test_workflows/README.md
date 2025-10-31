@@ -1,6 +1,6 @@
 # Workflow DSL Test Suite
 
-This directory contains test workflow files demonstrating various syntax patterns and features of the Currant workflow DSL.
+This directory contains test workflow files demonstrating various syntax patterns and features of the Rhythm workflow DSL.
 
 ## Test Workflow Files
 

@@ -19,7 +19,7 @@ workflows/
 │   └── Cargo.toml
 │
 ├── python/            # Python adapter
-│   └── currant/
+│   └── rhythm/
 │       ├── rust_bridge.py   # Rust FFI wrapper
 │       ├── decorators.py    # @task decorator
 │       ├── client.py        # start_workflow(), send_signal()
@@ -167,7 +167,7 @@ pytest
 ```bash
 # Terminal 1: Start worker
 export WORKFLOWS_DATABASE_URL="postgresql://localhost/workflows"
-python -m currant worker -q orders -q notifications -m examples.simple_example
+python -m rhythm worker -q orders -q notifications -m examples.simple_example
 
 # Terminal 2: Enqueue work
 python examples/enqueue_example.py
@@ -175,7 +175,7 @@ python examples/enqueue_example.py
 
 ## Workflows
 
-Currant uses DSL-based workflows written in `.flow` files.
+Rhythm uses DSL-based workflows written in `.flow` files.
 
 **Example** (`processOrder.flow`):
 ```
@@ -208,7 +208,7 @@ task("sendEmail", { "to": "customer@example.com", "subject": "Shipped!" })
 - Loops: `for (item in items) { ... }`
 - Expressions: Variables, operators, property access
 
-See [DSL_WORKFLOW_IMPLEMENTATION.md](/Users/maxnorth/Projects/currant/.context/DSL_WORKFLOW_IMPLEMENTATION.md) for complete implementation details.
+See [DSL_WORKFLOW_IMPLEMENTATION.md](/Users/maxnorth/Projects/rhythm/.context/DSL_WORKFLOW_IMPLEMENTATION.md) for complete implementation details.
 
 ---
 

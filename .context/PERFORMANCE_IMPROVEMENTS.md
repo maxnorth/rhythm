@@ -1,7 +1,7 @@
-# Currant Performance Improvements
+# Rhythm Performance Improvements
 
 ## Goal
-Transform Currant into a professional-grade async scheduler that can compete with Celery, Temporal, and BullMQ.
+Transform Rhythm into a professional-grade async scheduler that can compete with Celery, Temporal, and BullMQ.
 
 **Target Performance:**
 - **Throughput**: 10,000+ tasks/sec with 50 workers
@@ -40,7 +40,7 @@ Transform Currant into a professional-grade async scheduler that can compete wit
 ## Implementation Plan
 
 ### Phase 1: LISTEN/NOTIFY (Eliminate Polling)
-**Files**: `core/src/executions.rs`, `python/currant/worker.py`
+**Files**: `core/src/executions.rs`, `python/rhythm/worker.py`
 
 1. Add separate asyncpg connection for LISTEN in Python worker
 2. Replace `_listener_loop` polling with blocking wait on NOTIFY
@@ -48,7 +48,7 @@ Transform Currant into a professional-grade async scheduler that can compete wit
 4. Measure: DB query rate when idle should drop to ~0.2/sec (heartbeat only)
 
 ### Phase 2: Batch Claiming
-**Files**: `core/src/executions.rs`, `core/src/lib.rs`, `python/currant/worker.py`
+**Files**: `core/src/executions.rs`, `core/src/lib.rs`, `python/rhythm/worker.py`
 
 1. Add `claim_executions_batch(worker_id, queues, limit)` function
 2. Modify SQL: `LIMIT 1` → `LIMIT $3`
@@ -57,7 +57,7 @@ Transform Currant into a professional-grade async scheduler that can compete wit
 5. Measure: Throughput should increase 3-5x
 
 ### Phase 3: Local Task Queue + Prefetching
-**Files**: `python/currant/worker.py`
+**Files**: `python/rhythm/worker.py`
 
 1. Add `asyncio.Queue` as local task buffer (max size = `max_concurrent * 2`)
 2. Separate "claimer" task that keeps queue filled
@@ -66,7 +66,7 @@ Transform Currant into a professional-grade async scheduler that can compete wit
 5. Measure: Worker should maintain 100% utilization under load
 
 ### Phase 4: Concurrent Execution Optimization
-**Files**: `python/currant/worker.py`
+**Files**: `python/rhythm/worker.py`
 
 1. Use `asyncio.Semaphore` for concurrency control (cleaner than counter)
 2. Fire-and-forget execution tasks
@@ -74,7 +74,7 @@ Transform Currant into a professional-grade async scheduler that can compete wit
 4. Measure: Reduced latency variance
 
 ### Phase 5: Connection Pool Tuning
-**Files**: `core/src/db.rs`, `python/currant/config.py`
+**Files**: `core/src/db.rs`, `python/rhythm/config.py`
 
 1. Increase default pool size based on `max_concurrent`
 2. Add idle connection timeout
@@ -95,14 +95,14 @@ Transform Currant into a professional-grade async scheduler that can compete wit
 Each phase will be validated with:
 ```bash
 # Baseline (before changes)
-python -m currant bench --workers 10 --tasks 1000 --warmup-percent 10
+python -m rhythm bench --workers 10 --tasks 1000 --warmup-percent 10
 
 # After each phase
-python -m currant bench --workers 10 --tasks 1000 --warmup-percent 10
-python -m currant bench --workers 50 --tasks 10000 --warmup-percent 10
+python -m rhythm bench --workers 10 --tasks 1000 --warmup-percent 10
+python -m rhythm bench --workers 50 --tasks 10000 --warmup-percent 10
 
 # Stress test
-python -m currant bench --workers 100 --tasks 50000 --duration 60s
+python -m rhythm bench --workers 100 --tasks 50000 --duration 60s
 ```
 
 ## Success Metrics

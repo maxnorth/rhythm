@@ -102,7 +102,7 @@ impl Drop for WorkerGuard {
 }
 
 pub async fn run_benchmark(params: BenchmarkParams) -> Result<()> {
-    println!("🚀 Starting Currant Benchmark");
+    println!("🚀 Starting Rhythm Benchmark");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     // Validate parameters
@@ -398,8 +398,8 @@ async fn enqueue_tasks(
     }
 
     let function_name = match params.task_type.as_str() {
-        "noop" => "__currant_bench_noop__",
-        "compute" => "__currant_bench_compute__",
+        "noop" => "__rhythm_bench_noop__",
+        "compute" => "__rhythm_bench_compute__",
         _ => return Err(anyhow!("Unknown tasktype")),
     };
 

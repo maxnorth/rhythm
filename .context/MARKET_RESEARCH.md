@@ -1,4 +1,4 @@
-# Market Research: Temporal & DBOS - User Needs, Pain Points, and Opportunities for Currant
+# Market Research: Temporal & DBOS - User Needs, Pain Points, and Opportunities for Rhythm
 
 **Research Date**: 2025-10-11
 **Validation Date**: 2025-10-11  
@@ -10,7 +10,7 @@
 
 **Key Finding**: There's a significant opportunity for a **lightweight, Postgres-only durable execution framework** that bridges the gap between Temporal's power (but complexity) and DBOS's broken promise of simplicity.
 
-**Market Positioning for Currant**:
+**Market Positioning for Rhythm**:
 - **vs Temporal**: Simpler deployment (2 components vs 6-7), easier learning curve, lower operational overhead
 - **vs DBOS**: Actually delivers on "no orchestrator needed" (DBOS requires Conductor for production features like workflow recovery and observability)
 - **Unique Value**:
@@ -49,7 +49,7 @@
 - "Scaling takes a lot of expertise" ([HN discussion](https://news.ycombinator.com/item?id=34614477))
 - "Managing configurations can be complex, especially in large-scale deployments" ([source](https://docs.temporal.io/self-hosted-guide))
 
-**Currant advantage**: 2 components (worker + Postgres)
+**Rhythm advantage**: 2 components (worker + Postgres)
 
 #### 2. Steep Learning Curve
 
@@ -63,7 +63,7 @@
 
 **Learning time**: Temporal 101 course = 2 hours ([official course](https://learn.temporal.io/courses/temporal_101/))
 
-**Currant advantage**: Target <30 min to first workflow
+**Rhythm advantage**: Target <30 min to first workflow
 
 #### 3. Developer Experience
 
@@ -80,7 +80,7 @@
 - 244-line function in [temporalio/sdk-python/converter.py](https://github.com/temporalio/sdk-python/blob/49040549ae190496420540c11b2c2be9c7ac524e/temporalio/converter.py#L1344-L1587)
 - Quote: "Whopping 300 line function just to convert values back into python instance from json" ([source](https://h4s.one/blog/2024/temporal/))
 
-**Currant advantage**: Focus on DX from day one
+**Rhythm advantage**: Focus on DX from day one
 
 #### 4. Architectural Requirements
 
@@ -90,7 +90,7 @@
 - "split into two services...with runtime dependency on a third"
 - "potentially tripling operational complexity"
 
-**Currant advantage**: Embed into existing apps, no restructuring
+**Rhythm advantage**: Embed into existing apps, no restructuring
 
 #### 5. Cost
 
@@ -102,7 +102,7 @@
 **Evidence of concern**:
 - Blog exists: "[Developer Secrets to Reducing Temporal Cloud Costs](https://temporal.io/blog/developer-secrets-to-reducing-temporal-cloud-costs)"
 
-**Currant advantage**: No per-action pricing when self-hosted
+**Rhythm advantage**: No per-action pricing when self-hosted
 
 ---
 
@@ -198,9 +198,9 @@ Real costs for production:
 
 **Cannot self-host Conductor** - forced to pay DBOS indefinitely, no escape path.
 
-**Currant's philosophical difference**:
+**Rhythm's philosophical difference**:
 
-Currant is **not a company**. No cloud service to sell, no revenue model requiring vendor lock-in.
+Rhythm is **not a company**. No cloud service to sell, no revenue model requiring vendor lock-in.
 
 **Design goals**:
 - Support teams who **don't want a new vendor**
@@ -227,7 +227,7 @@ Currant is **not a company**. No cloud service to sell, no revenue model requiri
 - Potential for behavioral inconsistencies
 - More maintenance burden
 
-**Currant advantage**:
+**Rhythm advantage**:
 - Universal FFI design: Single Rust core, thin language adapters
 - Write once, use everywhere - consistent behavior guaranteed
 - Easy to add new languages (just FFI bindings, not reimplementation)
@@ -285,7 +285,7 @@ Currant is **not a company**. No cloud service to sell, no revenue model requiri
    - Multi-step workflow
    - E-commerce saga
    - AI agent with retries
-3. **Create comparison page** - Honest Currant vs Temporal vs DBOS
+3. **Create comparison page** - Honest Rhythm vs Temporal vs DBOS
 4. **Setup Discord community**
 5. **Launch blog post**
 
@@ -397,7 +397,7 @@ Research confirms a clear market gap. Developers want:
 - ✅ Truly Postgres-only (DBOS broken promise - requires Conductor)
 - ✅ Great developer experience (both competitors lacking)
 
-**Currant uniquely delivers**:
+**Rhythm uniquely delivers**:
 1. **vs Temporal**: Simple deployment (2 vs 6-7 components), easier learning curve, no $100-500/month cloud fees
 2. **vs DBOS**: Actually keeps the "no orchestrator" promise - no Conductor needed, workflows truly durable in horizontally scaled production via Postgres coordination
 3. **vs Both**:
@@ -416,10 +416,10 @@ DBOS exposed a clear frustration: developers want "Postgres-only, no orchestrato
 - At scale (100+ workers), DBOS costs more than Temporal Cloud while requiring you to manage infrastructure
 - The "no vendor" message resonates - both competitors have commercial incentives that compromise architecture
 
-**Currant's positioning**:
+**Rhythm's positioning**:
 - What DBOS claimed to be: Postgres-only, no orchestrator, truly open source
 - What DBOS actually is: Development-only simplicity with expensive production lock-in
-- What Currant delivers: Actually Postgres-only, actually no orchestrator ever, actually works in production at any scale, actually free forever
+- What Rhythm delivers: Actually Postgres-only, actually no orchestrator ever, actually works in production at any scale, actually free forever
 
 **No commercial pressure means**:
 - Workflow recovery works out-of-the-box in distributed deployments

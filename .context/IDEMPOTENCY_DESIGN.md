@@ -19,13 +19,13 @@ Idempotency guarantees ensure that duplicate task/workflow invocations don't cau
 
 ```python
 # User provides ID (idempotent)
-await currant.enqueue(
+await rhythm.enqueue(
     charge_stripe,
     task_id="payment-order-123"
 )
 
 # Auto-generated UUID (no idempotency guarantee)
-await currant.enqueue(
+await rhythm.enqueue(
     send_email,
     user_id=456
     # task_id = "uuid-abc-def-..." auto-generated
@@ -47,7 +47,7 @@ await currant.enqueue(
 **Per-queue configuration with sensible defaults**
 
 ```toml
-# currant.toml
+# rhythm.toml
 [queues.payments]
 retention = "30d"  # Keep payment records for 30 days
 
@@ -79,14 +79,14 @@ retention = "0"    # Delete immediately on completion
 **Example**:
 ```python
 # Day 0: Create task
-await currant.enqueue(send_report, task_id="daily-report-2025-10-12")
+await rhythm.enqueue(send_report, task_id="daily-report-2025-10-12")
 
 # Day 0-7: Duplicate blocked (task_id exists)
-await currant.enqueue(send_report, task_id="daily-report-2025-10-12")
+await rhythm.enqueue(send_report, task_id="daily-report-2025-10-12")
 # → Returns existing execution
 
 # Day 8: Retention expired, task deleted
-await currant.enqueue(send_report, task_id="daily-report-2025-10-12")
+await rhythm.enqueue(send_report, task_id="daily-report-2025-10-12")
 # → Creates new execution (allowed)
 ```
 
@@ -124,12 +124,12 @@ WHERE task_id IS NOT NULL
 **Automatic based on return value**
 
 ```python
-@currant.task
+@rhythm.task
 async def send_email(user_id):
     await email_service.send(user_id)
     # Returns None → result column = NULL
 
-@currant.task
+@rhythm.task
 async def calculate_tax(order_id):
     return {"tax": 42.50}
     # Returns value → result column = {"tax": 42.50}
@@ -145,11 +145,11 @@ ALTER TABLE executions ADD COLUMN result JSONB;
 **Result caching for duplicates**:
 ```python
 # First call
-handle1 = await currant.enqueue(calculate_tax, task_id="tax-order-123")
+handle1 = await rhythm.enqueue(calculate_tax, task_id="tax-order-123")
 result1 = await handle1.result()  # {"tax": 42.50}
 
 # Duplicate call (while first is still pending/running/completed)
-handle2 = await currant.enqueue(calculate_tax, task_id="tax-order-123")
+handle2 = await rhythm.enqueue(calculate_tax, task_id="tax-order-123")
 result2 = await handle2.result()  # Same: {"tax": 42.50} (cached)
 ```
 
@@ -218,7 +218,7 @@ rate_limit = "500/sec"
 
 ```python
 # Configure queue in code
-currant.configure_queue(
+rhythm.configure_queue(
     "payments",
     retention=timedelta(days=30),
     rate_limit="100/sec"
@@ -230,19 +230,19 @@ currant.configure_queue(
 ### Tasks
 
 ```python
-@currant.task(queue="stripe-api")
+@rhythm.task(queue="stripe-api")
 async def charge_stripe(order_id):
     return {"payment_id": "pay_123"}
 
 # Standalone task
-await currant.enqueue(
+await rhythm.enqueue(
     charge_stripe,
     order_id=456,
     task_id="payment-order-456"  # Optional
 )
 
 # Task within workflow
-@currant.workflow
+@rhythm.workflow
 async def process_order(ctx, order_id):
     result = await ctx.execute_task(
         charge_stripe,
@@ -257,7 +257,7 @@ async def process_order(ctx, order_id):
 
 ```python
 # Workflow ID always required
-await currant.start_workflow(
+await rhythm.start_workflow(
     process_order,
     workflow_id="order-456",  # Required
     order_id=456
@@ -271,19 +271,19 @@ await currant.start_workflow(
 
 ## Workflow Steps = Tasks
 
-**No more `@currant.task` decorator**
+**No more `@rhythm.task` decorator**
 
 ```python
 # Define once
-@currant.task(queue="stripe-api")
+@rhythm.task(queue="stripe-api")
 async def charge_stripe(order_id):
     pass
 
 # Use as standalone
-await currant.enqueue(charge_stripe, order_id=123)
+await rhythm.enqueue(charge_stripe, order_id=123)
 
 # Use as workflow step
-@currant.workflow
+@rhythm.workflow
 async def process_order(ctx, order_id):
     await ctx.execute_task(charge_stripe, order_id)
 ```
@@ -303,15 +303,15 @@ rate_limit = "100/sec"  # All Stripe tasks limited, regardless of source
 ```
 
 ```python
-@currant.task(queue="stripe-api")
+@rhythm.task(queue="stripe-api")
 async def charge_stripe(order_id):
     pass
 
 # Standalone: rate-limited
-await currant.enqueue(charge_stripe, order_id=123)
+await rhythm.enqueue(charge_stripe, order_id=123)
 
 # From workflow: also rate-limited (same queue!)
-@currant.workflow
+@rhythm.workflow
 async def process_order(ctx, order_id):
     await ctx.execute_task(charge_stripe, order_id)
     # → Goes to "stripe-api" queue → rate limited
@@ -367,23 +367,23 @@ WHERE status = 'pending';
 ### Simple Task (No Idempotency)
 
 ```python
-@currant.task(queue="notifications")
+@rhythm.task(queue="notifications")
 async def send_push_notification(user_id, message):
     await push_service.send(user_id, message)
 
 # Enqueue (no task_id = can run multiple times)
-await currant.enqueue(send_push_notification, user_id=123, message="Hello")
+await rhythm.enqueue(send_push_notification, user_id=123, message="Hello")
 ```
 
 ### Idempotent Task
 
 ```python
-@currant.task(queue="payments")
+@rhythm.task(queue="payments")
 async def charge_customer(order_id, amount):
     return await stripe.charge(order_id, amount)
 
 # Enqueue with task_id (idempotent)
-handle = await currant.enqueue(
+handle = await rhythm.enqueue(
     charge_customer,
     order_id=456,
     amount=99.99,
@@ -392,7 +392,7 @@ handle = await currant.enqueue(
 result = await handle.result()  # {"payment_id": "pay_abc"}
 
 # Duplicate (returns same handle, same result)
-handle2 = await currant.enqueue(
+handle2 = await rhythm.enqueue(
     charge_customer,
     order_id=456,
     amount=99.99,
@@ -404,15 +404,15 @@ result2 = await handle2.result()  # Same: {"payment_id": "pay_abc"}
 ### Workflow with Tasks
 
 ```python
-@currant.task(queue="payments")
+@rhythm.task(queue="payments")
 async def charge_card(order_id):
     return await stripe.charge(order_id)
 
-@currant.task(queue="inventory")
+@rhythm.task(queue="inventory")
 async def reserve_inventory(order_id):
     return await inventory.reserve(order_id)
 
-@currant.workflow
+@rhythm.workflow
 async def process_order(ctx, order_id):
     # Workflow steps are tasks with queue routing
     payment = await ctx.execute_task(
@@ -430,7 +430,7 @@ async def process_order(ctx, order_id):
     return {"payment": payment, "inventory": inventory}
 
 # Start workflow
-await currant.start_workflow(
+await rhythm.start_workflow(
     process_order,
     workflow_id=f"order-{order_id}",
     order_id=456
@@ -441,7 +441,7 @@ await currant.start_workflow(
 
 ```python
 # First attempt
-await currant.enqueue(
+await rhythm.enqueue(
     charge_customer,
     task_id="charge-123",
     order_id=456
@@ -449,7 +449,7 @@ await currant.enqueue(
 # → Executes, fails (e.g., network timeout)
 
 # Retry (allowed! status=failed)
-await currant.enqueue(
+await rhythm.enqueue(
     charge_customer,
     task_id="charge-123",
     order_id=456
@@ -463,7 +463,7 @@ await currant.enqueue(
 
 ```python
 # Task is pending or running
-await currant.enqueue(charge_card, task_id="payment-123")
+await rhythm.enqueue(charge_card, task_id="payment-123")
 
 # Error response:
 {
@@ -478,7 +478,7 @@ await currant.enqueue(charge_card, task_id="payment-123")
 
 ```python
 # Task completed successfully
-await currant.enqueue(charge_card, task_id="payment-123")
+await rhythm.enqueue(charge_card, task_id="payment-123")
 # → Completes
 
 # Duplicate attempt:

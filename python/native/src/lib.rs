@@ -1,4 +1,4 @@
-use ::currant_core::{benchmark, cli, db, executions, init, signals, worker, workflows, CreateExecutionParams, ExecutionType};
+use ::rhythm_core::{benchmark, cli, db, executions, init, signals, worker, workflows, CreateExecutionParams, ExecutionType};
 use pyo3::prelude::*;
 use serde_json::Value as JsonValue;
 use std::sync::OnceLock;
@@ -24,7 +24,7 @@ fn init_runtime() -> PyResult<()> {
     Ok(())
 }
 
-/// Initialize Currant with configuration options
+/// Initialize Rhythm with configuration options
 #[pyfunction]
 #[pyo3(signature = (database_url=None, config_path=None, auto_migrate=true, require_initialized=true, workflows_json=None))]
 fn initialize_sync(
@@ -426,7 +426,7 @@ fn execute_workflow_step_sync(execution_id: String) -> PyResult<String> {
 
 /// Python module
 #[pymodule]
-fn currant_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn rhythm_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(init_runtime, m)?)?;
     m.add_function(wrap_pyfunction!(initialize_sync, m)?)?;
     m.add_function(wrap_pyfunction!(create_execution_sync, m)?)?;

@@ -2,8 +2,8 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use serde_json::Value as JsonValue;
 
-use currant_core::types::*;
-use currant_core::{db, executions, signals, worker};
+use rhythm_core::types::*;
+use rhythm_core::{db, executions, signals, worker};
 
 /// Create an execution
 #[napi]

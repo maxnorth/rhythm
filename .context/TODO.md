@@ -1,9 +1,9 @@
-# Currant - TODO List
+# Rhythm - TODO List
 
 > **Last Updated**: 2025-10-20
 > **Status**: DSL workflows implemented, Python @workflow removed, Node.js in progress
 
-This document tracks missing functionality and planned features for Currant. Items are prioritized based on recent architectural decisions and project maturity needs.
+This document tracks missing functionality and planned features for Rhythm. Items are prioritized based on recent architectural decisions and project maturity needs.
 
 **Recent Updates**:
 - 2025-10-20: **Completed DSL workflow pivot** - Removed Python @workflow decorator, Python/Node now DSL-only
@@ -139,7 +139,7 @@ These are foundational features needed for production readiness. Full design in 
 **6. Queue configuration for rate limiting**
 - [ ] Add `rate_limit` field to queue config (e.g., "100/sec", "1000/min")
 - [ ] Parse rate limit strings into tokens + duration
-- [ ] Store queue config in database or load from currant.toml
+- [ ] Store queue config in database or load from rhythm.toml
 - [ ] Zero-cost check: if no rate_limit, skip all rate limiting logic
 - [ ] Tests for config parsing
 
@@ -161,14 +161,14 @@ These are foundational features needed for production readiness. Full design in 
 **9. Queue auto-creation**
 - [ ] Allow tasks to reference queue by string (no pre-definition needed)
 - [ ] Queues auto-create on first use
-- [ ] Apply config from currant.toml if exists
-- [ ] Default config if not in currant.toml
+- [ ] Apply config from rhythm.toml if exists
+- [ ] Default config if not in rhythm.toml
 - [ ] Tests for auto-creation
 
 ### Tasks = Tasks Unification
 
 **10. Unify Activities and tasks**
-- [ ] Remove `@currant.task` decorator
+- [ ] Remove `@rhythm.task` decorator
 - [ ] Tasks can be called standalone or from workflows
 - [ ] Add `parent_workflow_id` column to executions (nullable)
 - [ ] Tasks called from workflows populate `parent_workflow_id`
@@ -176,7 +176,7 @@ These are foundational features needed for production readiness. Full design in 
 - [ ] Tests for both usage patterns
 
 **11. Queue routing for Activities**
-- [ ] Tasks declare queue via decorator: `@currant.task(queue="stripe-api")`
+- [ ] Tasks declare queue via decorator: `@rhythm.task(queue="stripe-api")`
 - [ ] Tasks use task's queue (not workflow's queue)
 - [ ] Rate limiting applies to task tasks
 - [ ] Tests for cross-queue task calls
@@ -189,7 +189,7 @@ These items reflect recent architectural decisions (2025-10-11) that need implem
 
 ### CLI Restructuring
 
-**1. Global admin CLI binary** (`currant-cli`)
+**1. Global admin CLI binary** (`rhythm-cli`)
 - [ ] Create separate cargo package for optional global installation
 - [ ] Include commands: `list`, `status`, `cancel`, `signal`, `retry`, `cleanup`
 - [ ] Exclude: `migrate`, `worker`, `bench` (language-specific)
@@ -197,7 +197,7 @@ These items reflect recent architectural decisions (2025-10-11) that need implem
 
 **2. Remove `migrate` from core CLI**
 - [ ] Remove `migrate` command from `core/src/cli.rs` (currently lines 150-154)
-- [ ] Keep in Python adapter (`python/currant/__main__.py`)
+- [ ] Keep in Python adapter (`python/rhythm/__main__.py`)
 - [ ] Add to Node adapter when implemented
 - [ ] Update documentation
 
@@ -224,10 +224,10 @@ These items reflect recent architectural decisions (2025-10-11) that need implem
 
 ### Configuration Management
 
-**6. `currant.toml` configuration file support**
+**6. `rhythm.toml` configuration file support**
 - [ ] Add `toml` crate to core dependencies
 - [ ] Implement config loading in Rust core
-- [ ] Search path: `currant.toml` → `~/.config/currant/config.toml`
+- [ ] Search path: `rhythm.toml` → `~/.config/rhythm/config.toml`
 - [ ] Priority chain: CLI flag → env var → config file → fallback
 - [ ] Optional `.env` file loading
 - [ ] Tests for config loading and priority
@@ -254,7 +254,7 @@ interval = 10
 ### Versioning & Schema
 
 **8. Schema version table/metadata**
-- [ ] Add `currant_metadata` table with key-value storage
+- [ ] Add `rhythm_metadata` table with key-value storage
 - [ ] Store schema version on each migration
 - [ ] Add `get_schema_version()` function in core
 - [ ] Version checking on CLI commands (warn on mismatch)
@@ -288,20 +288,20 @@ Complete observability implementation as designed in TRACING_DESIGN.md.
 - [ ] Zero-cost when disabled (feature flag or runtime check)
 
 **11. Implement core counters**
-- [ ] `currant.executions.claimed` (labels: queue, worker_id, execution_type)
-- [ ] `currant.executions.completed` (labels: queue, status, execution_type)
-- [ ] `currant.executions.created` (labels: queue, execution_type, has_parent)
-- [ ] `currant.workflow.replays` (labels: workflow_name)
+- [ ] `rhythm.executions.claimed` (labels: queue, worker_id, execution_type)
+- [ ] `rhythm.executions.completed` (labels: queue, status, execution_type)
+- [ ] `rhythm.executions.created` (labels: queue, execution_type, has_parent)
+- [ ] `rhythm.workflow.replays` (labels: workflow_name)
 
 **12. Implement core histograms**
-- [ ] `currant.execution.duration` (labels: execution_type, queue, status)
-- [ ] `currant.claim_loop.duration` (labels: worker_id, queue)
-- [ ] `currant.db.query.duration` (labels: operation)
+- [ ] `rhythm.execution.duration` (labels: execution_type, queue, status)
+- [ ] `rhythm.claim_loop.duration` (labels: worker_id, queue)
+- [ ] `rhythm.db.query.duration` (labels: operation)
 
 **13. Implement core gauges**
-- [ ] `currant.workers.active` (from worker_heartbeats table)
-- [ ] `currant.executions.waiting` (labels: queue, execution_type)
-- [ ] `currant.executions.running` (labels: queue, execution_type, worker_id)
+- [ ] `rhythm.workers.active` (from worker_heartbeats table)
+- [ ] `rhythm.executions.waiting` (labels: queue, execution_type)
+- [ ] `rhythm.executions.running` (labels: queue, execution_type, worker_id)
 
 ### Core Tracing (Rust)
 
@@ -326,9 +326,9 @@ Complete observability implementation as designed in TRACING_DESIGN.md.
 - [ ] Read trace context from core (trace_id, span_id)
 - [ ] Create spans for user function execution
 - [ ] Implement adapter-specific metrics:
-  - `currant.function.execution.duration`
-  - `currant.serialization.duration`
-  - `currant.ffi.calls`
+  - `rhythm.function.execution.duration`
+  - `rhythm.serialization.duration`
+  - `rhythm.ffi.calls`
 - [ ] Configuration via Worker constructor
 - [ ] Documentation and examples
 
@@ -340,14 +340,14 @@ Complete observability implementation as designed in TRACING_DESIGN.md.
 
 **18. Observability configuration API**
 - [ ] Support env vars:
-  - `CURRANT_TRACING_ENABLED`
-  - `CURRANT_TRACING_ENDPOINT`
-  - `CURRANT_TRACES_SAMPLE_RATE`
-  - `CURRANT_METRICS_ENABLED`
-  - `CURRANT_METRICS_ENDPOINT`
-  - `CURRANT_SERVICE_NAME`
+  - `RHYTHM_TRACING_ENABLED`
+  - `RHYTHM_TRACING_ENDPOINT`
+  - `RHYTHM_TRACES_SAMPLE_RATE`
+  - `RHYTHM_METRICS_ENABLED`
+  - `RHYTHM_METRICS_ENDPOINT`
+  - `RHYTHM_SERVICE_NAME`
 - [ ] Support programmatic config in Worker constructor
-- [ ] Support `currant.toml` observability section
+- [ ] Support `rhythm.toml` observability section
 - [ ] Validate config and provide helpful errors
 
 ### Advanced Observability (Optional)
@@ -355,7 +355,7 @@ Complete observability implementation as designed in TRACING_DESIGN.md.
 **19. Custom instrumentation API**
 - [ ] Expose span creation API to user code
 - [ ] Expose metrics API to user code
-- [ ] Python: `currant.trace.span()`, `currant.metrics.increment()`
+- [ ] Python: `rhythm.trace.span()`, `rhythm.metrics.increment()`
 - [ ] Node: Similar API
 - [ ] Documentation with examples
 
@@ -381,7 +381,7 @@ Complete observability implementation as designed in TRACING_DESIGN.md.
 Bring Node.js adapter to parity with Python.
 
 **23. Node.js CLI implementation**
-- [ ] Create CLI entry point (`npx currant <command>`)
+- [ ] Create CLI entry point (`npx rhythm <command>`)
 - [ ] Implement `worker` command handler
 - [ ] Implement `bench` command handler (when bench moved from core)
 - [ ] Implement `migrate` command handler (when migrate moved from core)
@@ -445,7 +445,7 @@ Bring Node.js adapter to parity with Python.
 - [ ] Backup and recovery
 - [ ] Security best practices
 
-**31. currant.toml configuration reference**
+**31. rhythm.toml configuration reference**
 - [ ] Complete reference documentation
 - [ ] Examples for different environments
 - [ ] Common patterns and recipes

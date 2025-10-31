@@ -1,12 +1,12 @@
 {
-  "name": "currant",
+  "name": "rhythm",
   "version": "0.1.0",
   "description": "A lightweight durable execution framework using only Postgres",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "type": "module",
   "napi": {
-    "name": "currant",
+    "name": "rhythm",
     "triples": {
       "defaults": true,
       "additional": [
@@ -46,7 +46,7 @@
     "commander": "^11.1.0"
   },
   "bin": {
-    "currant-node": "./dist/cli.js"
+    "rhythm-node": "./dist/cli.js"
   },
   "devDependencies": {
     "@napi-rs/cli": "^2.18.0",

@@ -1,4 +1,4 @@
-# Currant - Node.js Library
+# Rhythm - Node.js Library
 
 A lightweight durable execution framework using only Postgres. This is the Node.js/TypeScript implementation.
 
@@ -30,7 +30,7 @@ npm install
 npm run build
 
 # 4. Setup database
-export CURRANT_DATABASE_URL="postgresql://localhost/currant"
+export RHYTHM_DATABASE_URL="postgresql://localhost/rhythm"
 node dist/cli.js migrate
 ```
 
@@ -39,7 +39,7 @@ See [BUILD.md](BUILD.md) for detailed instructions.
 ## Quick Start
 
 ```typescript
-import { task, workflow, isReplaying } from 'currant';
+import { task, workflow, isReplaying } from 'rhythm';
 
 // Define a simple task
 const sendEmail = task<[string, string], void>({
@@ -157,7 +157,7 @@ const processOrder = workflow<
 Workflows can wait for external signals (human-in-the-loop):
 
 ```typescript
-import { waitForSignal, sendSignal } from 'currant';
+import { waitForSignal, sendSignal } from 'rhythm';
 
 const approvalWorkflow = workflow<[string], { approved: boolean }>({
   queue: 'approvals',
@@ -187,7 +187,7 @@ await sendSignal(workflowId, 'approval_decision', {
 Evolve workflows while maintaining backward compatibility:
 
 ```typescript
-import { getVersion } from 'currant';
+import { getVersion } from 'rhythm';
 
 const processOrder = workflow<[string], any>({
   queue: 'orders',

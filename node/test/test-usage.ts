@@ -5,7 +5,7 @@
 import { task, workflow, isReplaying } from '../src/index.js';
 
 console.log('='.repeat(60));
-console.log('Currant Node.js Library - Usage Verification');
+console.log('Rhythm Node.js Library - Usage Verification');
 console.log('='.repeat(60));
 
 // Test 1: Basic task definition
@@ -30,7 +30,7 @@ console.log('\n[TEST 2] Enqueue Task');
 console.log('-'.repeat(60));
 
 (async () => {
-  const taskId = await sendEmail.queue('user@example.com', 'Welcome to Currant!');
+  const taskId = await sendEmail.queue('user@example.com', 'Welcome to Rhythm!');
   console.log('✓ Task enqueued with ID:', taskId);
   console.log('  Format valid:', /^task_[a-z0-9]+_[a-f0-9]+$/.test(taskId));
 

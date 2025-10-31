@@ -2,8 +2,8 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "currant")]
-#[command(about = "Currant - A lightweight durable execution framework", long_about = None)]
+#[command(name = "rhythm")]
+#[command(about = "Rhythm - A lightweight durable execution framework", long_about = None)]
 pub struct Cli {
     /// Path to config file (overrides default search)
     #[arg(long, global = true)]
@@ -142,10 +142,10 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
 
     // Apply CLI overrides to environment before any database operations
     if let Some(config_path) = &cli.config {
-        env::set_var("CURRANT_CONFIG_PATH", config_path);
+        env::set_var("RHYTHM_CONFIG_PATH", config_path);
     }
     if let Some(database_url) = &cli.database_url {
-        env::set_var("CURRANT_DATABASE_URL", database_url);
+        env::set_var("RHYTHM_DATABASE_URL", database_url);
     }
 
     // Eagerly load and validate configuration before executing any command

@@ -94,10 +94,10 @@ pub async fn check_initialized() -> Result<()> {
 
     if !exists {
         anyhow::bail!(
-            "Currant database has not been initialized\n\n\
+            "Rhythm database has not been initialized\n\n\
             Please run migrations first using your language adapter:\n\
-              Python: python -m currant migrate\n\
-              Node:   npx currant migrate"
+              Python: python -m rhythm migrate\n\
+              Node:   npx rhythm migrate"
         );
     }
 

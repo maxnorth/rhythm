@@ -12,12 +12,12 @@ if [ -f "$PYTHON_ROOT/.venv/bin/activate" ]; then
 fi
 
 # Set required environment variables
-export CURRANT_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
+export RHYTHM_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
 export PYTHONPATH="$PYTHON_ROOT:${PYTHONPATH}"
 
 # Run the test script
 echo "Enqueuing tasks with environment:"
-echo "  CURRANT_DATABASE_URL=$CURRANT_DATABASE_URL"
+echo "  RHYTHM_DATABASE_URL=$RHYTHM_DATABASE_URL"
 echo "  PYTHONPATH=$PYTHONPATH"
 echo ""
 

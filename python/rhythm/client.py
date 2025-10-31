@@ -3,7 +3,7 @@
 import logging
 from typing import Any, Optional
 
-from currant.rust_bridge import RustBridge
+from rhythm.rust_bridge import RustBridge
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ async def start_workflow(workflow_name: str, inputs: dict[str, Any]) -> str:
         Workflow execution ID
 
     Example:
-        >>> workflow_id = await currant.start_workflow(
+        >>> workflow_id = await rhythm.start_workflow(
         ...     "processOrder",
         ...     inputs={"orderId": "order-123", "amount": 99.99}
         ... )

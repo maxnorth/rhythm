@@ -1,5 +1,5 @@
 """
-Currant CLI entry point
+Rhythm CLI entry point
 
 This module provides a thin wrapper around the Rust CLI implementation.
 All CLI logic is implemented in Rust core for consistency across language adapters.
@@ -11,17 +11,17 @@ import sys
 
 def main():
     """
-    Entry point for the Currant CLI.
+    Entry point for the Rhythm CLI.
 
     This is intentionally minimal - all CLI parsing and logic happens in Rust.
     We normalize sys.argv and pass it to Rust for parsing.
     """
     # Normalize argv for Rust CLI
-    # When run as 'python -m currant migrate', Python sets:
-    # sys.argv = ['/path/to/currant/__main__.py', 'migrate', ...]
-    # We want: args = ['currant', 'migrate', ...]
+    # When run as 'python -m rhythm migrate', Python sets:
+    # sys.argv = ['/path/to/rhythm/__main__.py', 'migrate', ...]
+    # We want: args = ['rhythm', 'migrate', ...]
     args = sys.argv.copy()
-    args[0] = 'currant'
+    args[0] = 'rhythm'
 
     # Parse and apply global flags before any command processing
     # Set environment variables so they work with all commands (including worker/worker bench)
@@ -30,10 +30,10 @@ def main():
     i = 0
     while i < len(args):
         if args[i] == '--database-url' and i + 1 < len(args):
-            os.environ['CURRANT_DATABASE_URL'] = args[i + 1]
+            os.environ['RHYTHM_DATABASE_URL'] = args[i + 1]
             i += 2
         elif args[i] == '--config' and i + 1 < len(args):
-            os.environ['CURRANT_CONFIG_PATH'] = args[i + 1]
+            os.environ['RHYTHM_CONFIG_PATH'] = args[i + 1]
             i += 2
         else:
             command_parts.append(args[i])
@@ -42,17 +42,17 @@ def main():
     # Check for 'worker bench' subcommand first (more specific)
     if len(command_parts) > 2 and command_parts[1] == "worker" and command_parts[2] == "bench":
         # Python handles 'worker bench' subcommand
-        from currant.rust_bridge import RustBridge
+        from rhythm.rust_bridge import RustBridge
         import argparse
 
         # Detect Python executable
         python_cmd = sys.executable or "python"
 
-        # Build worker command: python -m currant worker --import currant.benchmark
-        worker_cmd = [python_cmd, "-m", "currant", "worker", "--import", "currant.benchmark"]
+        # Build worker command: python -m rhythm worker --import rhythm.benchmark
+        worker_cmd = [python_cmd, "-m", "rhythm", "worker", "--import", "rhythm.benchmark"]
 
         # Parse benchmark arguments
-        parser = argparse.ArgumentParser(prog='currant worker bench')
+        parser = argparse.ArgumentParser(prog='rhythm worker bench')
         parser.add_argument('--workers', type=int, default=10)
         parser.add_argument('--tasks', type=int, default=0)
         parser.add_argument('--workflows', type=int, default=0)
@@ -67,7 +67,7 @@ def main():
         parser.add_argument('--warmup-percent', type=float, default=0.0)
 
         try:
-            bench_args = parser.parse_args(command_parts[3:])  # Skip 'currant', 'worker', and 'bench'
+            bench_args = parser.parse_args(command_parts[3:])  # Skip 'rhythm', 'worker', and 'bench'
 
             # Call Rust benchmark function directly
             RustBridge.run_benchmark(
@@ -94,7 +94,7 @@ def main():
     elif len(command_parts) > 1 and command_parts[1] == "worker":
         # Regular worker command - needs Python-specific logic
         import asyncio
-        from currant.worker import run_worker
+        from rhythm.worker import run_worker
 
         # Parse worker args
         queues = []
@@ -132,10 +132,10 @@ def main():
             print("Error: At least one queue is required (-q/--queue)", file=sys.stderr)
             sys.exit(1)
 
-        # Auto-import benchmark module if CURRANT_BENCHMARK=1
-        if os.environ.get("CURRANT_BENCHMARK") == "1":
+        # Auto-import benchmark module if RHYTHM_BENCHMARK=1
+        if os.environ.get("RHYTHM_BENCHMARK") == "1":
             try:
-                import currant.benchmark
+                import rhythm.benchmark
                 print("✓ Benchmark functions registered")
             except ImportError as e:
                 print(f"Warning: Failed to import benchmark module: {e}", file=sys.stderr)
@@ -165,7 +165,7 @@ def main():
             sys.exit(130)
     elif len(command_parts) > 1 and command_parts[1] == "migrate":
         # Python handles migrate command
-        from currant.rust_bridge import RustBridge
+        from rhythm.rust_bridge import RustBridge
 
         print("Running database migrations...")
         try:
@@ -179,7 +179,7 @@ def main():
             sys.exit(1)
     else:
         # All other commands handled by Rust CLI
-        from currant.rust_bridge import RustBridge
+        from rhythm.rust_bridge import RustBridge
 
         try:
             RustBridge.run_cli(args)

@@ -1,7 +1,7 @@
 """Benchmark task functions - separate module to avoid issues"""
 
 import asyncio
-from currant import task
+from rhythm import task
 
 
 @task(queue="default")

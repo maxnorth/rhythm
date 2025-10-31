@@ -53,7 +53,7 @@ try {
     console.log('======================================================================\n');
     console.log('Next steps:');
     console.log('  1. Set up PostgreSQL database');
-    console.log('  2. export CURRANT_DATABASE_URL="postgresql://user:pass@localhost/currant"');
+    console.log('  2. export RHYTHM_DATABASE_URL="postgresql://user:pass@localhost/rhythm"');
     console.log('  3. Run migrations: node dist/cli.js migrate');
     console.log('  4. Start worker: node dist/cli.js worker -q default');
   } else {

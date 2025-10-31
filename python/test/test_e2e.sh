@@ -43,7 +43,7 @@ echo "✓ Python package installed"
 echo
 
 # Set database URL and Python path
-export CURRANT_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
+export RHYTHM_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
 export PYTHONPATH="${PWD}:${PYTHONPATH}"
 export RUST_LOG=debug
 
@@ -71,7 +71,7 @@ echo
 
 # Start worker in background
 echo "👷 Starting worker..."
-currant worker -q notifications -q orders -m examples.simple_example &
+rhythm worker -q notifications -q orders -m examples.simple_example &
 WORKER_PID=$!
 
 # Wait for worker to process tasks

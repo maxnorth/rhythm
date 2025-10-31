@@ -8,11 +8,11 @@ from typing import Optional, List
 import traceback
 import os
 
-from currant.config import settings
-from currant.rust_bridge import RustBridge
-from currant.models import Execution, ExecutionType, WorkerStatus
-from currant.registry import get_function
-from currant.utils import generate_id, calculate_retry_delay
+from rhythm.config import settings
+from rhythm.rust_bridge import RustBridge
+from rhythm.models import Execution, ExecutionType, WorkerStatus
+from rhythm.registry import get_function
+from rhythm.utils import generate_id, calculate_retry_delay
 
 logger = logging.getLogger(__name__)
 
@@ -110,9 +110,9 @@ class Worker:
     async def _setup_listen_connection(self):
         """Setup dedicated connection for LISTEN/NOTIFY"""
         try:
-            db_url = os.getenv("CURRANT_DATABASE_URL")
+            db_url = os.getenv("RHYTHM_DATABASE_URL")
             if not db_url:
-                logger.warning("CURRANT_DATABASE_URL not set, LISTEN/NOTIFY disabled")
+                logger.warning("RHYTHM_DATABASE_URL not set, LISTEN/NOTIFY disabled")
                 return
 
             self.notify_conn = await asyncpg.connect(db_url)
@@ -340,7 +340,7 @@ class Worker:
         # Call Rust execute_workflow_step
         result_str = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: __import__('currant').currant_core.execute_workflow_step_sync(execution.id)
+            lambda: __import__('rhythm').rhythm_core.execute_workflow_step_sync(execution.id)
         )
 
         logger.info(f"DSL workflow step result: {result_str}")

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Command-line interface for Currant (Node.js)
+ * Command-line interface for Rhythm (Node.js)
  */
 
 import { Command } from 'commander';
@@ -10,8 +10,8 @@ import { RustBridge } from './rust-bridge-native.js';
 const program = new Command();
 
 program
-  .name('currant')
-  .description('Currant - A lightweight durable execution framework')
+  .name('rhythm')
+  .description('Rhythm - A lightweight durable execution framework')
   .version('0.1.0');
 
 program

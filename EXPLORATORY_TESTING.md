@@ -132,9 +132,9 @@ task("t", { "val": -.5 })   # Was failing
 
 2. **Multiple statements on one line** - Initially worked due to whitespace-based parsing, but now **enforced via line number validation** in the Rust parser. Attempting to put multiple statements on the same line will result in a clear error message.
 
-3. **Semicolons explicitly disallowed** - Unlike JavaScript which makes semicolons optional, the Currant DSL **prohibits semicolons entirely**. This enforces a clean, Python-like syntax where newlines are the statement separators.
+3. **Semicolons explicitly disallowed** - Unlike JavaScript which makes semicolons optional, the Rhythm DSL **prohibits semicolons entirely**. This enforces a clean, Python-like syntax where newlines are the statement separators.
 
-4. **Comments use `//` not `#`** - Unlike Python/Ruby/Bash which use `#`, the Currant DSL uses `//` for comments (similar to JavaScript, Rust, C++). Hash symbols `#` inside strings are allowed, but `#` comments outside strings are rejected with a helpful error message.
+4. **Comments use `//` not `#`** - Unlike Python/Ruby/Bash which use `#`, the Rhythm DSL uses `//` for comments (similar to JavaScript, Rust, C++). Hash symbols `#` inside strings are allowed, but `#` comments outside strings are rejected with a helpful error message.
 
 5. **Large number handling** - Very large integers automatically converted to scientific notation by serde_json (e.g., `999999999999999999999` → `1e21`).
 

@@ -1,21 +1,21 @@
 """Benchmark tasks for performance testing.
 
-These functions are automatically registered when CURRANT_BENCHMARK=1 environment
-variable is set. They are used by the `currant bench` CLI command.
+These functions are automatically registered when RHYTHM_BENCHMARK=1 environment
+variable is set. They are used by the `rhythm bench` CLI command.
 
 Note: Function names must match what the benchmark CLI expects:
-- __currant_bench_noop__
-- __currant_bench_compute__
-- __currant_bench_task__
+- __rhythm_bench_noop__
+- __rhythm_bench_compute__
+- __rhythm_bench_task__
 """
 
 import asyncio
-from currant import task
-from currant.benchmark_tasks import bench_task
+from rhythm import task
+from rhythm.benchmark_tasks import bench_task
 
 
 @task(queue="default")
-async def __currant_bench_noop__(payload_size: int = 0):
+async def __rhythm_bench_noop__(payload_size: int = 0):
     """No-op task for benchmarking throughput with minimal overhead.
 
     Args:
@@ -29,7 +29,7 @@ async def __currant_bench_noop__(payload_size: int = 0):
 
 
 @task(queue="default")
-async def __currant_bench_compute__(iterations: int = 1000, payload_size: int = 0):
+async def __rhythm_bench_compute__(iterations: int = 1000, payload_size: int = 0):
     """CPU-bound task for benchmarking with computational work.
 
     Args:
@@ -48,4 +48,4 @@ async def __currant_bench_compute__(iterations: int = 1000, payload_size: int = 
 
 
 # Keep old name for backwards compatibility with benchmark CLI
-__currant_bench_task__ = bench_task
+__rhythm_bench_task__ = bench_task

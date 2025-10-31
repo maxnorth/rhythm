@@ -1,9 +1,9 @@
-/// Currant Global CLI
+/// Rhythm Global CLI
 ///
-/// This binary provides administrative commands for Currant without requiring
+/// This binary provides administrative commands for Rhythm without requiring
 /// a language runtime. It's useful for DevOps, debugging, and running baseline benchmarks.
 
-use currant_core::cli;
+use rhythm_core::cli;
 
 #[tokio::main]
 async fn main() {

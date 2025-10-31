@@ -4,10 +4,10 @@ import json
 from typing import Any, Dict, List, Optional
 
 try:
-    from currant import currant_core as rust
+    from rhythm import rhythm_core as rust
 except ImportError:
     raise ImportError(
-        "currant_core Rust extension not found."
+        "rhythm_core Rust extension not found."
     )
 
 
@@ -23,7 +23,7 @@ class RustBridge:
         workflows: Optional[List[Dict[str, str]]] = None,
     ) -> None:
         """
-        Initialize Currant with configuration options.
+        Initialize Rhythm with configuration options.
 
         Args:
             database_url: Database URL (overrides config file and env vars)
@@ -197,7 +197,7 @@ class RustBridge:
         Run a benchmark by calling into Rust.
 
         Args:
-            worker_command: Command to spawn workers (e.g., ["python", "-m", "currant", "worker"])
+            worker_command: Command to spawn workers (e.g., ["python", "-m", "rhythm", "worker"])
             workers: Number of worker processes to spawn
             tasks: Number of tasks to enqueue
             workflows: Number of workflows to enqueue

@@ -163,8 +163,8 @@ async function main() {
 
   console.log('='.repeat(60));
   console.log('Tasks and workflows enqueued! Start workers to process them:');
-  console.log('  currant worker -q notifications');
-  console.log('  currant worker -q orders');
+  console.log('  rhythm worker -q notifications');
+  console.log('  rhythm worker -q orders');
   console.log('='.repeat(60));
 }
 

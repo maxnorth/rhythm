@@ -1,5 +1,5 @@
 /**
- * Core types for Currant
+ * Core types for Rhythm
  */
 
 export interface ExecutionConfig {

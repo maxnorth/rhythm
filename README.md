@@ -1,4 +1,4 @@
-# Currant
+# Rhythm
 
 A lightweight durable execution framework using only Postgres. No external orchestrator needed.
 
@@ -26,22 +26,22 @@ pip install -e .
 
 ```bash
 # Set database URL
-export CURRANT_DATABASE_URL="postgresql://localhost/currant"
+export RHYTHM_DATABASE_URL="postgresql://localhost/rhythm"
 
 # Run migrations
-currant migrate
+rhythm migrate
 ```
 
 ### 2. Define Tasks and Workflows
 
 ```python
 # app.py - Define tasks
-import currant
-from currant import task
+import rhythm
+from rhythm import task
 
 # Initialize with workflow paths
-currant.init(
-    database_url="postgresql://localhost/currant",
+rhythm.init(
+    database_url="postgresql://localhost/rhythm",
     workflow_paths=["./workflows"]
 )
 
@@ -72,10 +72,10 @@ task("send_email", { "to": "customer@example.com", "subject": "Order shipped!" }
 ### 3. Start Workflows
 
 ```python
-import currant
+import rhythm
 
 # Start a DSL workflow
-workflow_id = await currant.start_workflow(
+workflow_id = await rhythm.start_workflow(
     "processOrder",
     inputs={"orderId": "order-123", "amount": 99.99}
 )
@@ -86,13 +86,13 @@ print(f"Workflow started: {workflow_id}")
 
 ```bash
 # Start worker for emails queue
-currant worker -q emails
+rhythm worker -q emails
 
 # Start worker for orders queue
-currant worker -q orders
+rhythm worker -q orders
 
 # Start worker for multiple queues
-currant worker -q emails -q orders
+rhythm worker -q emails -q orders
 ```
 
 ## Workflow Types
@@ -132,48 +132,48 @@ task_id = await send_email.options(
 
 ```bash
 # Run migrations
-currant migrate
+rhythm migrate
 
 # Start worker
-currant worker -q queue_name
+rhythm worker -q queue_name
 
 # Check execution status
-currant status <execution_id>
+rhythm status <execution_id>
 
 # List executions
-currant list
-currant list --queue emails --status pending
-currant list --limit 50
+rhythm list
+rhythm list --queue emails --status pending
+rhythm list --limit 50
 
 # Cancel execution
-currant cancel <execution_id>
+rhythm cancel <execution_id>
 ```
 
 ## Configuration
 
-Set via environment variables (prefix with `CURRANT_`):
+Set via environment variables (prefix with `RHYTHM_`):
 
 ```bash
 # Database
-export CURRANT_DATABASE_URL="postgresql://localhost/currant"
+export RHYTHM_DATABASE_URL="postgresql://localhost/rhythm"
 
 # Worker settings
-export CURRANT_WORKER_HEARTBEAT_INTERVAL=5  # seconds
-export CURRANT_WORKER_HEARTBEAT_TIMEOUT=30  # seconds
-export CURRANT_WORKER_POLL_INTERVAL=1  # seconds
-export CURRANT_WORKER_MAX_CONCURRENT=10  # per worker
+export RHYTHM_WORKER_HEARTBEAT_INTERVAL=5  # seconds
+export RHYTHM_WORKER_HEARTBEAT_TIMEOUT=30  # seconds
+export RHYTHM_WORKER_POLL_INTERVAL=1  # seconds
+export RHYTHM_WORKER_MAX_CONCURRENT=10  # per worker
 
 # Execution defaults
-export CURRANT_DEFAULT_TIMEOUT=300  # seconds
-export CURRANT_DEFAULT_WORKFLOW_TIMEOUT=3600  # seconds
-export CURRANT_DEFAULT_RETRIES=3
+export RHYTHM_DEFAULT_TIMEOUT=300  # seconds
+export RHYTHM_DEFAULT_WORKFLOW_TIMEOUT=3600  # seconds
+export RHYTHM_DEFAULT_RETRIES=3
 ```
 
 ## How It Works
 
 ### Worker Coordination (No External Orchestrator!)
 
-Unlike DBOS which requires a separate Conductor service, currant achieves worker failover entirely through Postgres:
+Unlike DBOS which requires a separate Conductor service, rhythm achieves worker failover entirely through Postgres:
 
 1. **Heartbeats** - Workers update a heartbeat table every 5s
 2. **Dead worker detection** - Workers detect when other workers haven't heartbeat in 30s
@@ -219,7 +219,7 @@ DSL workflows use simple state persistence:
 
 ## Comparison
 
-| Feature | Currant | DBOS Transact | Temporal |
+| Feature | Rhythm | DBOS Transact | Temporal |
 |---------|-----------|---------------|----------|
 | External orchestrator | ❌ None | ✅ Conductor required | ✅ Server required |
 | Database | Postgres only | Postgres only | Any (via adapter) |

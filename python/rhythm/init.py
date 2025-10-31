@@ -1,11 +1,11 @@
 """
-Initialization for Currant workflows
+Initialization for Rhythm workflows
 """
 
 from typing import List, Optional
 from pathlib import Path
 
-from currant.rust_bridge import RustBridge
+from rhythm.rust_bridge import RustBridge
 
 
 def init(
@@ -14,7 +14,7 @@ def init(
     auto_migrate: bool = True,
 ) -> None:
     """
-    Initialize Currant with workflow definitions.
+    Initialize Rhythm with workflow definitions.
 
     This function:
     1. Initializes Rust core with database connection
@@ -27,8 +27,8 @@ def init(
         auto_migrate: Whether to automatically run migrations if needed
 
     Example:
-        >>> import currant
-        >>> currant.init(
+        >>> import rhythm
+        >>> rhythm.init(
         ...     database_url="postgresql://localhost/myapp",
         ...     workflow_paths=["./workflows", "./app/workflows"]
         ... )

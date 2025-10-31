@@ -1,6 +1,6 @@
-# Currant Workflow Example
+# Rhythm Workflow Example
 
-This example demonstrates how to use Currant's DSL-based workflows.
+This example demonstrates how to use Rhythm's DSL-based workflows.
 
 ## Project Structure
 
@@ -29,10 +29,10 @@ task("sendEmail", { "to": "customer@example.com", "subject": "Order shipped!", "
 
 ### 2. Task Definitions (Python)
 
-Tasks are Python functions decorated with `@currant.task`:
+Tasks are Python functions decorated with `@rhythm.task`:
 
 ```python
-@currant.task(name="chargeCard", queue="payments")
+@rhythm.task(name="chargeCard", queue="payments")
 async def charge_card(order_id: str, amount: float):
     # Business logic here
     return {"success": True, "transaction_id": "tx_123456"}
@@ -40,11 +40,11 @@ async def charge_card(order_id: str, amount: float):
 
 ### 3. Initialization
 
-At startup, initialize Currant with workflow paths:
+At startup, initialize Rhythm with workflow paths:
 
 ```python
-currant.init(
-    database_url="postgresql://currant@localhost/currant",
+rhythm.init(
+    database_url="postgresql://rhythm@localhost/rhythm",
     workflow_paths=["./workflows"]
 )
 ```
@@ -56,7 +56,7 @@ This scans the `workflows/` directory, parses all `.flow` files, and stores them
 Queue a workflow execution:
 
 ```python
-workflow_id = await currant.start_workflow(
+workflow_id = await rhythm.start_workflow(
     "processOrder",
     inputs={"orderId": "order-123", "amount": 99.99}
 )
@@ -70,7 +70,7 @@ docker compose up -d
 
 # Run migrations
 cd python
-.venv/bin/python -m currant migrate
+.venv/bin/python -m rhythm migrate
 
 # Run the example
 cd examples/workflow_example

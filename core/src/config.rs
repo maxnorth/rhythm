@@ -1,16 +1,16 @@
-//! Configuration management for Currant
+//! Configuration management for Rhythm
 //!
 //! Configuration is loaded with the following priority (highest to lowest):
 //! 1. CLI flags (--database-url, etc.)
-//! 2. Environment variables (CURRANT_DATABASE_URL, etc.)
-//! 3. Config file (currant.toml in project root or ~/.config/currant/config.toml)
+//! 2. Environment variables (RHYTHM_DATABASE_URL, etc.)
+//! 3. Config file (rhythm.toml in project root or ~/.config/rhythm/config.toml)
 //! 4. Built-in defaults
 //!
-//! # Example Config File (currant.toml)
+//! # Example Config File (rhythm.toml)
 //!
 //! ```toml
 //! [database]
-//! url = "postgresql://localhost/currant"
+//! url = "postgresql://localhost/rhythm"
 //! max_connections = 50
 //! min_connections = 5
 //! acquire_timeout_secs = 10
@@ -20,22 +20,22 @@
 //!
 //! # Environment Variables
 //!
-//! All config values can be set via environment variables with the CURRANT_ prefix:
-//! - CURRANT_DATABASE_URL
-//! - CURRANT_DATABASE_MAX_CONNECTIONS
-//! - CURRANT_DATABASE_MIN_CONNECTIONS
+//! All config values can be set via environment variables with the RHYTHM_ prefix:
+//! - RHYTHM_DATABASE_URL
+//! - RHYTHM_DATABASE_MAX_CONNECTIONS
+//! - RHYTHM_DATABASE_MIN_CONNECTIONS
 //! - etc.
 //!
 //! # Usage
 //!
 //! ```rust
-//! use currant_core::config::Config;
+//! use rhythm_core::config::Config;
 //!
 //! // Load config with full priority chain
 //! let config = Config::load()?;
 //!
 //! // Load from specific file
-//! let config = Config::from_file("currant.toml")?;
+//! let config = Config::from_file("rhythm.toml")?;
 //!
 //! // Load with CLI overrides
 //! let config = Config::builder()
@@ -217,8 +217,8 @@ impl ConfigBuilder {
             anyhow::bail!(
                 "Database URL not configured\n\n\
                 Please set the database URL using one of:\n\
-                  1. Config file: Add 'url = \"postgresql://...\"' to [database] section in currant.toml\n\
-                  2. Environment variable: CURRANT_DATABASE_URL=postgresql://...\n\
+                  1. Config file: Add 'url = \"postgresql://...\"' to [database] section in rhythm.toml\n\
+                  2. Environment variable: RHYTHM_DATABASE_URL=postgresql://...\n\
                   3. CLI flag: --database-url postgresql://..."
             );
         }
@@ -234,7 +234,7 @@ impl ConfigBuilder {
                 anyhow::bail!("Config file not found: {:?}", path);
             } 
             Some(path.clone())
-        } else if let Ok(path_str) = env::var("CURRANT_CONFIG_PATH") {
+        } else if let Ok(path_str) = env::var("RHYTHM_CONFIG_PATH") {
             // Path from environment variable
             let path = PathBuf::from(path_str);
             if !path.exists() {
@@ -256,17 +256,17 @@ impl ConfigBuilder {
 
     /// Search for config file in default locations
     fn find_config_file(&self) -> Option<PathBuf> {
-        // 1. Project root: ./currant.toml
-        let project_config = PathBuf::from("currant.toml");
+        // 1. Project root: ./rhythm.toml
+        let project_config = PathBuf::from("rhythm.toml");
         if project_config.exists() {
             return Some(project_config);
         }
 
-        // 2. User config: ~/.config/currant/config.toml
+        // 2. User config: ~/.config/rhythm/config.toml
         if let Some(home) = env::var_os("HOME") {
             let user_config = PathBuf::from(home)
                 .join(".config")
-                .join("currant")
+                .join("rhythm")
                 .join("config.toml");
             if user_config.exists() {
                 return Some(user_config);
@@ -279,36 +279,36 @@ impl ConfigBuilder {
     /// Apply environment variables to config
     fn apply_env_vars(&self, config: &mut Config) {
         // Database URL
-        if let Ok(url) = env::var("CURRANT_DATABASE_URL") {
+        if let Ok(url) = env::var("RHYTHM_DATABASE_URL") {
             config.database.url = Some(url);
         }
 
         // Database pool settings
-        if let Ok(max) = env::var("CURRANT_DATABASE_MAX_CONNECTIONS") {
+        if let Ok(max) = env::var("RHYTHM_DATABASE_MAX_CONNECTIONS") {
             if let Ok(max) = max.parse() {
                 config.database.max_connections = max;
             }
         }
 
-        if let Ok(min) = env::var("CURRANT_DATABASE_MIN_CONNECTIONS") {
+        if let Ok(min) = env::var("RHYTHM_DATABASE_MIN_CONNECTIONS") {
             if let Ok(min) = min.parse() {
                 config.database.min_connections = min;
             }
         }
 
-        if let Ok(timeout) = env::var("CURRANT_DATABASE_ACQUIRE_TIMEOUT_SECS") {
+        if let Ok(timeout) = env::var("RHYTHM_DATABASE_ACQUIRE_TIMEOUT_SECS") {
             if let Ok(timeout) = timeout.parse() {
                 config.database.acquire_timeout_secs = timeout;
             }
         }
 
-        if let Ok(timeout) = env::var("CURRANT_DATABASE_IDLE_TIMEOUT_SECS") {
+        if let Ok(timeout) = env::var("RHYTHM_DATABASE_IDLE_TIMEOUT_SECS") {
             if let Ok(timeout) = timeout.parse() {
                 config.database.idle_timeout_secs = timeout;
             }
         }
 
-        if let Ok(lifetime) = env::var("CURRANT_DATABASE_MAX_LIFETIME_SECS") {
+        if let Ok(lifetime) = env::var("RHYTHM_DATABASE_MAX_LIFETIME_SECS") {
             if let Ok(lifetime) = lifetime.parse() {
                 config.database.max_lifetime_secs = lifetime;
             }
@@ -393,8 +393,8 @@ mod tests {
     #[test]
     fn test_missing_database_url_error() {
         // Temporarily unset DATABASE_URL for this test
-        let original = std::env::var("CURRANT_DATABASE_URL").ok();
-        std::env::remove_var("CURRANT_DATABASE_URL");
+        let original = std::env::var("RHYTHM_DATABASE_URL").ok();
+        std::env::remove_var("RHYTHM_DATABASE_URL");
 
         let result = Config::builder().build();
         assert!(result.is_err());
@@ -403,7 +403,7 @@ mod tests {
 
         // Restore original value
         if let Some(url) = original {
-            std::env::set_var("CURRANT_DATABASE_URL", url);
+            std::env::set_var("RHYTHM_DATABASE_URL", url);
         }
     }
 }

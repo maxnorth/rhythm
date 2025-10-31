@@ -2,7 +2,7 @@
 
 ## Summary
 
-Implemented critical performance optimizations to transform Currant into a professional-grade async scheduler. These changes eliminate aggressive polling, reduce database load, and enable batch processing.
+Implemented critical performance optimizations to transform Rhythm into a professional-grade async scheduler. These changes eliminate aggressive polling, reduce database load, and enable batch processing.
 
 ## Changes Made
 
@@ -20,7 +20,7 @@ Implemented critical performance optimizations to transform Currant into a profe
 - Poll loop reduced to 5s intervals when LISTEN working
 
 **Files Changed**:
-- `python/currant/worker.py`:
+- `python/rhythm/worker.py`:
   - Added `notify_conn` and `notify_event` to Worker class
   - Added `_setup_listen_connection()` method
   - Updated `_listener_loop()` to use `notify_event.wait()` instead of sleep polling
@@ -52,12 +52,12 @@ Implemented critical performance optimizations to transform Currant into a profe
 
 - `python/native/src/lib.rs`:
   - Added `claim_executions_batch_sync()` FFI binding
-  - Registered in `currant_core` PyModule
+  - Registered in `rhythm_core` PyModule
 
-- `python/currant/rust_bridge.py`:
+- `python/rhythm/rust_bridge.py`:
   - Added `RustBridge.claim_executions_batch()` wrapper
 
-- `python/currant/worker.py`:
+- `python/rhythm/worker.py`:
   - Updated `_try_claim_and_execute()` to use batch claiming
   - Calculates `available_capacity` dynamically
   - Launches all claimed tasks as concurrent tasks
@@ -147,17 +147,17 @@ To validate improvements:
 
 ```bash
 # Baseline (with improvements)
-export CURRANT_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
-.venv/bin/python -m currant bench --workers 10 --tasks 1000 --warmup-percent 10
+export RHYTHM_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
+.venv/bin/python -m rhythm bench --workers 10 --tasks 1000 --warmup-percent 10
 
 # Throughput test
-.venv/bin/python -m currant bench --workers 50 --tasks 10000 --warmup-percent 10
+.venv/bin/python -m rhythm bench --workers 50 --tasks 10000 --warmup-percent 10
 
 # Latency test
-.venv/bin/python -m currant bench --workers 10 --tasks 100 --warmup-percent 20
+.venv/bin/python -m rhythm bench --workers 10 --tasks 100 --warmup-percent 20
 
 # Stress test
-.venv/bin/python -m currant bench --workers 100 --duration 60s
+.venv/bin/python -m rhythm bench --workers 100 --duration 60s
 ```
 
 ## Breaking Changes
@@ -169,7 +169,7 @@ None! All changes are backward compatible:
 
 ## Architecture Notes
 
-The improvements maintain Currant's core design principles:
+The improvements maintain Rhythm's core design principles:
 - ✅ Postgres-only (no new dependencies)
 - ✅ Rust core for performance-critical paths
 - ✅ Clean FFI boundary between Rust and Python
@@ -183,4 +183,4 @@ The improvements maintain Currant's core design principles:
 4. **Fair Scheduling**: Priority + FIFO ordering preserved
 5. **Graceful Fallback**: Works even if NOTIFY fails
 
-These changes bring Currant in line with production-ready schedulers like Celery (Redis BLPOP), BullMQ (Redis blocking), and Temporal (gRPC streaming).
+These changes bring Rhythm in line with production-ready schedulers like Celery (Redis BLPOP), BullMQ (Redis blocking), and Temporal (gRPC streaming).

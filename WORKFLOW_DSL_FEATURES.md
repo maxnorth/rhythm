@@ -1,10 +1,10 @@
 # Workflow DSL Feature Reference
 
-Complete reference for the Currant workflow DSL syntax and features.
+Complete reference for the Rhythm workflow DSL syntax and features.
 
 ## Overview
 
-The Currant workflow DSL is a clean, expressive language for defining task workflows. It combines the best of JSON with modern programming language conveniences.
+The Rhythm workflow DSL is a clean, expressive language for defining task workflows. It combines the best of JSON with modern programming language conveniences.
 
 **Philosophy**: Strict where it matters, flexible where it helps.
 
@@ -276,7 +276,7 @@ To keep things simple and focused, these are intentionally excluded:
 
 ## Comparison with Standard JSON
 
-| Feature | Standard JSON | Currant DSL |
+| Feature | Standard JSON | Rhythm DSL |
 |---------|--------------|-------------|
 | Quoted keys | ✅ Required | ✅ Optional |
 | Hex numbers | ❌ | ✅ `0xFF` |

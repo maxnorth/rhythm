@@ -11,14 +11,14 @@ This script:
 import asyncio
 import asyncpg
 import sys
-sys.path.insert(0, '/Users/maxnorth/Projects/currant/python')
+sys.path.insert(0, '/Users/maxnorth/Projects/rhythm/python')
 
-import currant
-rust = currant.currant_core
+import rhythm
+rust = rhythm.rhythm_core
 
 
 async def main():
-    conn = await asyncpg.connect('postgresql://currant@localhost/currant')
+    conn = await asyncpg.connect('postgresql://rhythm@localhost/rhythm')
 
     print("=== Checking initial workflow ===")
 

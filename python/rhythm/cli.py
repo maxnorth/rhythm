@@ -5,9 +5,9 @@ import click
 import logging
 import sys
 
-from currant.rust_bridge import RustBridge
-from currant.worker import run_worker
-from currant.client import get_execution_status, list_executions, cancel_execution
+from rhythm.rust_bridge import RustBridge
+from rhythm.worker import run_worker
+from rhythm.client import get_execution_status, list_executions, cancel_execution
 
 # Setup logging
 logging.basicConfig(
@@ -19,7 +19,7 @@ logging.basicConfig(
 
 @click.group()
 def cli():
-    """Currant - A lightweight durable execution framework"""
+    """Rhythm - A lightweight durable execution framework"""
     pass
 
 

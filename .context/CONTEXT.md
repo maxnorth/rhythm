@@ -1,10 +1,10 @@
-# Currant - Project Context
+# Rhythm - Project Context
 
 > **Instructions for Claude**: Read this file at the start of each session (via `/context` command). After making significant architectural decisions or design changes, UPDATE this file to preserve context for future conversations.
 
 ## Development Status
 
-**Pre-release**: Currant has not been released yet and has no users.
+**Pre-release**: Rhythm has not been released yet and has no users.
 **Breaking changes are OK** - Do not add backwards compatibility code or worry about breaking changes. Make clean, direct changes.
 
 ## Performance Requirements
@@ -43,9 +43,9 @@
 - All code, docs, and examples updated throughout codebase
 - No backwards compatibility needed (pre-release)
 
-## What is Currant?
+## What is Rhythm?
 
-Currant is a **lightweight durable execution framework** that enables building reliable, multi-step workflows using only PostgreSQL - no external orchestrator needed.
+Rhythm is a **lightweight durable execution framework** that enables building reliable, multi-step workflows using only PostgreSQL - no external orchestrator needed.
 
 **Language Support**: Designed to support any language with FFI capabilities. Initial development focuses on Python and Node.js adapters.
 
@@ -96,7 +96,7 @@ Currant is a **lightweight durable execution framework** that enables building r
 - `signals.rs` - Workflow signal management
 - `types.rs` - Shared data structures
 
-**Python Adapter** (`/python/currant`):
+**Python Adapter** (`/python/rhythm`):
 - `decorators.py` - `@task` decorator
 - `registry.py` - Function registry for decorated functions
 - `worker.py` - Worker loop (claim → execute → report)
@@ -146,7 +146,7 @@ Currant is a **lightweight durable execution framework** that enables building r
 **Comparison**:
 - **DBOS Transact**: Requires separate Conductor service for coordination
 - **Temporal**: Requires dedicated server cluster
-- **Currant**: Only Postgres
+- **Rhythm**: Only Postgres
 
 **Trade-offs**:
 - ✅ Simpler deployment (one fewer service)
@@ -194,7 +194,7 @@ task("taskName", { "arg": "value" })
 sleep(5)
 ```
 
-**See**: [DSL_WORKFLOW_IMPLEMENTATION.md](/Users/maxnorth/Projects/currant/.context/DSL_WORKFLOW_IMPLEMENTATION.md)
+**See**: [DSL_WORKFLOW_IMPLEMENTATION.md](/Users/maxnorth/Projects/rhythm/.context/DSL_WORKFLOW_IMPLEMENTATION.md)
 
 ## Execution Model
 
@@ -311,8 +311,8 @@ npm test             # 23 tests
 **IMPORTANT**: `core/` is a pure Rust library with NO language-specific bindings. It's designed to be universal - any language with FFI capabilities can integrate with it.
 
 Language bindings live in separate crates:
-- **Python**: `python/native/` - PyO3 bindings that import `currant-core`
-- **Node.js**: `node/native/` - NAPI-RS bindings that import `currant-core`
+- **Python**: `python/native/` - PyO3 bindings that import `rhythm-core`
+- **Node.js**: `node/native/` - NAPI-RS bindings that import `rhythm-core`
 - **Future languages**: Follow the same pattern (e.g., `go/native/` with CGO, `ruby/native/` with Rutie, etc.)
 
 **Why this matters**:
@@ -333,11 +333,11 @@ core/
 
 python/native/
 ├── Cargo.toml        # PyO3 bindings, crate-type = ["cdylib"]
-└── src/lib.rs        # use currant_core::*; + PyO3 wrappers
+└── src/lib.rs        # use rhythm_core::*; + PyO3 wrappers
 
 node/native/
 ├── Cargo.toml        # NAPI-RS bindings, crate-type = ["cdylib"]
-└── src/lib.rs        # use currant_core::*; + NAPI wrappers
+└── src/lib.rs        # use rhythm_core::*; + NAPI wrappers
 ```
 
 **Never**:
@@ -360,12 +360,12 @@ node/native/
 
 | Language | Command | Version Isolation |
 |----------|---------|-------------------|
-| **Python** | `python -m currant <cmd>` | virtualenv |
-| **Node.js** | `npx currant <cmd>` | node_modules |
+| **Python** | `python -m rhythm <cmd>` | virtualenv |
+| **Node.js** | `npx rhythm <cmd>` | node_modules |
 | **Go** | `go run cmd/<cmd>/main.go` | go.mod |
 | **Rust** | `cargo run --bin <cmd>` | Cargo.toml |
-| **Ruby** | `bundle exec currant <cmd>` | Bundler |
-| **Admin (any)** | `currant <cmd>` (optional) | Global install |
+| **Ruby** | `bundle exec rhythm <cmd>` | Bundler |
+| **Admin (any)** | `rhythm <cmd>` (optional) | Global install |
 
 ---
 
@@ -373,29 +373,29 @@ node/native/
 
 **Installation:**
 ```bash
-cargo install currant-cli
+cargo install rhythm-cli
 ```
 
 **Available Commands** (database operations only):
 ```bash
-currant list           # Query executions
-currant status         # Check schema status
-currant cancel <id>    # Cancel execution
-currant signal <id>    # Send signal to workflow
-currant retry <id>     # Retry failed execution
-currant cleanup        # Purge old executions
+rhythm list           # Query executions
+rhythm status         # Check schema status
+rhythm cancel <id>    # Cancel execution
+rhythm signal <id>    # Send signal to workflow
+rhythm retry <id>     # Retry failed execution
+rhythm cleanup        # Purge old executions
 ```
 
 **NOT Available** (schema/runtime operations):
 ```bash
-currant migrate        # ❌ Use language adapter
-currant worker         # ❌ Use language adapter
-currant bench          # ❌ Use language adapter
+rhythm migrate        # ❌ Use language adapter
+rhythm worker         # ❌ Use language adapter
+rhythm bench          # ❌ Use language adapter
 ```
 
 **Use Cases:**
 - DevOps/SRE admin tasks without language runtime
-- Quick debugging (`currant list --status=failed`)
+- Quick debugging (`rhythm list --status=failed`)
 - CI/CD operations (cancel, cleanup, status checks)
 - Multi-language projects (one admin tool)
 
@@ -414,18 +414,18 @@ currant bench          # ❌ Use language adapter
 
 ```bash
 # All commands available
-python -m currant migrate      # Language-specific (uses installed package)
-python -m currant worker       # Language-specific
-python -m currant bench        # Language-specific
-python -m currant list         # Delegates to bundled core
-python -m currant cancel <id>  # Delegates to bundled core
+python -m rhythm migrate      # Language-specific (uses installed package)
+python -m rhythm worker       # Language-specific
+python -m rhythm bench        # Language-specific
+python -m rhythm list         # Delegates to bundled core
+python -m rhythm cancel <id>  # Delegates to bundled core
 ```
 
 **Example flow (Python)**:
 ```python
-# python/currant/__main__.py
+# python/rhythm/__main__.py
 args = sys.argv.copy()
-args[0] = 'currant'
+args[0] = 'rhythm'
 
 if args[1] in ['worker', 'bench', 'migrate']:
     # Python handles language-specific commands
@@ -442,16 +442,16 @@ Users write their own command scripts:
 ```go
 // cmd/migrate/main.go
 package main
-import "github.com/currant/currant"
+import "github.com/rhythm/rhythm"
 
 func main() {
-    currant.Migrate()  // Uses version from go.mod
+    rhythm.Migrate()  // Uses version from go.mod
 }
 
 // cmd/worker/main.go
 func main() {
-    config := currant.LoadConfigFromEnv()
-    worker := currant.NewWorker(config)
+    config := rhythm.LoadConfigFromEnv()
+    worker := rhythm.NewWorker(config)
     worker.Run()
 }
 ```
@@ -496,8 +496,8 @@ go run cmd/worker/main.go
 
 **Priority order** (highest to lowest):
 1. CLI flag: `--database-url postgresql://...` (explicit override for debugging)
-2. Environment variable: `CURRANT_DATABASE_URL` (container-friendly)
-3. Config file: `currant.toml` (default for local dev)
+2. Environment variable: `RHYTHM_DATABASE_URL` (container-friendly)
+3. Config file: `rhythm.toml` (default for local dev)
 4. **Required**: Database URL must be set via one of the above methods
 
 **Why no default URL?** Following best practices from Temporal, Celery, and other production tools:
@@ -508,9 +508,9 @@ go run cmd/worker/main.go
 
 **Config file format** (TOML):
 ```toml
-# currant.toml
+# rhythm.toml
 [database]
-url = "postgresql://localhost/currant"
+url = "postgresql://localhost/rhythm"
 max_connections = 50
 min_connections = 5
 acquire_timeout_secs = 10
@@ -527,18 +527,18 @@ max_lifetime_secs = 1800
 - `database.max_lifetime_secs`: Max connection lifetime (default: 1800)
 
 **Environment variable mapping**:
-- `CURRANT_DATABASE_URL` → `database.url`
-- `CURRANT_DATABASE_MAX_CONNECTIONS` → `database.max_connections`
-- `CURRANT_DATABASE_MIN_CONNECTIONS` → `database.min_connections`
-- `CURRANT_DATABASE_ACQUIRE_TIMEOUT_SECS` → `database.acquire_timeout_secs`
-- `CURRANT_DATABASE_IDLE_TIMEOUT_SECS` → `database.idle_timeout_secs`
-- `CURRANT_DATABASE_MAX_LIFETIME_SECS` → `database.max_lifetime_secs`
-- `CURRANT_CONFIG_PATH` → Override config file location
+- `RHYTHM_DATABASE_URL` → `database.url`
+- `RHYTHM_DATABASE_MAX_CONNECTIONS` → `database.max_connections`
+- `RHYTHM_DATABASE_MIN_CONNECTIONS` → `database.min_connections`
+- `RHYTHM_DATABASE_ACQUIRE_TIMEOUT_SECS` → `database.acquire_timeout_secs`
+- `RHYTHM_DATABASE_IDLE_TIMEOUT_SECS` → `database.idle_timeout_secs`
+- `RHYTHM_DATABASE_MAX_LIFETIME_SECS` → `database.max_lifetime_secs`
+- `RHYTHM_CONFIG_PATH` → Override config file location
 
 **Config file location search order**:
-1. `CURRANT_CONFIG_PATH` env var (if set)
-2. `currant.toml` (project root, can commit to repo or gitignore for local overrides)
-3. `~/.config/currant/config.toml` (user-level default)
+1. `RHYTHM_CONFIG_PATH` env var (if set)
+2. `rhythm.toml` (project root, can commit to repo or gitignore for local overrides)
+3. `~/.config/rhythm/config.toml` (user-level default)
 
 **`.env` file support**: Automatically loaded if present in project root (using `dotenvy` crate)
 
@@ -552,13 +552,13 @@ max_lifetime_secs = 1800
 
 **Usage in Rust**:
 ```rust
-use currant_core::config::Config;
+use rhythm_core::config::Config;
 
 // Load with full priority chain
 let config = Config::load()?;
 
 // Load from specific file
-let config = Config::from_file("currant.toml")?;
+let config = Config::from_file("rhythm.toml")?;
 
 // Use builder for programmatic overrides
 let config = Config::builder()
@@ -570,13 +570,13 @@ let config = Config::builder()
 **Global CLI integration**:
 ```bash
 # Use default config search
-currant bench --tasks 1000
+rhythm bench --tasks 1000
 
 # Override config file location
-currant --config /path/to/currant.toml bench --tasks 1000
+rhythm --config /path/to/rhythm.toml bench --tasks 1000
 
 # Override database URL directly
-currant --database-url postgresql://prod/db bench --tasks 1000
+rhythm --database-url postgresql://prod/db bench --tasks 1000
 ```
 
 **Future extensibility pattern**:
@@ -593,7 +593,7 @@ Then update `core/src/config.rs`:
 3. Add env var mappings in `apply_env_vars()`
 4. Add CLI flags if needed (e.g., `--observability-endpoint`)
 
-**No version coordination file needed**: Migration always runs from language adapter (which knows its own version), so no `.currant/config.toml` version field is required.
+**No version coordination file needed**: Migration always runs from language adapter (which knows its own version), so no `.rhythm/config.toml` version field is required.
 
 ### Testing Philosophy
 
@@ -668,10 +668,10 @@ See `core/migrations/` for schema details.
 **Command**:
 ```bash
 # Admin CLI (also available via Python passthrough)
-currant bench --tasks 10000 --concurrency 1000
+rhythm bench --tasks 10000 --concurrency 1000
 
 # Optional: simulate work between claim/complete
-currant bench --tasks 10000 --concurrency 1000 --work-delay-us 100
+rhythm bench --tasks 10000 --concurrency 1000 --work-delay-us 100
 ```
 
 **Configuration**:
@@ -699,21 +699,21 @@ currant bench --tasks 10000 --concurrency 1000 --work-delay-us 100
 **Commands**:
 ```bash
 # Python - baseline (passthrough to admin CLI)
-python -m currant bench --tasks 10000 --concurrency 1000
+python -m rhythm bench --tasks 10000 --concurrency 1000
 # ⚠️  Warning: Running baseline benchmark (pure Rust)
-#    To benchmark Python workers: python -m currant bench worker --workers N
+#    To benchmark Python workers: python -m rhythm bench worker --workers N
 
 # Python - worker benchmark (Python-specific command)
-python -m currant bench worker --workers 10 --tasks 1000
+python -m rhythm bench worker --workers 10 --tasks 1000
 
 # Node.js - worker benchmark
-npx currant bench worker --workers 10 --tasks 1000
+npx rhythm bench worker --workers 10 --tasks 1000
 ```
 
 **Benchmark functions** (in adapter modules):
-- `__currant_bench_noop__`: Minimal overhead task (tests throughput)
-- `__currant_bench_compute__`: CPU-bound task (tests under load)
-- `__currant_bench_task__`: No-op task (tests workflow coordination)
+- `__rhythm_bench_noop__`: Minimal overhead task (tests throughput)
+- `__rhythm_bench_compute__`: CPU-bound task (tests under load)
+- `__rhythm_bench_task__`: No-op task (tests workflow coordination)
 - `benchWorkflow`: DSL workflow dynamically generated with N tasks (tests end-to-end DSL execution)
 
 **Configuration**:
@@ -738,11 +738,11 @@ npx currant bench worker --workers 10 --tasks 1000
 **Example analysis**:
 ```bash
 # Run baseline
-currant bench --tasks 10000 --concurrency 1000
+rhythm bench --tasks 10000 --concurrency 1000
 # Result: 5000 tasks/sec
 
 # Run Python worker benchmark
-python -m currant bench worker --workers 10 --tasks 10000
+python -m rhythm bench worker --workers 10 --tasks 10000
 # Result: 1200 tasks/sec (24% of baseline)
 
 # Interpretation: 76% overhead from Python (FFI, serialization, GIL)
@@ -777,11 +777,11 @@ pub async fn run_benchmark(mode: WorkerMode, params: BenchmarkParams) -> Result<
 
 **Language adapter integration** (Python example):
 ```python
-# python/currant/__main__.py
+# python/rhythm/__main__.py
 if args[1] == 'bench':
     if len(args) > 2 and args[2] == 'worker':
         # Python handles: bench worker
-        worker_cmd = ["python", "-m", "currant", "worker", "--queue", "default", "--import", "currant.benchmark"]
+        worker_cmd = ["python", "-m", "rhythm", "worker", "--queue", "default", "--import", "rhythm.benchmark"]
         RustBridge.run_benchmark(
             mode=WorkerMode::External(worker_cmd),
             workers=args.workers,
@@ -790,7 +790,7 @@ if args[1] == 'bench':
     else:
         # Passthrough to admin CLI: bench (baseline mode)
         print("⚠️  Running baseline benchmark (pure Rust)")
-        print("   To benchmark Python workers: python -m currant bench worker --workers N")
+        print("   To benchmark Python workers: python -m rhythm bench worker --workers N")
         RustBridge.run_cli(args)
 ```
 
@@ -815,7 +815,7 @@ if args[1] == 'bench':
 
 ### Adding a New Language Adapter
 
-Currant is designed to support any language with FFI capabilities. To add a new language:
+Rhythm is designed to support any language with FFI capabilities. To add a new language:
 
 1. Create `<lang>/native/` directory with FFI bindings to Rust core
    - Python uses PyO3, Node.js uses NAPI-RS, Go would use CGO, etc.
@@ -836,19 +836,19 @@ Currant is designed to support any language with FFI capabilities. To add a new 
 
 ```bash
 # Baseline benchmark (pure Rust, theoretical maximum)
-currant bench --tasks 10000 --concurrency 1000
+rhythm bench --tasks 10000 --concurrency 1000
 
 # Baseline with simulated work
-currant bench --tasks 10000 --concurrency 1000 --work-delay-us 100
+rhythm bench --tasks 10000 --concurrency 1000 --work-delay-us 100
 
 # Python worker benchmark (full stack)
-python -m currant bench worker --workers 10 --tasks 1000
+python -m rhythm bench worker --workers 10 --tasks 1000
 
 # Test with realistic payloads
-python -m currant bench worker --workers 10 --tasks 1000 --payload-size 10000
+python -m rhythm bench worker --workers 10 --tasks 1000 --payload-size 10000
 
 # Test different queue configurations
-python -m currant bench worker --workers 20 --queues default,priority
+python -m rhythm bench worker --workers 20 --queues default,priority
 ```
 
 ---

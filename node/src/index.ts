@@ -1,5 +1,5 @@
 /**
- * Currant - A lightweight durable execution framework using only Postgres
+ * Rhythm - A lightweight durable execution framework using only Postgres
  */
 
 export { task } from './decorators.js';

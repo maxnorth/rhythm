@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: currant
-      POSTGRES_DB: currant
+      POSTGRES_USER: rhythm
+      POSTGRES_DB: rhythm
       POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U currant"]
+      test: ["CMD-SHELL", "pg_isready -U rhythm"]
       interval: 5s
       timeout: 5s
       retries: 5

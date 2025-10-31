@@ -1,11 +1,11 @@
-# Tracing and Metrics Design for Currant
+# Tracing and Metrics Design for Rhythm
 
 > **Status**: Planning / Design Phase
 > **Last Updated**: 2025-10-11
 
 ## Overview
 
-This document outlines the design considerations for adding distributed tracing and metrics to Currant. Given Currant's unique architecture (Rust core + language adapters + PostgreSQL-only coordination), observability needs careful thought around:
+This document outlines the design considerations for adding distributed tracing and metrics to Rhythm. Given Rhythm's unique architecture (Rust core + language adapters + PostgreSQL-only coordination), observability needs careful thought around:
 
 1. Where instrumentation happens (Rust core vs language adapters)
 2. How trace context propagates through the database
@@ -106,11 +106,11 @@ Add columns to `executions` table:
 
 **Option 1: Environment Variables (Simple)**
 ```bash
-CURRANT_TRACING_ENABLED=true
-CURRANT_TRACING_ENDPOINT=http://localhost:4317  # OTLP endpoint
-CURRANT_TRACING_SERVICE_NAME=my-app
-CURRANT_TRACES_SAMPLE_RATE=0.1
-CURRANT_TRACES_SAMPLE_ERRORS=true  # Always sample failures
+RHYTHM_TRACING_ENABLED=true
+RHYTHM_TRACING_ENDPOINT=http://localhost:4317  # OTLP endpoint
+RHYTHM_TRACING_SERVICE_NAME=my-app
+RHYTHM_TRACES_SAMPLE_RATE=0.1
+RHYTHM_TRACES_SAMPLE_ERRORS=true  # Always sample failures
 ```
 
 **Option 2: Per-Worker Config (Flexible)**
@@ -204,48 +204,48 @@ Metrics are arguably **more important** than traces for operational monitoring:
 ### Core Metrics (Rust)
 
 **Counters:**
-- `currant.executions.claimed`
+- `rhythm.executions.claimed`
   - Labels: `queue`, `worker_id`, `execution_type`
-- `currant.executions.completed`
+- `rhythm.executions.completed`
   - Labels: `queue`, `status` (success/failed/cancelled), `execution_type`
-- `currant.executions.created`
+- `rhythm.executions.created`
   - Labels: `queue`, `execution_type`, `has_parent` (bool)
-- `currant.workflow.replays`
+- `rhythm.workflow.replays`
   - Labels: `workflow_name`
 
 **Histograms:**
-- `currant.execution.duration`
+- `rhythm.execution.duration`
   - Labels: `execution_type`, `queue`, `status`
   - Measures: created_at → completed_at
-- `currant.claim_loop.duration`
+- `rhythm.claim_loop.duration`
   - Labels: `worker_id`, `queue`
   - Measures: Time to claim next execution
-- `currant.db.query.duration`
+- `rhythm.db.query.duration`
   - Labels: `operation` (claim/report/create/heartbeat)
   - Measures: Database query latency
 
 **Gauges:**
-- `currant.workers.active`
+- `rhythm.workers.active`
   - From `worker_heartbeats` table
   - Labels: None (or `queue` if workers subscribe to specific queues)
-- `currant.executions.waiting`
+- `rhythm.executions.waiting`
   - Labels: `queue`, `execution_type`
   - Queue depth (pending executions)
-- `currant.executions.running`
+- `rhythm.executions.running`
   - Labels: `queue`, `execution_type`, `worker_id`
   - Currently executing
 
 ### Adapter Metrics (Python/Node)
 
 **Histograms:**
-- `currant.function.execution.duration`
+- `rhythm.function.execution.duration`
   - Labels: `function_name`, `execution_type`, `status`
   - Measures: User function execution time
-- `currant.serialization.duration`
+- `rhythm.serialization.duration`
   - Labels: `direction` (serialize/deserialize), `format`
 
 **Counters:**
-- `currant.ffi.calls`
+- `rhythm.ffi.calls`
   - Labels: `function` (claim_execution/report_result/etc.)
   - Tracks FFI boundary crossings (for debugging overhead)
 
@@ -271,19 +271,19 @@ Metrics are arguably **more important** than traces for operational monitoring:
 **Environment Variables:**
 ```bash
 # Tracing
-CURRANT_TRACING_ENABLED=true
-CURRANT_TRACING_ENDPOINT=http://localhost:4317
-CURRANT_TRACES_SAMPLE_RATE=0.1
-CURRANT_TRACES_SAMPLE_ERRORS=true
+RHYTHM_TRACING_ENABLED=true
+RHYTHM_TRACING_ENDPOINT=http://localhost:4317
+RHYTHM_TRACES_SAMPLE_RATE=0.1
+RHYTHM_TRACES_SAMPLE_ERRORS=true
 
 # Metrics
-CURRANT_METRICS_ENABLED=true
-CURRANT_METRICS_ENDPOINT=http://localhost:4317
-CURRANT_METRICS_INTERVAL=10  # Export every 10 seconds
+RHYTHM_METRICS_ENABLED=true
+RHYTHM_METRICS_ENDPOINT=http://localhost:4317
+RHYTHM_METRICS_INTERVAL=10  # Export every 10 seconds
 
 # Common
-CURRANT_SERVICE_NAME=my-worker
-CURRANT_OBSERVABILITY_TAGS=env:production,version:1.2.3
+RHYTHM_SERVICE_NAME=my-worker
+RHYTHM_OBSERVABILITY_TAGS=env:production,version:1.2.3
 ```
 
 **Programmatic Config:**
@@ -326,7 +326,7 @@ worker = Worker(
 
 **Question**: Do we need W3C baggage propagation?
 
-**Context**: In HTTP-based systems, baggage carries metadata (tenant_id, request_id) across service boundaries. But Currant's execution tree is coordinated via database, not HTTP.
+**Context**: In HTTP-based systems, baggage carries metadata (tenant_id, request_id) across service boundaries. But Rhythm's execution tree is coordinated via database, not HTTP.
 
 **Potential Use Cases:**
 - Tenant/User ID: Filter traces by customer
@@ -406,17 +406,17 @@ worker = Worker(
 ```python
 @task()
 async def process_order(order_id: str):
-    with currant.trace.span("validate_order"):
+    with rhythm.trace.span("validate_order"):
         # custom logic
         pass
 
-    currant.metrics.increment("orders.processed", tags={"status": "success"})
+    rhythm.metrics.increment("orders.processed", tags={"status": "success"})
 ```
 
 **Considerations:**
 - Requires exposing tracing/metrics API in context
 - Different APIs per language (OpenTelemetry Python vs Node.js)
-- Or: Currant provides unified API that adapts to backend
+- Or: Rhythm provides unified API that adapts to backend
 
 **Decision Needed**: Ship custom instrumentation in v1? Or automatic-only initially?
 
@@ -441,10 +441,10 @@ async def process_order(order_id: str):
 
 **Question**: How to isolate traces in multi-tenant deployments?
 
-**Scenario**: Single Currant deployment serves multiple customers/teams.
+**Scenario**: Single Rhythm deployment serves multiple customers/teams.
 
 **Options:**
-- **Service name per tenant**: `service_name: "currant-tenant-123"`
+- **Service name per tenant**: `service_name: "rhythm-tenant-123"`
 - **Tag-based filtering**: `tags: {tenant_id: "123"}`
 - **Separate OTLP endpoints**: Route tenant A to endpoint X, tenant B to endpoint Y
 
@@ -481,7 +481,7 @@ async def process_order(order_id: str):
 - **Goal**: End-to-end traces across Rust + Python/Node
 
 ### Phase 5: Custom Instrumentation API
-- Expose `currant.trace.span()` and `currant.metrics.*` in user code
+- Expose `rhythm.trace.span()` and `rhythm.metrics.*` in user code
 - Documentation and examples
 - **Goal**: Users can add domain-specific observability
 

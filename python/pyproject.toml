@@ -3,7 +3,7 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "currant"
+name = "rhythm"
 version = "0.1.0"
 description = "A lightweight durable execution framework using only Postgres"
 requires-python = ">=3.11"
@@ -23,7 +23,7 @@ dev = [
 ]
 
 [project.scripts]
-currant = "currant.__main__:main"
+rhythm = "rhythm.__main__:main"
 
 [tool.black]
 line-length = 100
@@ -38,5 +38,5 @@ asyncio_mode = "auto"
 
 [tool.maturin]
 python-source = "."
-module-name = "currant.currant_core"
+module-name = "rhythm.rhythm_core"
 manifest-path = "native/Cargo.toml"

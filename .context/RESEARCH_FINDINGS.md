@@ -3,7 +3,7 @@
 > **Generated**: 2025-10-12
 > **Sources**: Temporal, DBOS, Celery, Sidekiq, BullMQ, AWS Step Functions, Azure Logic Apps
 
-This document captures features and patterns from mature workflow/task queue systems that Currant should consider implementing.
+This document captures features and patterns from mature workflow/task queue systems that Rhythm should consider implementing.
 
 ---
 
@@ -24,7 +24,7 @@ This document captures features and patterns from mature workflow/task queue sys
 - Kafka uses idempotent producer to prevent duplicates
 
 ### 2. **Execution Semantics Clarity**
-**What**: Document exactly what guarantees Currant provides
+**What**: Document exactly what guarantees Rhythm provides
 **Why**: Users need to know when to implement idempotency vs rely on framework
 **Guarantees to define**:
 - Tasks: At-least-once? Exactly-once?
@@ -37,8 +37,8 @@ This document captures features and patterns from mature workflow/task queue sys
 **Why**: Prevents endless retry loops, provides debugging capability
 **Implementation needs**:
 - Automatic DLQ routing after N retries (configurable per queue/task)
-- DLQ inspection via CLI: `currant dlq list`, `currant dlq inspect <id>`
-- DLQ reprocessing: `currant dlq retry <id>` (fix code, then retry)
+- DLQ inspection via CLI: `rhythm dlq list`, `rhythm dlq inspect <id>`
+- DLQ reprocessing: `rhythm dlq retry <id>` (fix code, then retry)
 - Failure metadata: error message, stack trace, retry count
 - DLQ retention policy separate from main queues
 
@@ -56,7 +56,7 @@ This document captures features and patterns from mature workflow/task queue sys
 
 **Example**:
 ```python
-@currant.task(
+@rhythm.task(
     queue="api-calls",
     retry_policy=RetryPolicy(
         max_attempts=5,
@@ -111,7 +111,7 @@ max_concurrent = 50
 **B. Task-level priority** (within a single queue):
 - Add `priority` column to executions table (integer, higher = more urgent)
 - Modify claim query: `ORDER BY priority DESC, scheduled_at ASC`
-- Ad-hoc priority boost: `currant reprioritize <id> --priority 10`
+- Ad-hoc priority boost: `rhythm reprioritize <id> --priority 10`
 
 **References**: Supported by Celery, Sidekiq, BullMQ
 
@@ -120,14 +120,14 @@ max_concurrent = 50
 **Why**: Operational control during deployments, incidents, migrations
 **Commands needed**:
 ```bash
-currant queue list                      # Show all queues with stats
-currant queue inspect <name>            # Detailed queue info
-currant queue pause <name>              # Stop claiming new tasks
-currant queue resume <name>             # Resume claiming
-currant queue drain <name>              # Wait for in-flight to complete
-currant queue purge <name>              # Delete all pending tasks
-currant queue move <id> --to <queue>    # Move task to different queue
-currant queue stats <name>              # Metrics: depth, throughput, latency
+rhythm queue list                      # Show all queues with stats
+rhythm queue inspect <name>            # Detailed queue info
+rhythm queue pause <name>              # Stop claiming new tasks
+rhythm queue resume <name>             # Resume claiming
+rhythm queue drain <name>              # Wait for in-flight to complete
+rhythm queue purge <name>              # Delete all pending tasks
+rhythm queue move <id> --to <queue>    # Move task to different queue
+rhythm queue stats <name>              # Metrics: depth, throughput, latency
 ```
 
 ### 8. **Queue Metrics & Visibility**
@@ -158,7 +158,7 @@ currant queue stats <name>              # Metrics: depth, throughput, latency
 
 **Example pattern**:
 ```python
-@currant.workflow
+@rhythm.workflow
 async def book_trip(ctx, user_id, trip_details):
     # Forward transactions
     flight_id = await ctx.execute_activity(book_flight, trip_details.flight)
@@ -228,7 +228,7 @@ async def book_trip(ctx, user_id, trip_details):
 
 **Example**:
 ```python
-@currant.workflow
+@rhythm.workflow
 async def process_orders(ctx, order_ids):
     # Fan-out: execute 100 Tasks in parallel
     futures = [
@@ -260,12 +260,12 @@ async def process_orders(ctx, order_ids):
 **Example**:
 ```python
 # Decorator-based
-@currant.cron("0 3 * * *", timezone="America/New_York")
+@rhythm.cron("0 3 * * *", timezone="America/New_York")
 async def daily_report():
     pass
 
 # Programmatic
-currant.schedule_cron(
+rhythm.schedule_cron(
     name="daily-report",
     schedule="0 3 * * *",
     function=daily_report,
@@ -289,14 +289,14 @@ currant.schedule_cron(
 **Example**:
 ```python
 # Schedule for specific time
-await currant.schedule_at(
+await rhythm.schedule_at(
     send_reminder,
     scheduled_time=meeting_time - timedelta(hours=1),
     args=[user_id, meeting_id]
 )
 
 # Schedule after delay
-await currant.schedule_in(
+await rhythm.schedule_in(
     retry_failed_payment,
     delay=timedelta(minutes=30),
     args=[payment_id]
@@ -354,13 +354,13 @@ await currant.schedule_in(
 **Implementation needs**:
 - Custom metadata on executions (key-value pairs)
 - Indexed search attributes (queryable fields)
-- Search API: `currant search "status=failed AND queue=api-calls"`
+- Search API: `rhythm search "status=failed AND queue=api-calls"`
 - Support for: string, number, datetime, boolean attributes
 - List filtering in UI/CLI
 
 **Example**:
 ```python
-await currant.start_workflow(
+await rhythm.start_workflow(
     process_order,
     workflow_id=f"order-{order_id}",
     search_attributes={
@@ -372,7 +372,7 @@ await currant.start_workflow(
 )
 
 # Later: search for specific executions
-results = currant.search_workflows(
+results = rhythm.search_workflows(
     "customer_id='CUST123' AND order_total > 1000"
 )
 ```
@@ -432,7 +432,7 @@ circuit_breaker.min_requests = 10          # Need 10+ requests to trigger
 
 **Example**:
 ```python
-@currant.workflow
+@rhythm.workflow
 async def get_user_profile(ctx, user_id):
     try:
         # Try primary data source (3 sec timeout)
@@ -454,7 +454,7 @@ async def get_user_profile(ctx, user_id):
 - Database-based locking (PostgreSQL advisory locks)
 - Lock timeout/renewal (heartbeat)
 - Lock release on completion or failure
-- CLI command: `currant run-once <job_name>`
+- CLI command: `rhythm run-once <job_name>`
 
 **Use cases**:
 - Database cleanup/vacuum
@@ -464,7 +464,7 @@ async def get_user_profile(ctx, user_id):
 
 **Example**:
 ```python
-@currant.task(singleton=True, singleton_timeout="10m")
+@rhythm.task(singleton=True, singleton_timeout="10m")
 async def cleanup_old_executions():
     # Only one worker in cluster will execute this
     pass
@@ -522,13 +522,13 @@ def test_order_workflow():
 **Example**:
 ```bash
 # Start in local mode (in-memory)
-currant dev
+rhythm dev
 
 # With hot reload
-currant dev --watch
+rhythm dev --watch
 
 # With UI
-currant dev --ui
+rhythm dev --ui
 ```
 
 ### 24. **CLI Autocomplete & Help**
@@ -619,7 +619,7 @@ currant dev --ui
 ### 32. **Workflow Pause/Resume**
 **What**: Manually pause workflow execution
 **Why**: Debugging, controlled execution, maintenance
-**Commands**: `currant workflow pause <id>`, `currant workflow resume <id>`
+**Commands**: `rhythm workflow pause <id>`, `rhythm workflow resume <id>`
 
 ### 33. **Dynamic Configuration Updates**
 **What**: Update queue config without restart
@@ -662,7 +662,7 @@ currant dev --ui
 
 ---
 
-## Comparison: What Currant Has vs Needs
+## Comparison: What Rhythm Has vs Needs
 
 ### ✅ Already Have
 - Workflow replay (deterministic execution)
@@ -703,7 +703,7 @@ currant dev --ui
 
 ## Next Steps
 
-1. **Review this document** and prioritize features based on Currant's goals
+1. **Review this document** and prioritize features based on Rhythm's goals
 2. **Update TODO.md** with selected features from this research
 3. **Create design documents** for Priority 1-2 features (like TRACING_DESIGN.md)
 4. **Break down into implementable tasks** with clear acceptance criteria
