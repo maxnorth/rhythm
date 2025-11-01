@@ -1,0 +1,94 @@
+// Break and Continue Examples
+// Demonstrates loop control flow with break and continue statements
+
+workflow(ctx, inputs) {
+  // Example 1: Break - Stop processing when error found
+  for (let item in inputs.items) {
+    let validation = await task("validate", { itemId: item.id })
+
+    if (validation.hasError == true) {
+      // Stop processing immediately on first error
+      task("log", { message: "Error found, stopping", itemId: item.id })
+      break
+    }
+
+    await task("process", { itemId: item.id })
+  }
+
+  // Example 2: Continue - Skip items that don't need processing
+  for (let order in inputs.orders) {
+    if (order.status == "completed") {
+      // Skip already completed orders
+      continue
+    }
+
+    if (order.status == "cancelled") {
+      // Skip cancelled orders
+      continue
+    }
+
+    // Only process pending orders
+    await task("processOrder", { orderId: order.id })
+  }
+
+  // Example 3: Search pattern - break when found
+  for (let user in inputs.users) {
+    if (user.email == inputs.searchEmail) {
+      await task("notifyUserFound", { userId: user.id, email: user.email })
+      break
+    }
+  }
+
+  // Example 4: Conditional break based on data
+  for (let record in inputs.records) {
+    // Stop if we encounter a terminator record
+    if (record.type == "END_OF_BATCH") {
+      task("log", { message: "Batch terminator found" })
+      break
+    }
+
+    // Skip invalid records
+    if (record.isValid == false) {
+      continue
+    }
+
+    await task("processRecord", { recordId: record.id })
+  }
+
+  // Example 5: Nested loops with break
+  for (let category in inputs.categories) {
+    for (let product in category.products) {
+      // Stop processing this category if we find a restricted product
+      if (product.isRestricted == true) {
+        task("log", { message: "Restricted product found, skipping category" })
+        break
+      }
+
+      await task("processProduct", {
+        categoryId: category.id,
+        productId: product.id
+      })
+    }
+  }
+
+  // Example 6: Continue with conditions
+  for (let transaction in inputs.transactions) {
+    // Skip small transactions
+    if (transaction.amount < 10) {
+      continue
+    }
+
+    // Skip test transactions
+    if (transaction.isTest == true) {
+      continue
+    }
+
+    // Process only real, significant transactions
+    await task("processTransaction", {
+      transactionId: transaction.id,
+      amount: transaction.amount
+    })
+  }
+
+  await task("complete", { status: "success" })
+}

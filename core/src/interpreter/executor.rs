@@ -715,6 +715,80 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
                     .ok_or_else(|| anyhow::anyhow!("Body statement missing type"))?;
 
                 match stmt_type {
+                    "break" => {
+                        // Exit loop immediately - pop scope and advance to next statement
+                        let scope_stack = locals.get_mut("scope_stack")
+                            .and_then(|v| v.as_array_mut())
+                            .expect("scope_stack must exist");
+                        scope_stack.pop();
+
+                        sqlx::query(
+                            r#"
+                            UPDATE workflow_execution_context
+                            SET statement_index = statement_index + 1, locals = $2
+                            WHERE execution_id = $1
+                            "#,
+                        )
+                        .bind(execution_id)
+                        .bind(&locals)
+                        .execute(pool.as_ref())
+                        .await
+                        .context("Failed to exit loop after break")?;
+
+                        return Ok(StepResult::Continue);
+                    }
+                    "continue" => {
+                        // Skip to next iteration
+                        let scope_stack = locals.get_mut("scope_stack")
+                            .and_then(|v| v.as_array_mut())
+                            .expect("scope_stack must exist");
+                        let loop_scope = scope_stack.get_mut(loop_depth)
+                            .expect("loop scope must exist");
+
+                        let next_index = current_index + 1;
+
+                        if next_index < items.len() {
+                            // Move to next iteration
+                            loop_scope["variables"][loop_variable] = items[next_index].clone();
+                            loop_scope["metadata"]["current_index"] = json!(next_index);
+                            loop_scope["metadata"]["body_statement_index"] = json!(0);
+
+                            // Save state and continue
+                            sqlx::query(
+                                r#"
+                                UPDATE workflow_execution_context
+                                SET locals = $1
+                                WHERE execution_id = $2
+                                "#,
+                            )
+                            .bind(&locals)
+                            .bind(execution_id)
+                            .execute(pool.as_ref())
+                            .await
+                            .context("Failed to save loop state after continue")?;
+
+                            // Continue executing next iteration
+                            return Box::pin(execute_workflow_step(execution_id)).await;
+                        } else {
+                            // No more items - exit loop
+                            scope_stack.pop();
+
+                            sqlx::query(
+                                r#"
+                                UPDATE workflow_execution_context
+                                SET statement_index = statement_index + 1, locals = $2
+                                WHERE execution_id = $1
+                                "#,
+                            )
+                            .bind(execution_id)
+                            .bind(&locals)
+                            .execute(pool.as_ref())
+                            .await
+                            .context("Failed to advance past for loop")?;
+
+                            return Ok(StepResult::Continue);
+                        }
+                    }
                     "task" => {
                         let should_await = body_stmt["await"].as_bool().unwrap_or(true);
                         let task_name = body_stmt["task"].as_str()

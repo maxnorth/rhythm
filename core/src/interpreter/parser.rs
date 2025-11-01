@@ -13,6 +13,8 @@ struct ParserContext {
     scope_depth: usize,
     /// Stack of scopes, each containing variable name -> depth where defined
     symbol_table: Vec<HashMap<String, usize>>,
+    /// Number of nested loops we're currently inside (0 = not in any loop)
+    loop_depth: usize,
 }
 
 impl ParserContext {
@@ -20,6 +22,7 @@ impl ParserContext {
         Self {
             scope_depth: 0,
             symbol_table: vec![HashMap::new()], // Start with global scope
+            loop_depth: 0,
         }
     }
 
@@ -59,12 +62,28 @@ impl ParserContext {
     fn current_depth(&self) -> usize {
         self.scope_depth
     }
+
+    /// Enter a loop (increment loop depth)
+    fn enter_loop(&mut self) {
+        self.loop_depth += 1;
+    }
+
+    /// Exit a loop (decrement loop depth)
+    fn exit_loop(&mut self) {
+        self.loop_depth = self.loop_depth.saturating_sub(1);
+    }
+
+    /// Check if we're currently inside a loop
+    fn in_loop(&self) -> bool {
+        self.loop_depth > 0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParseError {
     UnexpectedToken { line: usize, message: String },
     InvalidJson { line: usize, message: String },
+    InvalidStatement { line: usize, message: String },
     UnknownFunction { line: usize, function: String },
     PestError(String),
 }
@@ -77,6 +96,9 @@ impl std::fmt::Display for ParseError {
             }
             ParseError::InvalidJson { line, message } => {
                 write!(f, "Invalid JSON on line {}: {}", line, message)
+            }
+            ParseError::InvalidStatement { line, message } => {
+                write!(f, "Invalid statement on line {}: {}", line, message)
             }
             ParseError::UnknownFunction { line, function } => {
                 write!(f, "Unknown function '{}' on line {}", function, line)
@@ -218,6 +240,30 @@ pub fn parse_workflow(source: &str) -> Result<Vec<JsonValue>, ParseError> {
                 }
                 Rule::for_loop => {
                     steps.push(parse_for_loop(inner_statement, &mut ctx)?);
+                }
+                Rule::break_statement => {
+                    if !ctx.in_loop() {
+                        let line = inner_statement.as_span().start_pos().line_col().0;
+                        return Err(ParseError::InvalidStatement {
+                            line,
+                            message: "'break' can only be used inside a loop".to_string(),
+                        });
+                    }
+                    steps.push(json!({
+                        "type": "break"
+                    }));
+                }
+                Rule::continue_statement => {
+                    if !ctx.in_loop() {
+                        let line = inner_statement.as_span().start_pos().line_col().0;
+                        return Err(ParseError::InvalidStatement {
+                            line,
+                            message: "'continue' can only be used inside a loop".to_string(),
+                        });
+                    }
+                    steps.push(json!({
+                        "type": "continue"
+                    }));
                 }
                 _ => {}
             }
@@ -555,6 +601,7 @@ fn parse_for_loop(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext) ->
 
     // Enter a new scope for the loop body
     ctx.enter_scope();
+    ctx.enter_loop(); // Track that we're inside a loop
 
     // Declare the loop variable in the new scope
     ctx.declare_variable(loop_variable.clone());
@@ -571,6 +618,8 @@ fn parse_for_loop(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext) ->
                     Rule::sleep_call => parse_sleep_call(inner_statement, false)?,
                     Rule::if_statement => parse_if_statement(inner_statement, ctx)?,
                     Rule::for_loop => parse_for_loop(inner_statement, ctx)?,
+                    Rule::break_statement => json!({"type": "break"}),
+                    Rule::continue_statement => json!({"type": "continue"}),
                     _ => continue,
                 };
                 body_statements.push(stmt);
@@ -579,6 +628,7 @@ fn parse_for_loop(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext) ->
     }
 
     // Exit the loop scope
+    ctx.exit_loop(); // Exit loop tracking
     ctx.exit_scope();
 
     Ok(json!({
@@ -670,6 +720,24 @@ fn parse_if_statement(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext
                         Rule::sleep_call => parse_sleep_call(inner_statement, false)?,
                         Rule::if_statement => parse_if_statement(inner_statement, ctx)?,
                         Rule::for_loop => parse_for_loop(inner_statement, ctx)?,
+                        Rule::break_statement => {
+                            if !ctx.in_loop() {
+                                return Err(ParseError::InvalidStatement {
+                                    line: inner_statement.as_span().start_pos().line_col().0,
+                                    message: "'break' can only be used inside a loop".to_string(),
+                                });
+                            }
+                            json!({"type": "break"})
+                        },
+                        Rule::continue_statement => {
+                            if !ctx.in_loop() {
+                                return Err(ParseError::InvalidStatement {
+                                    line: inner_statement.as_span().start_pos().line_col().0,
+                                    message: "'continue' can only be used inside a loop".to_string(),
+                                });
+                            }
+                            json!({"type": "continue"})
+                        },
                         _ => continue,
                     };
                     then_statements.push(stmt);
@@ -688,6 +756,24 @@ fn parse_if_statement(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext
                                 Rule::sleep_call => parse_sleep_call(inner_statement, false)?,
                                 Rule::if_statement => parse_if_statement(inner_statement, ctx)?,
                                 Rule::for_loop => parse_for_loop(inner_statement, ctx)?,
+                                Rule::break_statement => {
+                                    if !ctx.in_loop() {
+                                        return Err(ParseError::InvalidStatement {
+                                            line: inner_statement.as_span().start_pos().line_col().0,
+                                            message: "'break' can only be used inside a loop".to_string(),
+                                        });
+                                    }
+                                    json!({"type": "break"})
+                                },
+                                Rule::continue_statement => {
+                                    if !ctx.in_loop() {
+                                        return Err(ParseError::InvalidStatement {
+                                            line: inner_statement.as_span().start_pos().line_col().0,
+                                            message: "'continue' can only be used inside a loop".to_string(),
+                                        });
+                                    }
+                                    json!({"type": "continue"})
+                                },
                                 _ => continue,
                             };
                             else_stmts.push(stmt);
@@ -2241,5 +2327,230 @@ workflow(ctx, inputs) {
         // Check that we have for loops
         let for_loops = statements.iter().filter(|s| s["type"] == "for").count();
         assert!(for_loops >= 5, "Expected at least 5 for loops");
+    }
+
+    // === BREAK/CONTINUE TESTS ===
+
+    #[test]
+    fn test_for_loop_with_break() {
+        let source = r#"
+workflow(ctx, inputs) {
+  for (let item in [1, 2, 3, 4, 5]) {
+    if (item == 3) {
+      break
+    }
+    task("process", { value: item })
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0]["type"], "for");
+
+        let body = result[0]["body_statements"].as_array().unwrap();
+        assert_eq!(body.len(), 2);
+
+        // First statement is if
+        assert_eq!(body[0]["type"], "if");
+        let then_stmts = body[0]["then_statements"].as_array().unwrap();
+        assert_eq!(then_stmts.len(), 1);
+        assert_eq!(then_stmts[0]["type"], "break");
+
+        // Second statement is task
+        assert_eq!(body[1]["type"], "task");
+    }
+
+    #[test]
+    fn test_for_loop_with_continue() {
+        let source = r#"
+workflow(ctx, inputs) {
+  for (let item in inputs.items) {
+    if (item.skip == true) {
+      continue
+    }
+    await task("process", { value: item })
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0]["type"], "for");
+
+        let body = result[0]["body_statements"].as_array().unwrap();
+        assert_eq!(body.len(), 2);
+
+        // First statement is if with continue
+        assert_eq!(body[0]["type"], "if");
+        let then_stmts = body[0]["then_statements"].as_array().unwrap();
+        assert_eq!(then_stmts.len(), 1);
+        assert_eq!(then_stmts[0]["type"], "continue");
+
+        // Second statement is task
+        assert_eq!(body[1]["type"], "task");
+        assert_eq!(body[1]["await"], true);
+    }
+
+    #[test]
+    fn test_for_loop_with_break_and_continue() {
+        let source = r#"
+workflow(ctx, inputs) {
+  for (let item in [1, 2, 3, 4, 5]) {
+    if (item > 10) {
+      break
+    }
+    if (item == 2) {
+      continue
+    }
+    task("process", { value: item })
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        let body = result[0]["body_statements"].as_array().unwrap();
+        assert_eq!(body.len(), 3);
+
+        // First if has break
+        assert_eq!(body[0]["type"], "if");
+        assert_eq!(body[0]["then_statements"][0]["type"], "break");
+
+        // Second if has continue
+        assert_eq!(body[1]["type"], "if");
+        assert_eq!(body[1]["then_statements"][0]["type"], "continue");
+
+        // Third is task
+        assert_eq!(body[2]["type"], "task");
+    }
+
+    #[test]
+    fn test_nested_loop_with_break() {
+        let source = r#"
+workflow(ctx, inputs) {
+  for (let outer in [1, 2, 3]) {
+    for (let inner in [4, 5, 6]) {
+      if (inner == 5) {
+        break
+      }
+      task("process", { o: outer, i: inner })
+    }
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        // Check outer loop
+        let outer_body = result[0]["body_statements"].as_array().unwrap();
+        assert_eq!(outer_body.len(), 1);
+        assert_eq!(outer_body[0]["type"], "for");
+
+        // Check inner loop has break
+        let inner_body = outer_body[0]["body_statements"].as_array().unwrap();
+        assert_eq!(inner_body.len(), 2);
+        assert_eq!(inner_body[0]["type"], "if");
+        assert_eq!(inner_body[0]["then_statements"][0]["type"], "break");
+    }
+
+    #[test]
+    fn test_break_outside_loop_fails() {
+        let source = r#"
+workflow(ctx, inputs) {
+  task("start", {})
+  break
+  task("end", {})
+}
+        "#;
+        let result = parse_workflow(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            ParseError::InvalidStatement { message, .. } => {
+                assert!(message.contains("break"));
+                assert!(message.contains("only be used inside a loop"));
+            }
+            _ => panic!("Expected InvalidStatement error, got {:?}", err),
+        }
+    }
+
+    #[test]
+    fn test_continue_outside_loop_fails() {
+        let source = r#"
+workflow(ctx, inputs) {
+  task("start", {})
+  continue
+  task("end", {})
+}
+        "#;
+        let result = parse_workflow(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            ParseError::InvalidStatement { message, .. } => {
+                assert!(message.contains("continue"));
+                assert!(message.contains("only be used inside a loop"));
+            }
+            _ => panic!("Expected InvalidStatement error, got {:?}", err),
+        }
+    }
+
+    #[test]
+    fn test_break_in_if_outside_loop_fails() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if (inputs.shouldBreak == true) {
+    break
+  }
+  task("process", {})
+}
+        "#;
+        let result = parse_workflow(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            ParseError::InvalidStatement { message, .. } => {
+                assert!(message.contains("break"));
+                assert!(message.contains("only be used inside a loop"));
+            }
+            _ => panic!("Expected InvalidStatement error, got {:?}", err),
+        }
+    }
+
+    #[test]
+    fn test_continue_in_if_outside_loop_fails() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if (inputs.shouldContinue == true) {
+    continue
+  }
+  task("process", {})
+}
+        "#;
+        let result = parse_workflow(source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            ParseError::InvalidStatement { message, .. } => {
+                assert!(message.contains("continue"));
+                assert!(message.contains("only be used inside a loop"));
+            }
+            _ => panic!("Expected InvalidStatement error, got {:?}", err),
+        }
+    }
+
+    #[test]
+    fn test_break_in_if_inside_loop_succeeds() {
+        // This should work - break inside if, inside loop
+        let source = r#"
+workflow(ctx, inputs) {
+  for (let item in [1, 2, 3]) {
+    if (item == 2) {
+      break
+    }
+  }
+}
+        "#;
+        let result = parse_workflow(source);
+        assert!(result.is_ok(), "Break inside if inside loop should work: {:?}", result.err());
     }
 }

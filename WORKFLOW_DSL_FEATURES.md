@@ -454,12 +454,31 @@ for (let order in orders) {
 }
 ```
 
+**Break and Continue**:
+```flow
+for (let item in inputs.items) {
+  // Exit loop early
+  if (item.type == "STOP") {
+    break
+  }
+
+  // Skip this iteration
+  if (item.skip == true) {
+    continue
+  }
+
+  await task("process", { itemId: item.id })
+}
+```
+
 **Key features**:
 - ✅ `let` keyword required for loop variable declaration
 - ✅ Iterate over inline arrays, variables, or member access (inputs.field)
 - ✅ Full await/suspension support - workflow pauses and resumes correctly
 - ✅ Nested loops with proper scope isolation
 - ✅ Loop variable accessible in nested scopes
+- ✅ `break` - exit the innermost loop immediately
+- ✅ `continue` - skip to next iteration of innermost loop
 
 ## What's NOT Supported
 
@@ -473,8 +492,8 @@ To keep things simple and focused, these are intentionally excluded:
 - ❌ **Template strings** - Use variables instead
 - ❌ **Arithmetic expressions** - No `+`, `-`, `*`, `/` operators (yet)
 - ❌ **While loops** - Only `for..in` loops supported
-- ❌ **Break/Continue** - Loop control not yet supported
 - ❌ **Array/Object indexing** - No `array[0]` or `obj["key"]` (yet)
+- ❌ **Variable reassignment** - Variables are immutable after declaration
 
 ## Comparison with Standard JSON
 
@@ -507,7 +526,7 @@ To keep things simple and focused, these are intentionally excluded:
 
 ## Testing
 
-All features are thoroughly tested with 108+ test cases covering:
+All features are thoroughly tested with 112+ test cases covering:
 - ✅ All number formats (hex, binary, underscores, scientific notation)
 - ✅ Quoted and unquoted keys
 - ✅ Variable assignment and resolution
@@ -529,6 +548,8 @@ All features are thoroughly tested with 108+ test cases covering:
 - ✅ For loops with await/suspension support
 - ✅ Nested for loops with proper scope isolation
 - ✅ Mixed await and fire-and-forget in loops
+- ✅ Break and continue statements in loops
+- ✅ Break/continue inside nested conditionals
 
 Run tests:
 ```bash
