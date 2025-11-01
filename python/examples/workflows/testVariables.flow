@@ -5,14 +5,14 @@
 // 3. Multiple variables
 workflow(ctx, inputs) {
   // Create an order and capture the result
-  let order_id = await task("bench_task", { "payload_size": 100 })
+  let order_id = await Task.run("bench_task", { "payload_size": 100 })
 
   // Use the order_id in the next task (bare identifier syntax)
-  await task("bench_task", { "order_id": order_id, "payload_size": 0 })
+  await Task.run("bench_task", { "order_id": order_id, "payload_size": 0 })
 
   // Fire-and-forget task with variable assignment
-  let log_id = task("bench_task", { "msg": "logged" })
+  let log_id = Task.run("bench_task", { "msg": "logged" })
 
   // Another task that uses both variables
-  await task("bench_task", { "order": order_id, "log": log_id })
+  await Task.run("bench_task", { "order": order_id, "log": log_id })
 }

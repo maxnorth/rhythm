@@ -1,12 +1,12 @@
 // Test await vs fire-and-forget behavior
 workflow(ctx, inputs) {
   // This task will be awaited (blocks until complete)
-  await task("bench_task", { "payload_size": 0 })
+  await Task.run("bench_task", { "payload_size": 0 })
 
   // These two tasks are fire-and-forget (queued and execution continues)
-  task("bench_task", { "payload_size": 0 })
-  task("bench_task", { "payload_size": 0 })
+  Task.run("bench_task", { "payload_size": 0 })
+  Task.run("bench_task", { "payload_size": 0 })
 
   // This one is awaited again
-  await task("bench_task", { "payload_size": 0 })
+  await Task.run("bench_task", { "payload_size": 0 })
 }

@@ -232,7 +232,7 @@ async fn register_benchmark_workflow(task_count: usize, payload_size: usize) -> 
     let mut workflow_lines = Vec::new();
     for _ in 0..task_count {
         workflow_lines.push(format!(
-            r#"    await task("bench_task", {{ "payload_size": {} }})"#,
+            r#"    await Task.run("bench_task", {{ "payload_size": {} }})"#,
             payload_size
         ));
     }

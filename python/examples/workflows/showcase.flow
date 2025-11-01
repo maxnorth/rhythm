@@ -2,13 +2,13 @@
 // Demonstrates all the modern syntax features
 workflow(ctx, inputs) {
     // Variables and unquoted keys
-    let userId = await task("authenticate", {
+    let userId = await Task.run("authenticate", {
                     username: "alice@example.com",
                     method: "oauth2"
                   })
   
   // Hex numbers for colors and configuration
-  let themeConfig = await task("load_theme", {
+  let themeConfig = await Task.run("load_theme", {
     primaryColor: 0xFF5733,      // Hex for colors
     secondaryColor: 0x3498DB,
     accentColor: 0x2ECC71,
@@ -16,7 +16,7 @@ workflow(ctx, inputs) {
   })
   
   // Binary numbers for bit flags and permissions
-  let permissions = await task("get_permissions", {
+  let permissions = await Task.run("get_permissions", {
     userId: userId,
     flags: 0b1111,               // All permissions
     readMask: 0b0001,
@@ -26,7 +26,7 @@ workflow(ctx, inputs) {
   })
   
   // Numbers with underscores for readability
-  let orderData = await task("create_order", {
+  let orderData = await Task.run("create_order", {
     userId: userId,
     items: [
       { sku: "PROD-001", qty: 2, price: 19.99 },
@@ -39,7 +39,7 @@ workflow(ctx, inputs) {
   })
   
   // Flexible decimal notation
-  let calculations = await task("calculate_discount", {
+  let calculations = await Task.run("calculate_discount", {
     baseRate: .15,               // 15% (same as 0.15)
     bonusRate: .05,              // 5% bonus
     maxDiscount: 250.,           // Max $250 (same as 250.0)
@@ -47,7 +47,7 @@ workflow(ctx, inputs) {
   })
   
   // Scientific notation for very large/small numbers
-  let scientificData = await task("process_metrics", {
+  let scientificData = await Task.run("process_metrics", {
     pageViews: 1.5e6,            // 1.5 million
     conversionRate: 3.5e-2,      // 0.035 (3.5%)
     revenue: 2.5E5,              // $250,000
@@ -55,7 +55,7 @@ workflow(ctx, inputs) {
   })
   
   // Fire-and-forget analytics (no await)
-  task("track_order_created", {
+  Task.run("track_order_created", {
     orderId: orderData,
     userId: userId,
     eventType: "purchase",
@@ -64,7 +64,7 @@ workflow(ctx, inputs) {
   })
   
   // Nested objects with mixed key styles
-  let shipmentId = await task("create_shipment", {
+  let shipmentId = await Task.run("create_shipment", {
     "order-id": orderData,       // Quoted key with dash
     recipient: {
       userId: userId,
@@ -84,7 +84,7 @@ workflow(ctx, inputs) {
   })
   
   // Escape sequences in strings
-  await task("send_notification", {
+  await Task.run("send_notification", {
     userId: userId,
     subject: "Order Confirmation",
     body: "Thank you for your order!\n\nOrder ID: #12345\n\tTotal: $1,473.96\n\nTrack your package:\nC:\\tracking\\12345",
@@ -92,7 +92,7 @@ workflow(ctx, inputs) {
   })
   
   // Arrays with variables
-  let taskIds = await task("queue_tasks", {
+  let taskIds = await Task.run("queue_tasks", {
     tasks: [
       orderData,
       shipmentId,
@@ -107,14 +107,14 @@ workflow(ctx, inputs) {
   })
   
   // Unicode support
-  await task("😎", {
+  await Task.run("😎", {
     msg: "任务完成",              // "Task complete" in Chinese
     emoji: "🎉",
     status: "success"
   })
   
   // Complex nested structure showcasing everything
-  await task("finalize_order", {
+  await Task.run("finalize_order", {
     orderId: orderData,
     userId: userId,
     shipmentId: shipmentId,

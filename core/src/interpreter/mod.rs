@@ -5,6 +5,7 @@
 //! ## Architecture
 //!
 //! - **Parser** (`parser.rs`): Parses `.flow` files into JSON AST
+//! - **Semantic Validator** (`semantic_validator.rs`): Validates AST for type/scope correctness
 //! - **Executor** (`executor.rs`): Tree-walking interpreter that executes workflows step-by-step
 //!
 //! ## Usage
@@ -15,7 +16,9 @@
 //! This module only provides the core parsing and execution primitives.
 
 pub mod parser;
+pub mod semantic_validator;
 pub mod executor;
 
 pub use parser::{parse_workflow, ParseError};
+pub use semantic_validator::{validate_workflow, ValidationError};
 pub use executor::{execute_workflow_step, StepResult};

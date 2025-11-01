@@ -16,6 +16,26 @@ pub enum StepResult {
     Continue,
 }
 
+/// Standard library of built-in functions
+/// This is an immutable global scope, not part of the snapshot
+/// Functions are organized in namespaces like Task.run(), Sleep.await()
+fn get_stdlib() -> JsonValue {
+    json!({
+        "Task": {
+            "run": {
+                "type": "builtin",
+                "handler": "task"
+            }
+        },
+        "Sleep": {
+            "await": {
+                "type": "builtin",
+                "handler": "sleep"
+            }
+        }
+    })
+}
+
 /// Evaluate a condition expression
 ///
 /// Returns true if the condition is met, false otherwise.
@@ -92,29 +112,43 @@ where
 
 /// Resolve variable references in a JSON value
 ///
-/// Variables are annotated with scope depth: {"var": "name", "depth": 0}
+/// Variables are annotated with scope depth: {"type": "variable", "name": "name", "depth": 0}
 /// This enables O(1) lookup directly to the correct scope.
 ///
 /// Also handles member access like "inputs.userId" or "ctx.workflowId"
 fn resolve_variables(value: &JsonValue, locals: &JsonValue) -> JsonValue {
     match value {
         JsonValue::Object(obj) => {
-            // Check if this is a variable reference with scope depth annotation
-            if let (Some(JsonValue::String(var_name)), Some(JsonValue::Number(depth_num))) =
-                (obj.get("var"), obj.get("depth"))
-            {
-                if let Some(depth) = depth_num.as_u64() {
-                    // Scoped variable reference - O(1) lookup
-                    return lookup_scoped_variable(var_name, depth as usize, locals);
+            // Check the type field to determine what kind of object this is
+            if let Some(type_str) = obj.get("type").and_then(|v| v.as_str()) {
+                match type_str {
+                    "variable" => {
+                        // Variable reference: {"type": "variable", "name": "x", "depth": 0}
+                        if let (Some(JsonValue::String(var_name)), Some(JsonValue::Number(depth_num))) =
+                            (obj.get("name"), obj.get("depth"))
+                        {
+                            if let Some(depth) = depth_num.as_u64() {
+                                return lookup_scoped_variable(var_name, depth as usize, locals);
+                            }
+                        }
+                        // Invalid variable format - return null
+                        return JsonValue::Null;
+                    }
+                    _ => {
+                        // Other typed objects (member_access, function_call, etc.)
+                        // Don't resolve these - they'll be handled by their specific contexts
+                        return value.clone();
+                    }
                 }
             }
 
             // Check if this is a member access: {"base": "inputs", "path": [...]}
+            // (member access might not have a type field from older code)
             if obj.contains_key("base") && obj.contains_key("path") {
                 return resolve_member_access(value, locals);
             }
 
-            // Not a variable reference or member access - resolve all values recursively
+            // Regular object - resolve all values recursively
             let mut resolved = Map::new();
             for (k, v) in obj.iter() {
                 resolved.insert(k.clone(), resolve_variables(v, locals));
@@ -172,18 +206,15 @@ fn lookup_scoped_variable(var_name: &str, depth: usize, locals: &JsonValue) -> J
         }
     }
 
-    // Variable not found - return annotated reference for error visibility
-    json!({
-        "var": var_name,
-        "depth": depth
-    })
+    // Variable not found - return null
+    JsonValue::Null
 }
 
 /// Resolve a for loop iterable specification to get the actual collection
 ///
 /// Handles three formats:
 /// 1. {"type": "array", "value": [...]} - Inline array
-/// 2. {"type": "variable", "value": {"var": "name", "depth": 0}} - Variable reference
+/// 2. {"type": "variable", "value": {"type": "variable", "name": "name", "depth": 0}} - Variable reference
 /// 3. {"type": "member_access", "value": "inputs.items"} - Member access
 fn resolve_iterable(iterable_spec: &JsonValue, locals: &JsonValue) -> Result<JsonValue> {
     let iterable_type = iterable_spec.get("type")
@@ -363,6 +394,107 @@ fn ensure_scope_stack(locals: &mut JsonValue) {
     }
 }
 
+/// Execute a function call by resolving from stdlib
+async fn execute_function_call(
+    name_parts: &[String],
+    args: &[JsonValue],
+    locals: &JsonValue,
+    execution_id: &str,
+    pool: &sqlx::PgPool,
+) -> Result<JsonValue> {
+    // Resolve function from stdlib
+    let stdlib = get_stdlib();
+    let mut current = &stdlib;
+
+    // Navigate through namespace path
+    for part in name_parts {
+        current = current.get(part)
+            .ok_or_else(|| anyhow::anyhow!("Undefined function: {}", name_parts.join(".")))?;
+    }
+
+    // Check if it's a builtin
+    let handler = current.get("handler")
+        .and_then(|h| h.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Function {} is not callable", name_parts.join(".")))?;
+
+    // Resolve arguments
+    let resolved_args: Vec<JsonValue> = args.iter()
+        .map(|arg| resolve_variables(arg, locals))
+        .collect();
+
+    // Execute based on handler type
+    match handler {
+        "task" => {
+            // Task.run(task_name, inputs)
+            if resolved_args.is_empty() {
+                anyhow::bail!("Task.run() requires at least a task name");
+            }
+
+            let task_name = resolved_args[0].as_str()
+                .ok_or_else(|| anyhow::anyhow!("Task.run() first argument must be a string (task name)"))?;
+
+            let inputs = if resolved_args.len() > 1 {
+                resolved_args[1].clone()
+            } else {
+                json!({})
+            };
+
+            // Create child task execution
+            let task_id = executions::create_execution(CreateExecutionParams {
+                id: None,
+                exec_type: ExecutionType::Task,
+                function_name: task_name.to_string(),
+                queue: "default".to_string(),
+                priority: 5,
+                args: serde_json::json!([]),
+                kwargs: inputs,
+                max_retries: 3,
+                timeout_seconds: None,
+                parent_workflow_id: Some(execution_id.to_string()),
+            })
+            .await
+            .context("Failed to create task execution")?;
+
+            // Return the task ID
+            Ok(JsonValue::String(task_id))
+        }
+        "sleep" => {
+            // Sleep.await(duration_ms)
+            if resolved_args.is_empty() {
+                anyhow::bail!("Sleep.await() requires a duration in milliseconds");
+            }
+
+            let duration = resolved_args[0].as_i64()
+                .ok_or_else(|| anyhow::anyhow!("Sleep.await() argument must be a number (milliseconds)"))?;
+
+            if duration < 0 {
+                anyhow::bail!("Sleep duration must be non-negative");
+            }
+
+            // Calculate wake time
+            let wake_time = chrono::Utc::now() + chrono::Duration::milliseconds(duration);
+
+            // Update execution to sleep
+            sqlx::query(
+                r#"
+                UPDATE workflow_execution_context
+                SET wake_time = $1
+                WHERE execution_id = $2
+                "#,
+            )
+            .bind(wake_time)
+            .bind(execution_id)
+            .execute(pool)
+            .await
+            .context("Failed to set wake time")?;
+
+            // Return null (sleep doesn't return a value)
+            Ok(JsonValue::Null)
+        }
+        _ => anyhow::bail!("Unknown builtin handler: {}", handler),
+    }
+}
+
 /// Execute a single workflow step
 ///
 /// This is the core of the workflow execution engine. It:
@@ -532,6 +664,160 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
         .ok_or_else(|| anyhow::anyhow!("Statement missing 'type' field"))?;
 
     match statement_type {
+        "assignment" => {
+            // New assignment format: {"type": "assignment", "left": {"type": "variable", ...}, "right": <expression>}
+            let left = statement.get("left")
+                .ok_or_else(|| anyhow::anyhow!("Assignment missing 'left' field"))?;
+
+            let var_name = left.get("name")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Assignment left side missing variable name"))?;
+
+            let depth = left.get("depth")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| anyhow::anyhow!("Assignment left side missing depth"))? as usize;
+
+            let right = statement.get("right")
+                .ok_or_else(|| anyhow::anyhow!("Assignment missing 'right' field"))?;
+
+            // Evaluate the right side expression
+            let value = resolve_variables(right, &locals);
+
+            // Assign to the correct scope
+            assign_variable(&mut locals, var_name, value, Some(depth));
+
+            // Update workflow context with new locals
+            sqlx::query(
+                r#"
+                UPDATE workflow_execution_context
+                SET locals = $1, statement_index = statement_index + 1
+                WHERE execution_id = $2
+                "#,
+            )
+            .bind(&locals)
+            .bind(execution_id)
+            .execute(pool.as_ref())
+            .await
+            .context("Failed to update workflow context with assignment")?;
+
+            Ok(StepResult::Continue)
+        }
+        "await" => {
+            // Await statement: {"type": "await", "expression": <function_call or other>}
+            let expression = statement.get("expression")
+                .ok_or_else(|| anyhow::anyhow!("Await statement missing 'expression' field"))?;
+
+            let expr_type = expression.get("type")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Await expression missing 'type' field"))?;
+
+            match expr_type {
+                "function_call" => {
+                    // Execute the function call
+                    let name_parts = expression.get("name")
+                        .and_then(|v| v.as_array())
+                        .ok_or_else(|| anyhow::anyhow!("Function call missing 'name' field"))?;
+
+                    let name_strings: Vec<String> = name_parts.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+
+                    let args = expression.get("args")
+                        .and_then(|v| v.as_array())
+                        .ok_or_else(|| anyhow::anyhow!("Function call missing 'args' field"))?;
+
+                    let task_id = execute_function_call(&name_strings, args, &locals, execution_id, pool.as_ref()).await?;
+
+                    // For Task.run(), we need to await the result
+                    if name_strings.join(".") == "Task.run" {
+                        // Suspend workflow and wait for task to complete
+                        let task_id_str = task_id.as_str()
+                            .ok_or_else(|| anyhow::anyhow!("Task.run() should return a task ID string"))?;
+
+                        sqlx::query(
+                            r#"
+                            UPDATE workflow_execution_context
+                            SET awaiting_task_id = $1
+                            WHERE execution_id = $2
+                            "#,
+                        )
+                        .bind(task_id_str)
+                        .bind(execution_id)
+                        .execute(pool.as_ref())
+                        .await
+                        .context("Failed to update workflow context")?;
+
+                        sqlx::query("UPDATE executions SET status = $1 WHERE id = $2")
+                            .bind(&ExecutionStatus::Suspended)
+                            .bind(execution_id)
+                            .execute(pool.as_ref())
+                            .await
+                            .context("Failed to suspend workflow")?;
+
+                        return Ok(StepResult::Suspended);
+                    } else if name_strings.join(".") == "Sleep.await" {
+                        // Sleep suspends the workflow
+                        sqlx::query("UPDATE executions SET status = $1 WHERE id = $2")
+                            .bind(&ExecutionStatus::Suspended)
+                            .bind(execution_id)
+                            .execute(pool.as_ref())
+                            .await
+                            .context("Failed to suspend workflow for sleep")?;
+
+                        return Ok(StepResult::Suspended);
+                    }
+
+                    // Move to next statement
+                    sqlx::query("UPDATE workflow_execution_context SET statement_index = statement_index + 1 WHERE execution_id = $1")
+                        .bind(execution_id)
+                        .execute(pool.as_ref())
+                        .await
+                        .context("Failed to advance workflow")?;
+
+                    Ok(StepResult::Continue)
+                }
+                _ => anyhow::bail!("Await only supports function calls currently, got: {}", expr_type),
+            }
+        }
+        "expression_statement" => {
+            // Expression statement (for side effects): {"type": "expression_statement", "expression": <function_call>}
+            let expression = statement.get("expression")
+                .ok_or_else(|| anyhow::anyhow!("Expression statement missing 'expression' field"))?;
+
+            let expr_type = expression.get("type")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Expression missing 'type' field"))?;
+
+            match expr_type {
+                "function_call" => {
+                    // Execute the function call (fire-and-forget)
+                    let name_parts = expression.get("name")
+                        .and_then(|v| v.as_array())
+                        .ok_or_else(|| anyhow::anyhow!("Function call missing 'name' field"))?;
+
+                    let name_strings: Vec<String> = name_parts.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+
+                    let args = expression.get("args")
+                        .and_then(|v| v.as_array())
+                        .ok_or_else(|| anyhow::anyhow!("Function call missing 'args' field"))?;
+
+                    // Execute but don't wait
+                    let _ = execute_function_call(&name_strings, args, &locals, execution_id, pool.as_ref()).await?;
+
+                    // Move to next statement immediately
+                    sqlx::query("UPDATE workflow_execution_context SET statement_index = statement_index + 1 WHERE execution_id = $1")
+                        .bind(execution_id)
+                        .execute(pool.as_ref())
+                        .await
+                        .context("Failed to advance workflow")?;
+
+                    Ok(StepResult::Continue)
+                }
+                _ => anyhow::bail!("Expression statement only supports function calls currently, got: {}", expr_type),
+            }
+        }
         "task" => {
             // Create child task execution
             let task_name = statement["task"].as_str()
@@ -1097,7 +1383,7 @@ mod tests {
         });
 
         // Simple variable reference with scope annotation
-        let input = json!({"var": "order_id", "depth": 0});
+        let input = json!({"type": "variable", "name": "order_id", "depth": 0});
         let result = resolve_variables(&input, &locals);
         assert_eq!(result, json!("12345"));
 
@@ -1106,10 +1392,10 @@ mod tests {
         let result = resolve_variables(&input, &locals);
         assert_eq!(result, json!("hello"));
 
-        // Variable not found - returns original annotation
-        let input = json!({"var": "missing", "depth": 0});
+        // Variable not found - returns null
+        let input = json!({"type": "variable", "name": "missing", "depth": 0});
         let result = resolve_variables(&input, &locals);
-        assert_eq!(result, json!({"var": "missing", "depth": 0}));
+        assert_eq!(result, JsonValue::Null);
     }
 
     #[test]
@@ -1128,8 +1414,8 @@ mod tests {
         });
 
         let input = json!({
-            "order": {"var": "order_id", "depth": 0},
-            "total": {"var": "amount", "depth": 0},
+            "order": {"type": "variable", "name": "order_id", "depth": 0},
+            "total": {"type": "variable", "name": "amount", "depth": 0},
             "static": "value"
         });
 
@@ -1157,8 +1443,8 @@ mod tests {
 
         let input = json!({
             "user": {
-                "id": {"var": "user_id", "depth": 0},
-                "orders": [{"var": "order_id", "depth": 0}, "other"]
+                "id": {"type": "variable", "name": "user_id", "depth": 0},
+                "orders": [{"type": "variable", "name": "order_id", "depth": 0}, "other"]
             },
             "count": 5
         });
@@ -1188,8 +1474,8 @@ mod tests {
         });
 
         let input = json!([
-            {"var": "id1", "depth": 0},
-            {"var": "id2", "depth": 0},
+            {"type": "variable", "name": "id1", "depth": 0},
+            {"type": "variable", "name": "id2", "depth": 0},
             "static"
         ]);
         let result = resolve_variables(&input, &locals);
@@ -1214,7 +1500,7 @@ mod tests {
 
         // Variable that resolves to an object
         let input = json!({
-            "settings": {"var": "config", "depth": 0},
+            "settings": {"type": "variable", "name": "config", "depth": 0},
             "enabled": true
         });
 
@@ -1239,16 +1525,16 @@ mod tests {
             }]
         });
 
-        // Variable references return annotation if not found
+        // Variable references return null if not found
         let input = json!({
-            "user_id": {"var": "missing_var", "depth": 0},
+            "user_id": {"type": "variable", "name": "missing_var", "depth": 0},
             "value": 123
         });
 
         let result = resolve_variables(&input, &locals);
 
         assert_eq!(result, json!({
-            "user_id": {"var": "missing_var", "depth": 0},
+            "user_id": JsonValue::Null,
             "value": 123
         }));
     }
@@ -1266,8 +1552,8 @@ mod tests {
         });
 
         let input = json!({
-            "a": {"var": "found", "depth": 0},
-            "b": {"var": "missing", "depth": 0},
+            "a": {"type": "variable", "name": "found", "depth": 0},
+            "b": {"type": "variable", "name": "missing", "depth": 0},
             "c": "normal"
         });
 
@@ -1275,7 +1561,7 @@ mod tests {
 
         assert_eq!(result, json!({
             "a": "value1",
-            "b": {"var": "missing", "depth": 0},
+            "b": JsonValue::Null,
             "c": "normal"
         }));
     }
@@ -1299,8 +1585,8 @@ mod tests {
             "level1": {
                 "level2": {
                     "level3": {
-                        "user": {"var": "user_id", "depth": 0},
-                        "data": {"var": "config", "depth": 0}
+                        "user": {"type": "variable", "name": "user_id", "depth": 0},
+                        "data": {"type": "variable", "name": "config", "depth": 0}
                     }
                 }
             }
@@ -1328,7 +1614,7 @@ mod tests {
 
         // Literal $ strings are just strings - no conflict with our annotation format
         let input = json!({
-            "price": {"var": "amount", "depth": 0},
+            "price": {"type": "variable", "name": "amount", "depth": 0},
             "currency": "USD$",
             "note": "Cost is $amount dollars"
         });
@@ -1358,11 +1644,11 @@ mod tests {
         });
 
         let input = json!({
-            "n": {"var": "count", "depth": 0},
-            "r": {"var": "ratio", "depth": 0},
-            "e": {"var": "enabled", "depth": 0},
-            "d": {"var": "disabled", "depth": 0},
-            "z": {"var": "empty", "depth": 0}
+            "n": {"type": "variable", "name": "count", "depth": 0},
+            "r": {"type": "variable", "name": "ratio", "depth": 0},
+            "e": {"type": "variable", "name": "enabled", "depth": 0},
+            "d": {"type": "variable", "name": "disabled", "depth": 0},
+            "z": {"type": "variable", "name": "empty", "depth": 0}
         });
 
         let result = resolve_variables(&input, &locals);
@@ -1388,8 +1674,8 @@ mod tests {
         });
 
         let input = json!([
-            { "id": {"var": "id1", "depth": 0}, "name": "Item 1" },
-            { "id": {"var": "id2", "depth": 0}, "name": "Item 2" }
+            { "id": {"type": "variable", "name": "id1", "depth": 0}, "name": "Item 1" },
+            { "id": {"type": "variable", "name": "id2", "depth": 0}, "name": "Item 2" }
         ]);
 
         let result = resolve_variables(&input, &locals);
@@ -1433,7 +1719,7 @@ mod tests {
 
         let iterable_spec = json!({
             "type": "variable",
-            "value": {"var": "items", "depth": 0}
+            "value": {"type": "variable", "name": "items", "depth": 0}
         });
 
         let result = resolve_iterable(&iterable_spec, &locals).unwrap();
@@ -1814,9 +2100,9 @@ mod tests {
 
         // Build an input that references variables from all three scopes
         let input = json!({
-            "user": {"var": "userId", "depth": 0},
-            "order": {"var": "order", "depth": 1},
-            "item": {"var": "item", "depth": 2}
+            "user": {"type": "variable", "name": "userId", "depth": 0},
+            "order": {"type": "variable", "name": "order", "depth": 1},
+            "item": {"type": "variable", "name": "item", "depth": 2}
         });
 
         let result = resolve_variables(&input, &locals);

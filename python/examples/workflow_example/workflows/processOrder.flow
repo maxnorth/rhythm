@@ -1,9 +1,9 @@
 workflow(ctx, inputs) {
-  task("chargeCard", {
+  Task.run("chargeCard", {
       "orderId": "order-123",
       "amount": 99.99
   })
-  await sleep(500)
-  await task("shipOrder", { "orderId": "order-123" })
-  task("sendEmail", { "to": "customer@example.com", "subject": "Order shipped!", "body": "Your order is on the way" })
+  await Sleep.await(500)
+  await Task.run("shipOrder", { "orderId": "order-123" })
+  Task.run("sendEmail", { "to": "customer@example.com", "subject": "Order shipped!", "body": "Your order is on the way" })
 }

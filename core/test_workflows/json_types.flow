@@ -1,7 +1,7 @@
 // Test: All JSON data types
 // Expected: Parser handles strings, numbers, booleans, null, arrays, objects
 workflow(ctx, inputs) {
-  await task("test_types", {
+  await Task.run("test_types", {
       "string_val": "hello world",
       "number_int": 42,
       "number_float": 3.14159,

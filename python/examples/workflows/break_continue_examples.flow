@@ -4,15 +4,15 @@
 workflow(ctx, inputs) {
   // Example 1: Break - Stop processing when error found
   for (let item in inputs.items) {
-    let validation = await task("validate", { itemId: item.id })
+    let validation = await Task.run("validate", { itemId: item.id })
 
     if (validation.hasError == true) {
       // Stop processing immediately on first error
-      task("log", { message: "Error found, stopping", itemId: item.id })
+      Task.run("log", { message: "Error found, stopping", itemId: item.id })
       break
     }
 
-    await task("process", { itemId: item.id })
+    await Task.run("process", { itemId: item.id })
   }
 
   // Example 2: Continue - Skip items that don't need processing
@@ -28,13 +28,13 @@ workflow(ctx, inputs) {
     }
 
     // Only process pending orders
-    await task("processOrder", { orderId: order.id })
+    await Task.run("processOrder", { orderId: order.id })
   }
 
   // Example 3: Search pattern - break when found
   for (let user in inputs.users) {
     if (user.email == inputs.searchEmail) {
-      await task("notifyUserFound", { userId: user.id, email: user.email })
+      await Task.run("notifyUserFound", { userId: user.id, email: user.email })
       break
     }
   }
@@ -43,7 +43,7 @@ workflow(ctx, inputs) {
   for (let record in inputs.records) {
     // Stop if we encounter a terminator record
     if (record.type == "END_OF_BATCH") {
-      task("log", { message: "Batch terminator found" })
+      Task.run("log", { message: "Batch terminator found" })
       break
     }
 
@@ -52,7 +52,7 @@ workflow(ctx, inputs) {
       continue
     }
 
-    await task("processRecord", { recordId: record.id })
+    await Task.run("processRecord", { recordId: record.id })
   }
 
   // Example 5: Nested loops with break
@@ -60,11 +60,11 @@ workflow(ctx, inputs) {
     for (let product in category.products) {
       // Stop processing this category if we find a restricted product
       if (product.isRestricted == true) {
-        task("log", { message: "Restricted product found, skipping category" })
+        Task.run("log", { message: "Restricted product found, skipping category" })
         break
       }
 
-      await task("processProduct", {
+      await Task.run("processProduct", {
         categoryId: category.id,
         productId: product.id
       })
@@ -84,11 +84,11 @@ workflow(ctx, inputs) {
     }
 
     // Process only real, significant transactions
-    await task("processTransaction", {
+    await Task.run("processTransaction", {
       transactionId: transaction.id,
       amount: transaction.amount
     })
   }
 
-  await task("complete", { status: "success" })
+  await Task.run("complete", { status: "success" })
 }

@@ -1,6 +1,6 @@
 // Test: Simple variable assignment and usage
 // Expected: Variables are captured and passed correctly
 workflow(ctx, inputs) {
-  let user_id = await task("create_user", { "name": "Alice" })
-  await task("send_email", { "user_id": user_id, "subject": "Welcome" })
+  let user_id = await Task.run("create_user", { "name": "Alice" })
+  await Task.run("send_email", { "user_id": user_id, "subject": "Welcome" })
 }

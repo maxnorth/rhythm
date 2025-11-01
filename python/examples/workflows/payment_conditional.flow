@@ -5,15 +5,15 @@ workflow(ctx, inputs) {
   // Check payment amount and choose processing path
   if (inputs.amount > 1000) {
     // High-value payment - requires additional verification
-    await task("verify_identity", { userId: inputs.userId })
-    await task("fraud_check", { amount: inputs.amount })
-    let paymentResult = await task("process_premium_payment", {
+    await Task.run("verify_identity", { userId: inputs.userId })
+    await Task.run("fraud_check", { amount: inputs.amount })
+    let paymentResult = await Task.run("process_premium_payment", {
       userId: inputs.userId,
       amount: inputs.amount
     })
   } else {
     // Standard payment processing
-    let paymentResult = await task("process_standard_payment", {
+    let paymentResult = await Task.run("process_standard_payment", {
       userId: inputs.userId,
       amount: inputs.amount
     })
@@ -21,23 +21,23 @@ workflow(ctx, inputs) {
 
   // Check payment result status
   if (paymentResult.status == "success") {
-    await task("send_receipt", {
+    await Task.run("send_receipt", {
       userId: inputs.userId,
       transactionId: paymentResult.transactionId
     })
-    await task("update_account", {
+    await Task.run("update_account", {
       userId: inputs.userId,
       amount: inputs.amount
     })
   } else {
-    await task("send_failure_notification", {
+    await Task.run("send_failure_notification", {
       userId: inputs.userId,
       reason: paymentResult.error
     })
   }
 
   // Analytics - fire and forget
-  task("track_payment_event", {
+  Task.run("track_payment_event", {
     userId: inputs.userId,
     amount: inputs.amount,
     status: paymentResult.status

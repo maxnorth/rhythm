@@ -1,4 +1,4 @@
 workflow(ctx, inputs) {
-  task("generateReport", { "date": "2025-10-19", "reportType": "sales" })
-  task("sendEmail", { "to": "manager@example.com", "subject": "Daily Sales Report", "body": "See attached report" })
+  Task.run("generateReport", { "date": "2025-10-19", "reportType": "sales" })
+  Task.run("sendEmail", { "to": "manager@example.com", "subject": "Daily Sales Report", "body": "See attached report" })
 }

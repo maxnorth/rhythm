@@ -3,21 +3,21 @@
 
 workflow(ctx, inputs) {
   // Check inventory availability
-  let inventory = await task("check_inventory", {
+  let inventory = await Task.run("check_inventory", {
     productId: inputs.productId,
     quantity: inputs.quantity
   })
 
   if (inventory.available >= inputs.quantity) {
     // Reserve inventory
-    await task("reserve_inventory", {
+    await Task.run("reserve_inventory", {
       productId: inputs.productId,
       quantity: inputs.quantity,
       orderId: inputs.orderId
     })
 
     // Process payment
-    let payment = await task("process_payment", {
+    let payment = await Task.run("process_payment", {
       orderId: inputs.orderId,
       amount: inputs.totalAmount
     })
@@ -25,18 +25,18 @@ workflow(ctx, inputs) {
     if (payment.status == "success") {
       // Determine shipping method based on order value and urgency
       if (inputs.totalAmount > 500 || inputs.isUrgent == true) {
-        await task("schedule_express_shipping", {
+        await Task.run("schedule_express_shipping", {
           orderId: inputs.orderId,
           address: inputs.shippingAddress
         })
       } else {
         if (inputs.totalAmount > 100) {
-          await task("schedule_priority_shipping", {
+          await Task.run("schedule_priority_shipping", {
             orderId: inputs.orderId,
             address: inputs.shippingAddress
           })
         } else {
-          await task("schedule_standard_shipping", {
+          await Task.run("schedule_standard_shipping", {
             orderId: inputs.orderId,
             address: inputs.shippingAddress
           })
@@ -44,28 +44,28 @@ workflow(ctx, inputs) {
       }
 
       // Send confirmation
-      await task("send_order_confirmation", {
+      await Task.run("send_order_confirmation", {
         email: inputs.customerEmail,
         orderId: inputs.orderId
       })
 
       // Update loyalty points if customer is a member
       if (inputs.customerId != null) {
-        let points = await task("calculate_loyalty_points", {
+        let points = await Task.run("calculate_loyalty_points", {
           amount: inputs.totalAmount
         })
-        await task("add_loyalty_points", {
+        await Task.run("add_loyalty_points", {
           customerId: inputs.customerId,
           points: points.amount
         })
       }
     } else {
       // Payment failed - release inventory and notify customer
-      await task("release_inventory", {
+      await Task.run("release_inventory", {
         productId: inputs.productId,
         quantity: inputs.quantity
       })
-      await task("send_payment_failure_email", {
+      await Task.run("send_payment_failure_email", {
         email: inputs.customerEmail,
         reason: payment.errorMessage
       })
@@ -73,13 +73,13 @@ workflow(ctx, inputs) {
   } else {
     // Insufficient inventory
     if (inventory.nextAvailableDate != null) {
-      await task("offer_backorder", {
+      await Task.run("offer_backorder", {
         email: inputs.customerEmail,
         productId: inputs.productId,
         availableDate: inventory.nextAvailableDate
       })
     } else {
-      await task("suggest_alternatives", {
+      await Task.run("suggest_alternatives", {
         email: inputs.customerEmail,
         productId: inputs.productId
       })
@@ -87,7 +87,7 @@ workflow(ctx, inputs) {
   }
 
   // Analytics
-  task("track_order_event", {
+  Task.run("track_order_event", {
     orderId: inputs.orderId,
     status: inventory.available >= inputs.quantity ? "fulfilled" : "out_of_stock"
   })
