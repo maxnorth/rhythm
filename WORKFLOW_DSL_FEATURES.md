@@ -480,6 +480,52 @@ for (let item in inputs.items) {
 - ✅ `break` - exit the innermost loop immediately
 - ✅ `continue` - skip to next iteration of innermost loop
 
+### 11. Return Statements
+
+**Exit workflow early with a value**:
+
+```flow
+// Return without value
+workflow(ctx, inputs) {
+  if (inputs.cancel == true) {
+    return
+  }
+  await task("process", {})
+}
+
+// Return with value
+workflow(ctx, inputs) {
+  let result = await task("compute", {})
+  return result
+}
+
+// Return with object
+workflow(ctx, inputs) {
+  if (inputs.error) {
+    return { status: "error", code: 400 }
+  }
+  return { status: "success", code: 200 }
+}
+
+// Early exit from loop
+workflow(ctx, inputs) {
+  for (let item in inputs.items) {
+    if (item.isTarget == true) {
+      return item  // Exit workflow immediately with this item
+    }
+  }
+  return null  // Not found
+}
+```
+
+**Key features**:
+- ✅ **Return is optional** - workflows without return complete with `null` result
+- ✅ Return with or without a value (defaults to `null`)
+- ✅ Can return strings, numbers, objects, arrays, or variables
+- ✅ Works in any scope: top-level, if statements, loops
+- ✅ Immediately completes the workflow with the returned value as result
+- ✅ Variable references in return values are resolved before returning
+
 ## What's NOT Supported
 
 To keep things simple and focused, these are intentionally excluded:
@@ -526,7 +572,7 @@ To keep things simple and focused, these are intentionally excluded:
 
 ## Testing
 
-All features are thoroughly tested with 112+ test cases covering:
+All features are thoroughly tested with 124+ test cases covering:
 - ✅ All number formats (hex, binary, underscores, scientific notation)
 - ✅ Quoted and unquoted keys
 - ✅ Variable assignment and resolution
@@ -550,6 +596,9 @@ All features are thoroughly tested with 112+ test cases covering:
 - ✅ Mixed await and fire-and-forget in loops
 - ✅ Break and continue statements in loops
 - ✅ Break/continue inside nested conditionals
+- ✅ Return statements with and without values
+- ✅ Return with objects, arrays, and variables
+- ✅ Return from any scope (loops, if statements, top-level)
 
 Run tests:
 ```bash

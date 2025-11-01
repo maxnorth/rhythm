@@ -427,9 +427,11 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
 
     // Check if we've reached the end
     if statement_index >= statements.len() as i32 {
-        // Workflow is complete
-        sqlx::query("UPDATE executions SET status = $1, completed_at = NOW() WHERE id = $2")
+        // Workflow is complete - no more statements to execute
+        // Set result to null explicitly (no return statement was encountered)
+        sqlx::query("UPDATE executions SET status = $1, result = $2, completed_at = NOW() WHERE id = $3")
             .bind(&ExecutionStatus::Completed)
+            .bind(&JsonValue::Null)
             .bind(execution_id)
             .execute(pool.as_ref())
             .await
@@ -913,6 +915,32 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
                     return Ok(StepResult::Continue);
                 }
             }
+        }
+        "return" => {
+            // Return statement - exit workflow with value
+            let return_value = statement.get("value")
+                .cloned()
+                .unwrap_or(JsonValue::Null);
+
+            // Resolve variables in the return value
+            let resolved_value = resolve_variables(&return_value, &locals);
+
+            // Mark workflow as completed with the return value as result
+            sqlx::query(
+                r#"
+                UPDATE executions
+                SET status = $1, result = $2, completed_at = NOW()
+                WHERE id = $3
+                "#,
+            )
+            .bind(&ExecutionStatus::Completed)
+            .bind(&resolved_value)
+            .bind(execution_id)
+            .execute(pool.as_ref())
+            .await
+            .context("Failed to complete workflow with return value")?;
+
+            Ok(StepResult::Completed)
         }
         _ => {
             anyhow::bail!("Unknown statement type: {}", statement_type)

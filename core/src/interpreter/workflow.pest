@@ -20,8 +20,8 @@ workflow_function = {
     "workflow" ~ "(" ~ identifier ~ "," ~ identifier ~ ")" ~ "{" ~ statement* ~ "}"
 }
 
-// A statement is either a variable assignment, an await task, a fire-and-forget task, a sleep call, an if statement, a for loop, break, or continue
-statement = { assignment | await_statement | task_call | sleep_call | if_statement | for_loop | break_statement | continue_statement }
+// A statement is either a variable assignment, an await task, a fire-and-forget task, a sleep call, an if statement, a for loop, break, continue, or return
+statement = { assignment | await_statement | task_call | sleep_call | if_statement | for_loop | break_statement | continue_statement | return_statement }
 
 // let varname = task(...) or let varname = await task(...)
 assignment = {
@@ -157,6 +157,9 @@ break_statement = { "break" }
 
 // Continue statement - skip to next iteration of innermost loop
 continue_statement = { "continue" }
+
+// Return statement - exit workflow with optional value
+return_statement = { "return" ~ json_value? }
 
 // Whitespace and comments (automatically skipped by Pest)
 WHITESPACE = _{ " " | "\t" | "\n" | "\r" }

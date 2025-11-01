@@ -265,12 +265,32 @@ pub fn parse_workflow(source: &str) -> Result<Vec<JsonValue>, ParseError> {
                         "type": "continue"
                     }));
                 }
+                Rule::return_statement => {
+                    steps.push(parse_return_statement(inner_statement, &mut ctx)?);
+                }
                 _ => {}
             }
         }
     }
 
     Ok(steps)
+}
+
+fn parse_return_statement(pair: pest::iterators::Pair<Rule>, ctx: &ParserContext) -> Result<JsonValue, ParseError> {
+    let line = pair.as_span().start_pos().line_col().0;
+    let mut inner = pair.into_inner();
+
+    // Check if there's a return value
+    let return_value = if let Some(value_pair) = inner.next() {
+        parse_json_value(value_pair, line, ctx)?
+    } else {
+        JsonValue::Null
+    };
+
+    Ok(json!({
+        "type": "return",
+        "value": return_value
+    }))
 }
 
 fn parse_assignment(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext) -> Result<JsonValue, ParseError> {
@@ -620,6 +640,7 @@ fn parse_for_loop(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext) ->
                     Rule::for_loop => parse_for_loop(inner_statement, ctx)?,
                     Rule::break_statement => json!({"type": "break"}),
                     Rule::continue_statement => json!({"type": "continue"}),
+                    Rule::return_statement => parse_return_statement(inner_statement, ctx)?,
                     _ => continue,
                 };
                 body_statements.push(stmt);
@@ -738,6 +759,7 @@ fn parse_if_statement(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext
                             }
                             json!({"type": "continue"})
                         },
+                        Rule::return_statement => parse_return_statement(inner_statement, ctx)?,
                         _ => continue,
                     };
                     then_statements.push(stmt);
@@ -774,6 +796,7 @@ fn parse_if_statement(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext
                                     }
                                     json!({"type": "continue"})
                                 },
+                                Rule::return_statement => parse_return_statement(inner_statement, ctx)?,
                                 _ => continue,
                             };
                             else_stmts.push(stmt);
@@ -2552,5 +2575,134 @@ workflow(ctx, inputs) {
         "#;
         let result = parse_workflow(source);
         assert!(result.is_ok(), "Break inside if inside loop should work: {:?}", result.err());
+    }
+
+    // === RETURN STATEMENT TESTS ===
+
+    #[test]
+    fn test_return_without_value() {
+        let source = r#"
+workflow(ctx, inputs) {
+  task("start", {})
+  return
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[1]["type"], "return");
+        assert_eq!(result[1]["value"], JsonValue::Null);
+    }
+
+    #[test]
+    fn test_return_with_string() {
+        let source = r#"
+workflow(ctx, inputs) {
+  return "success"
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0]["type"], "return");
+        assert_eq!(result[0]["value"], "success");
+    }
+
+    #[test]
+    fn test_return_with_object() {
+        let source = r#"
+workflow(ctx, inputs) {
+  return { status: "success", code: 200 }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0]["type"], "return");
+        assert_eq!(result[0]["value"]["status"], "success");
+        assert_eq!(result[0]["value"]["code"], 200);
+    }
+
+    #[test]
+    fn test_return_with_variable() {
+        let source = r#"
+workflow(ctx, inputs) {
+  let result = await task("compute", {})
+  return result
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[1]["type"], "return");
+        assert_eq!(result[1]["value"]["var"], "result");
+        assert_eq!(result[1]["value"]["depth"], 0);
+    }
+
+    #[test]
+    fn test_return_in_if_statement() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if (inputs.shouldReturn == true) {
+    return "early exit"
+  }
+  task("continue", {})
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0]["type"], "if");
+
+        let then_stmts = result[0]["then_statements"].as_array().unwrap();
+        assert_eq!(then_stmts.len(), 1);
+        assert_eq!(then_stmts[0]["type"], "return");
+        assert_eq!(then_stmts[0]["value"], "early exit");
+    }
+
+    #[test]
+    fn test_return_in_loop() {
+        let source = r#"
+workflow(ctx, inputs) {
+  for (let item in inputs.items) {
+    if (item.isTarget == true) {
+      return item
+    }
+  }
+  return null
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 2);
+
+        // Check for loop
+        assert_eq!(result[0]["type"], "for");
+        let body = result[0]["body_statements"].as_array().unwrap();
+        assert_eq!(body[0]["type"], "if");
+
+        let then_stmts = body[0]["then_statements"].as_array().unwrap();
+        assert_eq!(then_stmts[0]["type"], "return");
+        assert_eq!(then_stmts[0]["value"]["var"], "item");
+
+        // Check final return
+        assert_eq!(result[1]["type"], "return");
+        assert_eq!(result[1]["value"], JsonValue::Null);
+    }
+
+    #[test]
+    fn test_workflow_without_return_is_valid() {
+        // Workflow without explicit return should be valid
+        let source = r#"
+workflow(ctx, inputs) {
+  await task("step1", {})
+  await task("step2", {})
+  task("step3", {})
+}
+        "#;
+        let result = parse_workflow(source);
+        assert!(result.is_ok(), "Workflow without return should be valid");
+
+        let statements = result.unwrap();
+        assert_eq!(statements.len(), 3);
+
+        // None of the statements should be return
+        for stmt in statements {
+            assert_ne!(stmt["type"], "return");
+        }
     }
 }
