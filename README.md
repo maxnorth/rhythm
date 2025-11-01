@@ -1,235 +1,110 @@
 # Rhythm
 
-A lightweight durable execution framework using only Postgres. No external orchestrator needed.
+Durable workflows using snapshots instead of replay. No determinism constraints.
 
-## Features
+Write workflows in a simple DSL (JavaScript-like async/await), implement tasks in any language (Python and Node.js supported now). When a workflow awaits, snapshot the execution state—on resume, continue from the snapshot. No event history, no determinism rules.
 
-- **Truly self-contained** - Only depends on Postgres, no external Conductor/orchestrator
-- **Durable execution** - Workflows survive crashes and automatically resume
-- **DSL-based workflows** - Simple `.flow` files for language-agnostic orchestration
-- **Queue-first design** - All work is queued by default
-- **Unified platform** - Handle both simple async tasks (Celery-style) and complex workflows
-- **Worker failover** - Automatic recovery via heartbeat-based coordination through Postgres
-- **LISTEN/NOTIFY** - Fast task pickup with Postgres pub/sub
-- **Signals** - External systems can send signals to workflows (Python workflows)
-- **Versioning** - Workflow evolution with backward compatibility (Python workflows)
+**Rust core with language bindings**: Single execution engine in Rust, thin FFI adapters for each language. Same workflow runs everywhere—DSL is parsed once, snapshots are universal. Fast parser (Pest-based), efficient execution.
 
-## Installation
+**Also works as a task queue**: Use it for simple async tasks without workflows. Unified interface—tasks and workflows use the same execution model.
 
-```bash
-pip install -e .
+**Not** a DAG scheduler (Airflow), not a Temporal clone. This explores snapshot-based execution as an alternative to replay-based models.
+
+**Status**: Experimental prototype. Core execution works. Missing control flow (if/else, loops), observability, production features. Expect bugs and breaking changes.
+
+```javascript
+// workflows/processOrder.flow
+workflow(ctx, inputs) {
+  let payment = await task("chargeCard", {
+    orderId: inputs.orderId,
+    amount: inputs.amount
+  })
+
+  await task("shipOrder", { orderId: inputs.orderId })
+}
 ```
+
+```python
+# tasks.py - implement tasks in Python or JavaScript
+@rhythm.task(queue="orders")
+async def chargeCard(orderId: str, amount: float):
+    # Normal Python - use time.now(), random(), external APIs
+    # No determinism rules
+    return {"success": True, "txn_id": "..."}
+```
+
+---
+
+## Why This Exists
+
+Temporal's replay-based model is powerful but has friction:
+
+- Every line of workflow code must be deterministic (no `time.now()`, no random, no direct I/O)
+- Versioning requires careful migration of in-flight workflows
+- Mental model split: "normal code" vs "workflow code"
+- Testing requires replay mocks and history simulation
+
+Rhythm experiments with **snapshot execution state instead of replaying code**. Accept a DSL in exchange for eliminating determinism constraints.
+
+[Read more about how this differs from Temporal →](FAQ.md#how-does-this-differ-from-temporal)
+
+---
+
+## What Works / What Doesn't
+
+**Working**:
+- ✅ Snapshot-based execution (await tasks, resume on crash)
+- ✅ Worker failover (heartbeat-based, via Postgres)
+- ✅ Python & Node.js task implementations
+- ✅ Basic DSL: tasks, variables, await, fire-and-forget
+- ✅ Multi-queue workers, retries, timeouts
+
+**Missing**:
+- ❌ Control flow (if/else, loops) — **biggest gap**
+- ❌ Expressions (operators, property access)
+- ❌ Observability (metrics, tracing, UI)
+- ❌ Idempotency keys
+- ❌ Rate limiting
+- ❌ Production hardening (edge cases, error handling)
+
+**Stability**: Core works. Expect rough edges, breaking changes, missing features.
+
+---
 
 ## Quick Start
 
-### 1. Setup Database
+- Python (bla bla replace this)
+- JS (bla bla replace this)
 
-```bash
-# Set database URL
-export RHYTHM_DATABASE_URL="postgresql://localhost/rhythm"
+---
 
-# Run migrations
-rhythm migrate
-```
+## Roadmap
 
-### 2. Define Tasks and Workflows
+**Priority 1**: Control flow (if/else, loops, expressions) — DSL unusable without this
+**Priority 2**: Observability (what's running, where it's stuck)
+**Priority 3**: Production features (idempotency, rate limiting, retention)
 
-```python
-# app.py - Define tasks
-import rhythm
-from rhythm import task
+[Full roadmap](.context/TODO.md)
 
-# Initialize with workflow paths
-rhythm.init(
-    database_url="postgresql://localhost/rhythm",
-    workflow_paths=["./workflows"]
-)
+---
 
-# Define tasks that workflows can call
-@task(queue="payments")
-async def charge_card(order_id: str, amount: float):
-    print(f"💳 Charging ${amount} for order {order_id}")
-    return {"success": True, "transaction_id": "txn_123"}
+## Learn More
 
-@task(queue="fulfillment")
-async def ship_order(order_id: str):
-    print(f"📦 Shipping order {order_id}")
-    return {"success": True, "tracking": "TRACK123"}
+- **[FAQ](FAQ.md)** — Common questions, how this differs from Temporal, technical details
+- **[DSL Syntax Reference](WORKFLOW_DSL_FEATURES.md)** — Complete language guide, why a DSL
+- **[Technical Deep Dive](TECHNICAL_DEEP_DIVE.md)** — Snapshot model, architecture, performance
+- **[Blog Post](https://...)** — Longer explanation of snapshot vs replay
+- **Examples**: [Python](python/examples/) | [Node.js](node/examples/)
 
-@task(queue="emails")
-async def send_email(to: str, subject: str, body: str):
-    print(f"📧 Sending email to {to}")
-    return {"sent": True}
-```
+---
 
-```
-// workflows/processOrder.flow - Define workflow
-task("charge_card", { "order_id": "order-123", "amount": 99.99 })
-task("ship_order", { "order_id": "order-123" })
-task("send_email", { "to": "customer@example.com", "subject": "Order shipped!" })
-```
+## Contributing / Feedback
 
-### 3. Start Workflows
+Not seeking contributions yet (pre-release, rapid changes).
 
-```python
-import rhythm
+Feedback welcome:
+- Does the snapshot model make sense?
+- Is the DSL trade-off acceptable?
+- What's blocking you from trying this?
 
-# Start a DSL workflow
-workflow_id = await rhythm.start_workflow(
-    "processOrder",
-    inputs={"orderId": "order-123", "amount": 99.99}
-)
-print(f"Workflow started: {workflow_id}")
-```
-
-### 4. Run Workers
-
-```bash
-# Start worker for emails queue
-rhythm worker -q emails
-
-# Start worker for orders queue
-rhythm worker -q orders
-
-# Start worker for multiple queues
-rhythm worker -q emails -q orders
-```
-
-## Workflow Types
-
-### DSL Workflows (Recommended)
-
-Language-agnostic workflows defined in `.flow` files:
-
-**Benefits:**
-- Same workflow works with Python, Node.js, or any language
-- Simple flat state (no complex replay)
-- Easier to visualize and debug
-- Inherently deterministic
-
-**Current syntax:**
-```
-task("taskName", { "arg": "value" })
-sleep(5)
-```
-
-**Coming soon:**
-- Conditionals: `if (result.success) { ... }`
-- Loops: `for (item in items) { ... }`
-- Expressions: Variables, operators, property access
-
-### Task Options
-
-**Dynamic Options** - Override execution options at queue time:
-```python
-# Override queue and priority for tasks
-task_id = await send_email.options(
-    queue="high-priority",
-    priority=10
-).queue(to="vip@example.com", subject="Urgent", body="...")
-
-## CLI Commands
-
-```bash
-# Run migrations
-rhythm migrate
-
-# Start worker
-rhythm worker -q queue_name
-
-# Check execution status
-rhythm status <execution_id>
-
-# List executions
-rhythm list
-rhythm list --queue emails --status pending
-rhythm list --limit 50
-
-# Cancel execution
-rhythm cancel <execution_id>
-```
-
-## Configuration
-
-Set via environment variables (prefix with `RHYTHM_`):
-
-```bash
-# Database
-export RHYTHM_DATABASE_URL="postgresql://localhost/rhythm"
-
-# Worker settings
-export RHYTHM_WORKER_HEARTBEAT_INTERVAL=5  # seconds
-export RHYTHM_WORKER_HEARTBEAT_TIMEOUT=30  # seconds
-export RHYTHM_WORKER_POLL_INTERVAL=1  # seconds
-export RHYTHM_WORKER_MAX_CONCURRENT=10  # per worker
-
-# Execution defaults
-export RHYTHM_DEFAULT_TIMEOUT=300  # seconds
-export RHYTHM_DEFAULT_WORKFLOW_TIMEOUT=3600  # seconds
-export RHYTHM_DEFAULT_RETRIES=3
-```
-
-## How It Works
-
-### Worker Coordination (No External Orchestrator!)
-
-Unlike DBOS which requires a separate Conductor service, rhythm achieves worker failover entirely through Postgres:
-
-1. **Heartbeats** - Workers update a heartbeat table every 5s
-2. **Dead worker detection** - Workers detect when other workers haven't heartbeat in 30s
-3. **Work recovery** - Dead workers' executions are reset to pending and re-queued
-4. **LISTEN/NOTIFY** - Workers listen for new work via Postgres pub/sub for instant pickup
-
-### Workflow Execution
-
-DSL workflows use simple state persistence:
-
-1. Parse `.flow` file to AST, store in database
-2. Execute statement by statement (tree-walking interpreter)
-3. On `task()`: Create child execution, save state `{statement_index, locals}`, suspend
-4. When child completes: Resume workflow, continue from next statement
-5. No replay needed - just continue from saved position
-
-## Architecture
-
-```
-┌─────────────┐
-│  Client     │ - Enqueues tasks/workflows
-└──────┬──────┘
-       │
-       v
-┌─────────────────────────────────────┐
-│         Postgres Database           │
-│  • executions (tasks/workflows)     │
-│  • worker_heartbeats                │
-│  • workflow_signals                 │
-│  • LISTEN/NOTIFY channels           │
-└─────────────┬───────────────────────┘
-              │
-       ┌──────┴──────┐
-       │             │
-       v             v
-┌──────────┐  ┌──────────┐
-│ Worker 1 │  │ Worker 2 │ - Poll for work
-│          │  │          │ - Execute functions
-│          │  │          │ - Heartbeat
-│          │  │          │ - Detect failures
-└──────────┘  └──────────┘
-```
-
-## Comparison
-
-| Feature | Rhythm | DBOS Transact | Temporal |
-|---------|-----------|---------------|----------|
-| External orchestrator | ❌ None | ✅ Conductor required | ✅ Server required |
-| Database | Postgres only | Postgres only | Any (via adapter) |
-| Queue-first | ✅ Yes | ❌ Sync by default | ✅ Yes |
-| Workflow style | DSL-based | Python/TS code | Language code |
-| Language-agnostic workflows | ✅ Yes | ❌ No | ❌ No |
-| Worker failover | ✅ Via Postgres | ✅ Via Conductor | ✅ Via Server |
-| Signals | 🚧 Planned | ❌ No | ✅ Yes |
-| Versioning | 🚧 Planned | ❌ Limited | ✅ Yes |
-
-## License
-
-MIT
+[Open an issue](https://github.com/yourusername/rhythm/issues) or [discussion](https://github.com/yourusername/rhythm/discussions)

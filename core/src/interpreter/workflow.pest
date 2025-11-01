@@ -20,8 +20,8 @@ workflow_function = {
     "workflow" ~ "(" ~ identifier ~ "," ~ identifier ~ ")" ~ "{" ~ statement* ~ "}"
 }
 
-// A statement is either a variable assignment, an await task, a fire-and-forget task, or a sleep call
-statement = { assignment | await_statement | task_call | sleep_call }
+// A statement is either a variable assignment, an await task, a fire-and-forget task, a sleep call, an if statement, or a for loop
+statement = { assignment | await_statement | task_call | sleep_call | if_statement | for_loop }
 
 // let varname = task(...) or let varname = await task(...)
 assignment = {
@@ -106,6 +106,51 @@ null = @{ "null" }
 
 // Integer literal
 integer = @{ ASCII_DIGIT+ }
+
+// If/else conditional statements
+if_statement = {
+    "if" ~ "(" ~ condition ~ ")" ~ "{" ~ statement* ~ "}" ~ else_clause?
+}
+
+else_clause = {
+    "else" ~ "{" ~ statement* ~ "}"
+}
+
+// Condition expressions (logical operators)
+condition = { or_expr }
+
+or_expr = { and_expr ~ ("||" ~ and_expr)* }
+
+and_expr = { comparison ~ ("&&" ~ comparison)* }
+
+comparison = {
+    comparison_value ~ (comparison_op ~ comparison_value)?
+    | "(" ~ condition ~ ")"  // Support parenthesized conditions
+}
+
+comparison_op = { "==" | "!=" | "<=" | ">=" | "<" | ">" }
+
+// Values that can be compared
+comparison_value = {
+    member_access  // inputs.userId, ctx.workflowId, result.status
+    | boolean      // true/false (must come before identifier)
+    | null         // null (must come before identifier)
+    | identifier   // Variable reference
+    | string
+    | number
+}
+
+// For loop statement - requires let keyword for loop variable
+for_loop = {
+    "for" ~ "(" ~ "let" ~ identifier ~ "in" ~ for_iterable ~ ")" ~ "{" ~ statement* ~ "}"
+}
+
+// What can be iterated over in a for loop
+for_iterable = {
+    member_access  // inputs.items, result.data
+    | identifier   // Variable reference
+    | json_array   // Inline array: [1, 2, 3]
+}
 
 // Whitespace and comments (automatically skipped by Pest)
 WHITESPACE = _{ " " | "\t" | "\n" | "\r" }

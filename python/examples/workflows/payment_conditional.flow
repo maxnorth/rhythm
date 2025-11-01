@@ -1,0 +1,45 @@
+// Conditional payment processing workflow
+// Demonstrates if/else logic with different payment amounts and statuses
+
+workflow(ctx, inputs) {
+  // Check payment amount and choose processing path
+  if (inputs.amount > 1000) {
+    // High-value payment - requires additional verification
+    await task("verify_identity", { userId: inputs.userId })
+    await task("fraud_check", { amount: inputs.amount })
+    let paymentResult = await task("process_premium_payment", {
+      userId: inputs.userId,
+      amount: inputs.amount
+    })
+  } else {
+    // Standard payment processing
+    let paymentResult = await task("process_standard_payment", {
+      userId: inputs.userId,
+      amount: inputs.amount
+    })
+  }
+
+  // Check payment result status
+  if (paymentResult.status == "success") {
+    await task("send_receipt", {
+      userId: inputs.userId,
+      transactionId: paymentResult.transactionId
+    })
+    await task("update_account", {
+      userId: inputs.userId,
+      amount: inputs.amount
+    })
+  } else {
+    await task("send_failure_notification", {
+      userId: inputs.userId,
+      reason: paymentResult.error
+    })
+  }
+
+  // Analytics - fire and forget
+  task("track_payment_event", {
+    userId: inputs.userId,
+    amount: inputs.amount,
+    status: paymentResult.status
+  })
+}

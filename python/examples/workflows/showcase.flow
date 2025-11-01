@@ -3,9 +3,9 @@
 workflow(ctx, inputs) {
     // Variables and unquoted keys
     let userId = await task("authenticate", {
-    username: "alice@example.com",
-    method: "oauth2"
-  })
+                    username: "alice@example.com",
+                    method: "oauth2"
+                  })
   
   // Hex numbers for colors and configuration
   let themeConfig = await task("load_theme", {
@@ -94,7 +94,7 @@ workflow(ctx, inputs) {
   // Arrays with variables
   let taskIds = await task("queue_tasks", {
     tasks: [
-      orderId,
+      orderData,
       shipmentId,
       userId
     ],

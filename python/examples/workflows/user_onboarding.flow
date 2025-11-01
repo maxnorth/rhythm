@@ -1,0 +1,47 @@
+// User onboarding workflow with conditional paths
+// Demonstrates complex conditions with && and || operators
+
+workflow(ctx, inputs) {
+  // Create user account
+  let user = await task("create_user_account", {
+    email: inputs.email,
+    name: inputs.name
+  })
+
+  // Check if user is eligible for premium features
+  if (inputs.referralCode != null && inputs.signupSource == "partner") {
+    // Premium onboarding path
+    await task("activate_premium_trial", { userId: user.id })
+    await task("assign_account_manager", { userId: user.id })
+    await task("send_premium_welcome", { email: inputs.email })
+  } else {
+    // Standard onboarding path
+    await task("send_standard_welcome", { email: inputs.email })
+  }
+
+  // Check user region for localized setup
+  if (inputs.country == "US" || inputs.country == "CA") {
+    await task("setup_north_america_features", { userId: user.id })
+  } else {
+    if (inputs.country == "GB" || inputs.country == "FR" || inputs.country == "DE") {
+      await task("setup_europe_features", { userId: user.id })
+    } else {
+      await task("setup_global_features", { userId: user.id })
+    }
+  }
+
+  // Age verification for certain features
+  if (inputs.age >= 18) {
+    await task("enable_full_features", { userId: user.id })
+  } else {
+    await task("enable_restricted_features", { userId: user.id })
+    await task("notify_guardian", { email: inputs.guardianEmail })
+  }
+
+  // Final setup tasks
+  task("track_signup", {
+    userId: user.id,
+    source: inputs.signupSource,
+    hasReferral: inputs.referralCode != null
+  })
+}

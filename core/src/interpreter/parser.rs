@@ -1,10 +1,65 @@
 use pest::Parser;
 use pest_derive::Parser;
 use serde_json::{json, Value as JsonValue};
+use std::collections::HashMap;
 
 #[derive(Parser)]
 #[grammar = "interpreter/workflow.pest"]
 struct WorkflowParser;
+
+/// Parser context for tracking variable scopes during parsing
+struct ParserContext {
+    /// Current scope depth (0 = global)
+    scope_depth: usize,
+    /// Stack of scopes, each containing variable name -> depth where defined
+    symbol_table: Vec<HashMap<String, usize>>,
+}
+
+impl ParserContext {
+    fn new() -> Self {
+        Self {
+            scope_depth: 0,
+            symbol_table: vec![HashMap::new()], // Start with global scope
+        }
+    }
+
+    /// Enter a new scope (e.g., for loop, if block)
+    fn enter_scope(&mut self) {
+        self.scope_depth += 1;
+        self.symbol_table.push(HashMap::new());
+    }
+
+    /// Exit current scope
+    fn exit_scope(&mut self) {
+        self.symbol_table.pop();
+        self.scope_depth = self.scope_depth.saturating_sub(1);
+    }
+
+    /// Declare a variable in the current scope
+    fn declare_variable(&mut self, name: String) {
+        if let Some(current_scope) = self.symbol_table.last_mut() {
+            current_scope.insert(name, self.scope_depth);
+        }
+    }
+
+    /// Look up a variable and return the depth where it's defined
+    /// Walks from current scope to global scope
+    fn lookup_variable(&self, name: &str) -> Option<usize> {
+        // Walk from current depth down to 0
+        for depth in (0..=self.scope_depth).rev() {
+            if let Some(scope) = self.symbol_table.get(depth) {
+                if scope.contains_key(name) {
+                    return Some(depth);
+                }
+            }
+        }
+        None
+    }
+
+    fn current_depth(&self) -> usize {
+        self.scope_depth
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParseError {
@@ -59,6 +114,7 @@ impl From<pest::error::Error<Rule>> for ParseError {
 /// ]
 /// ```
 pub fn parse_workflow(source: &str) -> Result<Vec<JsonValue>, ParseError> {
+    let mut ctx = ParserContext::new();
     // Check for semicolons and provide helpful error message
     if let Some(pos) = source.find(';') {
         let line = source[..pos].lines().count();
@@ -146,16 +202,22 @@ pub fn parse_workflow(source: &str) -> Result<Vec<JsonValue>, ParseError> {
         for inner_statement in statement.into_inner() {
             match inner_statement.as_rule() {
                 Rule::assignment => {
-                    steps.push(parse_assignment(inner_statement)?);
+                    steps.push(parse_assignment(inner_statement, &mut ctx)?);
                 }
                 Rule::await_statement | Rule::await_task => {
-                    steps.push(parse_await_statement(inner_statement)?);
+                    steps.push(parse_await_statement(inner_statement, &mut ctx)?);
                 }
                 Rule::task_call => {
-                    steps.push(parse_task_call(inner_statement, false)?);
+                    steps.push(parse_task_call(inner_statement, false, &mut ctx)?);
                 }
                 Rule::sleep_call => {
                     steps.push(parse_sleep_call(inner_statement, false)?);
+                }
+                Rule::if_statement => {
+                    steps.push(parse_if_statement(inner_statement, &mut ctx)?);
+                }
+                Rule::for_loop => {
+                    steps.push(parse_for_loop(inner_statement, &mut ctx)?);
                 }
                 _ => {}
             }
@@ -165,7 +227,7 @@ pub fn parse_workflow(source: &str) -> Result<Vec<JsonValue>, ParseError> {
     Ok(steps)
 }
 
-fn parse_assignment(pair: pest::iterators::Pair<Rule>) -> Result<JsonValue, ParseError> {
+fn parse_assignment(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext) -> Result<JsonValue, ParseError> {
     let mut inner = pair.into_inner();
 
     // Get variable name (identifier)
@@ -173,27 +235,31 @@ fn parse_assignment(pair: pest::iterators::Pair<Rule>) -> Result<JsonValue, Pars
         .ok_or_else(|| ParseError::PestError("assignment requires variable name".to_string()))?;
     let var_name = var_name_pair.as_str().to_string();
 
+    // Declare the variable in current scope
+    ctx.declare_variable(var_name.clone());
+
     // Get the task expression (either await_statement or task_call)
     let task_expr = inner.next()
         .ok_or_else(|| ParseError::PestError("assignment requires task expression".to_string()))?;
 
     // Parse the task (will have await field set appropriately)
     let mut task_json = match task_expr.as_rule() {
-        Rule::await_statement | Rule::await_task => parse_await_statement(task_expr)?,
-        Rule::task_call => parse_task_call(task_expr, false)?,
+        Rule::await_statement | Rule::await_task => parse_await_statement(task_expr, ctx)?,
+        Rule::task_call => parse_task_call(task_expr, false, ctx)?,
         Rule::sleep_call => parse_sleep_call(task_expr, false)?,
         _ => return Err(ParseError::PestError("invalid assignment expression".to_string())),
     };
 
-    // Add variable name to task JSON
+    // Add variable name and scope depth to task JSON
     if let Some(obj) = task_json.as_object_mut() {
         obj.insert("assign_to".to_string(), json!(var_name));
+        obj.insert("assign_to_depth".to_string(), json!(ctx.current_depth()));
     }
 
     Ok(task_json)
 }
 
-fn parse_await_statement(pair: pest::iterators::Pair<Rule>) -> Result<JsonValue, ParseError> {
+fn parse_await_statement(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext) -> Result<JsonValue, ParseError> {
     let mut inner = pair.into_inner();
 
     // The inner element can be either task_call or sleep_call
@@ -202,13 +268,13 @@ fn parse_await_statement(pair: pest::iterators::Pair<Rule>) -> Result<JsonValue,
 
     // Parse with await=true
     match call_pair.as_rule() {
-        Rule::task_call => parse_task_call(call_pair, true),
+        Rule::task_call => parse_task_call(call_pair, true, ctx),
         Rule::sleep_call => parse_sleep_call(call_pair, true),
         _ => Err(ParseError::PestError("await can only be used with task() or sleep()".to_string())),
     }
 }
 
-fn parse_task_call(pair: pest::iterators::Pair<Rule>, await_completion: bool) -> Result<JsonValue, ParseError> {
+fn parse_task_call(pair: pest::iterators::Pair<Rule>, await_completion: bool, ctx: &mut ParserContext) -> Result<JsonValue, ParseError> {
     let line = pair.as_span().start_pos().line_col().0;
     let mut inner = pair.into_inner();
 
@@ -223,7 +289,7 @@ fn parse_task_call(pair: pest::iterators::Pair<Rule>, await_completion: bool) ->
 
     // Second element (if present) is the inputs object
     let inputs = if let Some(json_pair) = inner.next() {
-        parse_json_object(json_pair, line)?
+        parse_json_object(json_pair, line, ctx)?
     } else {
         json!({})
     };
@@ -307,7 +373,7 @@ fn parse_string(pair: pest::iterators::Pair<Rule>) -> Result<String, ParseError>
     Ok(result)
 }
 
-fn parse_json_object(pair: pest::iterators::Pair<Rule>, line: usize) -> Result<JsonValue, ParseError> {
+fn parse_json_object(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &ParserContext) -> Result<JsonValue, ParseError> {
     let mut obj = serde_json::Map::new();
 
     for inner in pair.into_inner() {
@@ -337,7 +403,7 @@ fn parse_json_object(pair: pest::iterators::Pair<Rule>, line: usize) -> Result<J
                     line,
                     message: "JSON pair missing value".to_string(),
                 })?;
-            let value = parse_json_value(value_pair, line)?;
+            let value = parse_json_value(value_pair, line, ctx)?;
 
             obj.insert(key, value);
         }
@@ -346,7 +412,7 @@ fn parse_json_object(pair: pest::iterators::Pair<Rule>, line: usize) -> Result<J
     Ok(JsonValue::Object(obj))
 }
 
-fn parse_json_value(pair: pest::iterators::Pair<Rule>, line: usize) -> Result<JsonValue, ParseError> {
+fn parse_json_value(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &ParserContext) -> Result<JsonValue, ParseError> {
     let inner = pair.into_inner().next()
         .ok_or_else(|| ParseError::InvalidJson {
             line,
@@ -354,8 +420,8 @@ fn parse_json_value(pair: pest::iterators::Pair<Rule>, line: usize) -> Result<Js
         })?;
 
     match inner.as_rule() {
-        Rule::json_object => parse_json_object(inner, line),
-        Rule::json_array => parse_json_array(inner, line),
+        Rule::json_object => parse_json_object(inner, line, ctx),
+        Rule::json_array => parse_json_array(inner, line, ctx),
         Rule::string => Ok(JsonValue::String(parse_string(inner)?)),
         Rule::number => {
             let num_str = inner.as_str();
@@ -427,11 +493,25 @@ fn parse_json_value(pair: pest::iterators::Pair<Rule>, line: usize) -> Result<Js
             Ok(JsonValue::String(member_str.to_string()))
         }
         Rule::identifier => {
-            // This is a variable reference - add $ prefix in JSON to distinguish from literal strings
+            // This is a variable reference - add $ prefix and annotate with scope depth
             // In .flow files, users write: task("foo", { "key": myVar })
-            // Parser outputs JSON: { "key": "$myVar" } so executor knows it's a variable
+            // Parser outputs JSON: { "key": {"var": "myVar", "depth": 0} } for O(1) lookup
             let var_name = inner.as_str();
-            Ok(JsonValue::String(format!("${}", var_name)))
+
+            // Look up the variable in the symbol table to get its scope depth
+            if let Some(depth) = ctx.lookup_variable(var_name) {
+                // Variable found - annotate with depth for O(1) runtime lookup
+                Ok(json!({
+                    "var": var_name,
+                    "depth": depth
+                }))
+            } else {
+                // Variable not declared - parse error
+                Err(ParseError::InvalidJson {
+                    line,
+                    message: format!("Undefined variable '{}'. Variables must be declared with 'let' before use.", var_name),
+                })
+            }
         }
         _ => Err(ParseError::InvalidJson {
             line,
@@ -440,16 +520,385 @@ fn parse_json_value(pair: pest::iterators::Pair<Rule>, line: usize) -> Result<Js
     }
 }
 
-fn parse_json_array(pair: pest::iterators::Pair<Rule>, line: usize) -> Result<JsonValue, ParseError> {
+fn parse_json_array(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &ParserContext) -> Result<JsonValue, ParseError> {
     let mut arr = Vec::new();
 
     for inner in pair.into_inner() {
         if inner.as_rule() == Rule::json_value {
-            arr.push(parse_json_value(inner, line)?);
+            arr.push(parse_json_value(inner, line, ctx)?);
         }
     }
 
     Ok(JsonValue::Array(arr))
+}
+
+fn parse_for_loop(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext) -> Result<JsonValue, ParseError> {
+    let line = pair.as_span().start_pos().line_col().0;
+    let mut inner = pair.into_inner();
+
+    // Get the loop variable name
+    let loop_var_pair = inner.next()
+        .ok_or_else(|| ParseError::UnexpectedToken {
+            line,
+            message: "for loop requires a variable name".to_string(),
+        })?;
+    let loop_variable = loop_var_pair.as_str().to_string();
+
+    // Get the iterable (what we're looping over)
+    let iterable_pair = inner.next()
+        .ok_or_else(|| ParseError::UnexpectedToken {
+            line,
+            message: "for loop requires an iterable".to_string(),
+        })?;
+
+    let iterable = parse_for_iterable(iterable_pair, line, ctx)?;
+
+    // Enter a new scope for the loop body
+    ctx.enter_scope();
+
+    // Declare the loop variable in the new scope
+    ctx.declare_variable(loop_variable.clone());
+
+    // Collect loop body statements
+    let mut body_statements = Vec::new();
+    for item in inner {
+        if item.as_rule() == Rule::statement {
+            for inner_statement in item.into_inner() {
+                let stmt = match inner_statement.as_rule() {
+                    Rule::assignment => parse_assignment(inner_statement, ctx)?,
+                    Rule::await_statement | Rule::await_task => parse_await_statement(inner_statement, ctx)?,
+                    Rule::task_call => parse_task_call(inner_statement, false, ctx)?,
+                    Rule::sleep_call => parse_sleep_call(inner_statement, false)?,
+                    Rule::if_statement => parse_if_statement(inner_statement, ctx)?,
+                    Rule::for_loop => parse_for_loop(inner_statement, ctx)?,
+                    _ => continue,
+                };
+                body_statements.push(stmt);
+            }
+        }
+    }
+
+    // Exit the loop scope
+    ctx.exit_scope();
+
+    Ok(json!({
+        "type": "for",
+        "loop_variable": loop_variable,
+        "iterable": iterable,
+        "body_statements": body_statements,
+    }))
+}
+
+fn parse_for_iterable(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &ParserContext) -> Result<JsonValue, ParseError> {
+    let inner = pair.into_inner().next()
+        .ok_or_else(|| ParseError::InvalidJson {
+            line,
+            message: "Empty for loop iterable".to_string(),
+        })?;
+
+    match inner.as_rule() {
+        Rule::member_access => {
+            // Member access like inputs.items or result.data
+            Ok(json!({
+                "type": "member_access",
+                "value": inner.as_str()
+            }))
+        }
+        Rule::identifier => {
+            // Variable reference in for loop iterable - annotate with scope depth
+            let var_name = inner.as_str();
+
+            if let Some(depth) = ctx.lookup_variable(var_name) {
+                // Variable found - annotate with depth
+                Ok(json!({
+                    "type": "variable",
+                    "value": {
+                        "var": var_name,
+                        "depth": depth
+                    }
+                }))
+            } else {
+                // Variable not declared - parse error
+                Err(ParseError::InvalidJson {
+                    line,
+                    message: format!("Undefined variable '{}' in for loop iterable. Variables must be declared with 'let' before use.", var_name),
+                })
+            }
+        }
+        Rule::json_array => {
+            // Inline array
+            let array_value = parse_json_array(inner, line, ctx)?;
+            Ok(json!({
+                "type": "array",
+                "value": array_value
+            }))
+        }
+        _ => Err(ParseError::InvalidJson {
+            line,
+            message: format!("Invalid for loop iterable type: {:?}", inner.as_rule()),
+        })
+    }
+}
+
+fn parse_if_statement(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext) -> Result<JsonValue, ParseError> {
+    let line = pair.as_span().start_pos().line_col().0;
+    let mut inner = pair.into_inner();
+
+    // Get the condition
+    let condition_pair = inner.next()
+        .ok_or_else(|| ParseError::UnexpectedToken {
+            line,
+            message: "if statement requires a condition".to_string(),
+        })?;
+
+    let condition = parse_condition(condition_pair, line, ctx)?;
+
+    // Collect then-branch statements
+    let mut then_statements = Vec::new();
+    let mut else_statements: Option<Vec<JsonValue>> = None;
+
+    // Process remaining pairs (statements and optional else clause)
+    for item in inner {
+        match item.as_rule() {
+            Rule::statement => {
+                // Parse statement for then branch
+                for inner_statement in item.into_inner() {
+                    let stmt = match inner_statement.as_rule() {
+                        Rule::assignment => parse_assignment(inner_statement, ctx)?,
+                        Rule::await_statement | Rule::await_task => parse_await_statement(inner_statement, ctx)?,
+                        Rule::task_call => parse_task_call(inner_statement, false, ctx)?,
+                        Rule::sleep_call => parse_sleep_call(inner_statement, false)?,
+                        Rule::if_statement => parse_if_statement(inner_statement, ctx)?,
+                        Rule::for_loop => parse_for_loop(inner_statement, ctx)?,
+                        _ => continue,
+                    };
+                    then_statements.push(stmt);
+                }
+            }
+            Rule::else_clause => {
+                // Parse else clause
+                let mut else_stmts = Vec::new();
+                for else_item in item.into_inner() {
+                    if else_item.as_rule() == Rule::statement {
+                        for inner_statement in else_item.into_inner() {
+                            let stmt = match inner_statement.as_rule() {
+                                Rule::assignment => parse_assignment(inner_statement, ctx)?,
+                                Rule::await_statement | Rule::await_task => parse_await_statement(inner_statement, ctx)?,
+                                Rule::task_call => parse_task_call(inner_statement, false, ctx)?,
+                                Rule::sleep_call => parse_sleep_call(inner_statement, false)?,
+                                Rule::if_statement => parse_if_statement(inner_statement, ctx)?,
+                                Rule::for_loop => parse_for_loop(inner_statement, ctx)?,
+                                _ => continue,
+                            };
+                            else_stmts.push(stmt);
+                        }
+                    }
+                }
+                else_statements = Some(else_stmts);
+            }
+            _ => {}
+        }
+    }
+
+    let mut result = serde_json::json!({
+        "type": "if",
+        "condition": condition,
+        "then_statements": then_statements,
+    });
+
+    if let Some(else_stmts) = else_statements {
+        result["else_statements"] = JsonValue::Array(else_stmts);
+    }
+
+    Ok(result)
+}
+
+fn parse_condition(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &ParserContext) -> Result<JsonValue, ParseError> {
+    // Condition is just an or_expr
+    let or_expr = pair.into_inner().next()
+        .ok_or_else(|| ParseError::InvalidJson {
+            line,
+            message: "Empty condition".to_string(),
+        })?;
+
+    parse_or_expr(or_expr, line, ctx)
+}
+
+fn parse_or_expr(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &ParserContext) -> Result<JsonValue, ParseError> {
+    let mut parts: Vec<JsonValue> = Vec::new();
+
+    for inner in pair.into_inner() {
+        if inner.as_rule() == Rule::and_expr {
+            parts.push(parse_and_expr(inner, line, ctx)?);
+        }
+    }
+
+    if parts.len() == 1 {
+        Ok(parts.into_iter().next().unwrap())
+    } else {
+        Ok(json!({
+            "type": "or",
+            "operands": parts
+        }))
+    }
+}
+
+fn parse_and_expr(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &ParserContext) -> Result<JsonValue, ParseError> {
+    let mut parts: Vec<JsonValue> = Vec::new();
+
+    for inner in pair.into_inner() {
+        if inner.as_rule() == Rule::comparison {
+            parts.push(parse_comparison(inner, line, ctx)?);
+        }
+    }
+
+    if parts.len() == 1 {
+        Ok(parts.into_iter().next().unwrap())
+    } else {
+        Ok(json!({
+            "type": "and",
+            "operands": parts
+        }))
+    }
+}
+
+fn parse_comparison(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &ParserContext) -> Result<JsonValue, ParseError> {
+    let mut inner = pair.into_inner();
+
+    // Get first element
+    let first_pair = inner.next()
+        .ok_or_else(|| ParseError::InvalidJson {
+            line,
+            message: "Comparison missing value".to_string(),
+        })?;
+
+    // Check if it's a parenthesized condition
+    if first_pair.as_rule() == Rule::condition {
+        // This is a parenthesized condition: (condition)
+        return parse_condition(first_pair, line, ctx);
+    }
+
+    // Otherwise, it's a comparison_value
+    let left = parse_comparison_value(first_pair, line, ctx)?;
+
+    // Check if there's an operator
+    if let Some(op_pair) = inner.next() {
+        let operator = op_pair.as_str().to_string();
+
+        // Get right value
+        let right_pair = inner.next()
+            .ok_or_else(|| ParseError::InvalidJson {
+                line,
+                message: "Comparison missing right value".to_string(),
+            })?;
+        let right = parse_comparison_value(right_pair, line, ctx)?;
+
+        Ok(json!({
+            "type": "comparison",
+            "operator": operator,
+            "left": left,
+            "right": right
+        }))
+    } else {
+        // No operator, just a value (for boolean expressions)
+        Ok(left)
+    }
+}
+
+fn parse_comparison_value(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &ParserContext) -> Result<JsonValue, ParseError> {
+    let inner = pair.into_inner().next()
+        .ok_or_else(|| ParseError::InvalidJson {
+            line,
+            message: "Empty comparison value".to_string(),
+        })?;
+
+    match inner.as_rule() {
+        Rule::member_access => {
+            // Member access like inputs.userId or result.status
+            Ok(JsonValue::String(inner.as_str().to_string()))
+        }
+        Rule::identifier => {
+            // Variable reference in condition - annotate with scope depth
+            let var_name = inner.as_str();
+
+            // Look up the variable in the symbol table to get its scope depth
+            if let Some(depth) = ctx.lookup_variable(var_name) {
+                // Variable found - annotate with depth for O(1) runtime lookup
+                Ok(json!({
+                    "var": var_name,
+                    "depth": depth
+                }))
+            } else {
+                // Variable not declared - parse error
+                Err(ParseError::InvalidJson {
+                    line,
+                    message: format!("Undefined variable '{}' in condition. Variables must be declared with 'let' before use.", var_name),
+                })
+            }
+        }
+        Rule::string => {
+            Ok(JsonValue::String(parse_string(inner)?))
+        }
+        Rule::number => {
+            // Parse number directly
+            let num_str = inner.as_str();
+
+            // Handle hex numbers
+            if num_str.starts_with("0x") || num_str.starts_with("0X") ||
+               num_str.starts_with("-0x") || num_str.starts_with("-0X") {
+                let (sign, hex_part) = if num_str.starts_with('-') {
+                    (-1i64, &num_str[3..])
+                } else {
+                    (1i64, &num_str[2..])
+                };
+                let hex_clean = hex_part.replace('_', "");
+                if let Ok(val) = i64::from_str_radix(&hex_clean, 16) {
+                    return Ok(JsonValue::Number((sign * val).into()));
+                }
+            }
+
+            // Handle binary numbers
+            if num_str.starts_with("0b") || num_str.starts_with("0B") ||
+               num_str.starts_with("-0b") || num_str.starts_with("-0B") {
+                let (sign, bin_part) = if num_str.starts_with('-') {
+                    (-1i64, &num_str[3..])
+                } else {
+                    (1i64, &num_str[2..])
+                };
+                let bin_clean = bin_part.replace('_', "");
+                if let Ok(val) = i64::from_str_radix(&bin_clean, 2) {
+                    return Ok(JsonValue::Number((sign * val).into()));
+                }
+            }
+
+            // Handle regular numbers (with underscores)
+            let clean_str = num_str.replace('_', "");
+
+            // Try parsing as integer first, then float
+            if let Ok(i) = clean_str.parse::<i64>() {
+                Ok(JsonValue::Number(i.into()))
+            } else if let Ok(f) = clean_str.parse::<f64>() {
+                Ok(serde_json::Number::from_f64(f)
+                    .map(JsonValue::Number)
+                    .unwrap_or(JsonValue::Null))
+            } else {
+                Err(ParseError::InvalidJson {
+                    line,
+                    message: format!("Invalid number: {}", num_str),
+                })
+            }
+        }
+        Rule::boolean => {
+            Ok(JsonValue::Bool(inner.as_str() == "true"))
+        }
+        Rule::null => {
+            Ok(JsonValue::Null)
+        }
+        _ => Err(ParseError::InvalidJson {
+            line,
+            message: format!("Invalid comparison value type: {:?}", inner.as_rule()),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -672,8 +1121,9 @@ workflow(ctx, inputs) {
         assert_eq!(result[0]["inputs"]["amount"], 100);
 
         // Second task uses order_id as a variable reference
-        // Parser adds $ prefix to distinguish from literal strings
-        assert_eq!(result[1]["inputs"]["order_id"], "$order_id");
+        // Parser now annotates with scope depth for O(1) lookup
+        assert_eq!(result[1]["inputs"]["order_id"]["var"], "order_id");
+        assert_eq!(result[1]["inputs"]["order_id"]["depth"], 0);
         assert_eq!(result[1]["inputs"]["amount"], 50);
     }
 
@@ -681,6 +1131,7 @@ workflow(ctx, inputs) {
     fn test_parse_json_all_types() {
         let source = r#"
 workflow(ctx, inputs) {
+  let my_variable = task("get_value", {})
   task("test", {
     "string": "hello",
     "number": 42,
@@ -697,8 +1148,8 @@ workflow(ctx, inputs) {
 
         let result = parse_workflow(source).unwrap();
 
-        assert_eq!(result.len(), 1);
-        let inputs = &result[0]["inputs"];
+        assert_eq!(result.len(), 2);
+        let inputs = &result[1]["inputs"];
 
         assert_eq!(inputs["string"], "hello");
         assert_eq!(inputs["number"], 42);
@@ -706,7 +1157,9 @@ workflow(ctx, inputs) {
         assert_eq!(inputs["bool_true"], true);
         assert_eq!(inputs["bool_false"], false);
         assert_eq!(inputs["null_val"], JsonValue::Null);
-        assert_eq!(inputs["var_ref"], "$my_variable");
+        // Variable reference now annotated with scope depth
+        assert_eq!(inputs["var_ref"]["var"], "my_variable");
+        assert_eq!(inputs["var_ref"]["depth"], 0);
         assert_eq!(inputs["nested"]["key"], "value");
         assert_eq!(inputs["array"][0], 1);
         assert_eq!(inputs["array"][1], 2);
@@ -742,12 +1195,22 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_edge_array_only_variables() {
-        let source = r#"workflow(ctx, inputs) { task("t", { "arr": [var1, var2, var3] }) }"#;
+        let source = r#"
+workflow(ctx, inputs) {
+  let var1 = task("t1", {})
+  let var2 = task("t2", {})
+  let var3 = task("t3", {})
+  task("t", { "arr": [var1, var2, var3] })
+}
+        "#;
         let result = parse_workflow(source).unwrap();
-        let arr = &result[0]["inputs"]["arr"];
-        assert_eq!(arr[0], "$var1");
-        assert_eq!(arr[1], "$var2");
-        assert_eq!(arr[2], "$var3");
+        let arr = &result[3]["inputs"]["arr"];
+        assert_eq!(arr[0]["var"], "var1");
+        assert_eq!(arr[0]["depth"], 0);
+        assert_eq!(arr[1]["var"], "var2");
+        assert_eq!(arr[1]["depth"], 0);
+        assert_eq!(arr[2]["var"], "var3");
+        assert_eq!(arr[2]["depth"], 0);
     }
 
     #[test]
@@ -819,7 +1282,9 @@ workflow(ctx, inputs) {
         assert_eq!(result.len(), 3);
         assert_eq!(result[0]["assign_to"], "x");
         assert_eq!(result[1]["assign_to"], "x");
-        assert_eq!(result[2]["inputs"]["val"], "$x");
+        // Variable x is found in symbol table at depth 0
+        assert_eq!(result[2]["inputs"]["val"]["var"], "x");
+        assert_eq!(result[2]["inputs"]["val"]["depth"], 0);
         // Note: executor should use the last assigned value
     }
 
@@ -955,9 +1420,15 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_unquoted_variable_value() {
         // Variable as value (unquoted identifier) should work
-        let source = r#"workflow(ctx, inputs) { task("t", { "val": my_var }) }"#;
+        let source = r#"
+workflow(ctx, inputs) {
+  let my_var = task("get", {})
+  task("t", { "val": my_var })
+}
+        "#;
         let result = parse_workflow(source).unwrap();
-        assert_eq!(result[0]["inputs"]["val"], "$my_var");
+        assert_eq!(result[1]["inputs"]["val"]["var"], "my_var");
+        assert_eq!(result[1]["inputs"]["val"]["depth"], 0);
     }
 
     #[test]
@@ -1117,10 +1588,18 @@ workflow(ctx, inputs) {
     #[test]
     fn test_edge_unquoted_keys_with_variables() {
         // Unquoted keys with variable values
-        let source = r#"workflow(ctx, inputs) { task("t", { userId: user_id, config: my_config }) }"#;
+        let source = r#"
+workflow(ctx, inputs) {
+  let user_id = task("get_user", {})
+  let my_config = task("get_config", {})
+  task("t", { userId: user_id, config: my_config })
+}
+        "#;
         let result = parse_workflow(source).unwrap();
-        assert_eq!(result[0]["inputs"]["userId"], "$user_id");
-        assert_eq!(result[0]["inputs"]["config"], "$my_config");
+        assert_eq!(result[2]["inputs"]["userId"]["var"], "user_id");
+        assert_eq!(result[2]["inputs"]["userId"]["depth"], 0);
+        assert_eq!(result[2]["inputs"]["config"]["var"], "my_config");
+        assert_eq!(result[2]["inputs"]["config"]["depth"], 0);
     }
 
     #[test]
@@ -1194,7 +1673,9 @@ workflow(ctx, inputs) {
         assert_eq!(result[0]["inputs"]["userId"], "inputs.userId");  // Member access
 
         // Second statement: mixed references
-        assert_eq!(result[1]["inputs"]["validationResult"], "$result");  // Bare variable reference
+        // Bare variable reference now annotated with scope depth
+        assert_eq!(result[1]["inputs"]["validationResult"]["var"], "result");
+        assert_eq!(result[1]["inputs"]["validationResult"]["depth"], 0);
         assert_eq!(result[1]["inputs"]["workflow"], "ctx.workflowId");  // Member access
         assert_eq!(result[1]["inputs"]["order"], "inputs.orderId");  // Member access
     }
@@ -1254,5 +1735,511 @@ workflow(ctx, inputs) {
         assert_eq!(result[0]["type"], "sleep");
         assert_eq!(result[0]["duration"], 10);
         assert_eq!(result[0]["await"], false);
+    }
+
+    // === IF/ELSE CONDITIONAL TESTS ===
+
+    #[test]
+    fn test_simple_if_statement() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if (inputs.status == "success") {
+    await task("send_success", {})
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        assert_eq!(result[0]["type"], "if");
+        assert_eq!(result[0]["condition"]["type"], "comparison");
+        assert_eq!(result[0]["condition"]["operator"], "==");
+        // Member access is preserved as-is
+        assert_eq!(result[0]["condition"]["left"], "inputs.status");
+        assert_eq!(result[0]["condition"]["right"], "success");
+
+        let then_stmts = result[0]["then_statements"].as_array().unwrap();
+        assert_eq!(then_stmts.len(), 1);
+        assert_eq!(then_stmts[0]["type"], "task");
+        assert_eq!(then_stmts[0]["task"], "send_success");
+    }
+
+    #[test]
+    fn test_if_else_statement() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if (inputs.amount > 100) {
+    await task("premium_processing", {})
+  } else {
+    await task("standard_processing", {})
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        assert_eq!(result[0]["type"], "if");
+        assert_eq!(result[0]["condition"]["type"], "comparison");
+        assert_eq!(result[0]["condition"]["operator"], ">");
+        assert_eq!(result[0]["condition"]["left"], "inputs.amount");
+        assert_eq!(result[0]["condition"]["right"], 100);
+
+        let then_stmts = result[0]["then_statements"].as_array().unwrap();
+        assert_eq!(then_stmts.len(), 1);
+        assert_eq!(then_stmts[0]["task"], "premium_processing");
+
+        let else_stmts = result[0]["else_statements"].as_array().unwrap();
+        assert_eq!(else_stmts.len(), 1);
+        assert_eq!(else_stmts[0]["task"], "standard_processing");
+    }
+
+    #[test]
+    fn test_if_with_member_access() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if (payment.status == "completed") {
+    await task("ship_order", {})
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        assert_eq!(result[0]["condition"]["left"], "payment.status");
+        assert_eq!(result[0]["condition"]["right"], "completed");
+    }
+
+    #[test]
+    fn test_if_with_inputs_access() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if (inputs.userId == 123) {
+    await task("admin_task", {})
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        assert_eq!(result[0]["condition"]["left"], "inputs.userId");
+        assert_eq!(result[0]["condition"]["right"], 123);
+    }
+
+    #[test]
+    fn test_if_with_and_operator() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if (inputs.amount > 100 && inputs.status == "approved") {
+    await task("process", {})
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        assert_eq!(result[0]["condition"]["type"], "and");
+        let operands = result[0]["condition"]["operands"].as_array().unwrap();
+        assert_eq!(operands.len(), 2);
+
+        assert_eq!(operands[0]["operator"], ">");
+        assert_eq!(operands[0]["left"], "inputs.amount");
+        assert_eq!(operands[0]["right"], 100);
+
+        assert_eq!(operands[1]["operator"], "==");
+        assert_eq!(operands[1]["left"], "inputs.status");
+        assert_eq!(operands[1]["right"], "approved");
+    }
+
+    #[test]
+    fn test_if_with_or_operator() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if (inputs.status == "failed" || inputs.status == "cancelled") {
+    await task("cleanup", {})
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        assert_eq!(result[0]["condition"]["type"], "or");
+        let operands = result[0]["condition"]["operands"].as_array().unwrap();
+        assert_eq!(operands.len(), 2);
+
+        assert_eq!(operands[0]["operator"], "==");
+        assert_eq!(operands[0]["left"], "inputs.status");
+        assert_eq!(operands[0]["right"], "failed");
+
+        assert_eq!(operands[1]["operator"], "==");
+        assert_eq!(operands[1]["left"], "inputs.status");
+        assert_eq!(operands[1]["right"], "cancelled");
+    }
+
+    #[test]
+    fn test_if_with_complex_condition() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if ((inputs.amount > 100 && inputs.priority == "high") || inputs.urgent == true) {
+    await task("fast_track", {})
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        assert_eq!(result[0]["condition"]["type"], "or");
+    }
+
+    #[test]
+    fn test_if_with_multiple_statements() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if (inputs.status == "success") {
+    await task("send_notification", {})
+    await task("update_stats", {})
+    task("log_event", {})
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        let then_stmts = result[0]["then_statements"].as_array().unwrap();
+        assert_eq!(then_stmts.len(), 3);
+        assert_eq!(then_stmts[0]["task"], "send_notification");
+        assert_eq!(then_stmts[1]["task"], "update_stats");
+        assert_eq!(then_stmts[2]["task"], "log_event");
+    }
+
+    #[test]
+    fn test_nested_if_statements() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if (inputs.level == 1) {
+    if (inputs.sublevel == "a") {
+      await task("nested_task", {})
+    }
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        assert_eq!(result[0]["type"], "if");
+        let then_stmts = result[0]["then_statements"].as_array().unwrap();
+        assert_eq!(then_stmts.len(), 1);
+        assert_eq!(then_stmts[0]["type"], "if");
+    }
+
+    #[test]
+    fn test_if_with_all_comparison_operators() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if (inputs.a == 1) { task("t1", {}) }
+  if (inputs.b != 2) { task("t2", {}) }
+  if (inputs.c < 3) { task("t3", {}) }
+  if (inputs.d > 4) { task("t4", {}) }
+  if (inputs.e <= 5) { task("t5", {}) }
+  if (inputs.f >= 6) { task("t6", {}) }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 6);
+
+        assert_eq!(result[0]["condition"]["operator"], "==");
+        assert_eq!(result[1]["condition"]["operator"], "!=");
+        assert_eq!(result[2]["condition"]["operator"], "<");
+        assert_eq!(result[3]["condition"]["operator"], ">");
+        assert_eq!(result[4]["condition"]["operator"], "<=");
+        assert_eq!(result[5]["condition"]["operator"], ">=");
+    }
+
+    #[test]
+    fn test_if_with_variable_assignment() {
+        let source = r#"
+workflow(ctx, inputs) {
+  let result = await task("check_status", {})
+  if (result.success == true) {
+    await task("continue", {})
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 2);
+
+        assert_eq!(result[0]["type"], "task");
+        assert_eq!(result[0]["assign_to"], "result");
+
+        assert_eq!(result[1]["type"], "if");
+        assert_eq!(result[1]["condition"]["left"], "result.success");
+        assert_eq!(result[1]["condition"]["right"], true);
+    }
+
+    #[test]
+    fn test_if_with_boolean_values() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if (inputs.enabled == true) {
+    await task("process", {})
+  } else {
+    await task("skip", {})
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        assert_eq!(result[0]["condition"]["left"], "inputs.enabled");
+        assert_eq!(result[0]["condition"]["right"], true);
+    }
+
+    #[test]
+    fn test_if_with_null_comparison() {
+        let source = r#"
+workflow(ctx, inputs) {
+  if (inputs.optionalValue == null) {
+    await task("handle_missing", {})
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        assert_eq!(result[0]["condition"]["left"], "inputs.optionalValue");
+        assert_eq!(result[0]["condition"]["right"], JsonValue::Null);
+    }
+
+    #[test]
+    fn test_payment_conditional_workflow() {
+        // Test that the payment_conditional.flow example parses correctly
+        let source = r#"
+workflow(ctx, inputs) {
+  if (inputs.amount > 1000) {
+    await task("verify_identity", { userId: inputs.userId })
+    let paymentResult = await task("process_premium_payment", {
+      userId: inputs.userId,
+      amount: inputs.amount
+    })
+  } else {
+    let paymentResult = await task("process_standard_payment", {
+      userId: inputs.userId,
+      amount: inputs.amount
+    })
+  }
+  if (paymentResult.status == "success") {
+    await task("send_receipt", {
+      userId: inputs.userId,
+      transactionId: paymentResult.transactionId
+    })
+  }
+}
+        "#;
+        let result = parse_workflow(source);
+        assert!(result.is_ok(), "Payment conditional workflow should parse: {:?}", result.err());
+        let steps = result.unwrap();
+        assert!(steps.len() >= 2, "Should have at least 2 if statements");
+    }
+
+    #[test]
+    fn test_user_onboarding_workflow() {
+        // Test complex conditions with && and || operators
+        let source = r#"
+workflow(ctx, inputs) {
+  let user = await task("create_user_account", {
+    email: inputs.email,
+    name: inputs.name
+  })
+
+  if (inputs.referralCode != null && inputs.signupSource == "partner") {
+    await task("activate_premium_trial", { userId: user.id })
+  } else {
+    await task("send_standard_welcome", { email: inputs.email })
+  }
+
+  if (inputs.country == "US" || inputs.country == "CA") {
+    await task("setup_north_america_features", { userId: user.id })
+  }
+}
+        "#;
+        let result = parse_workflow(source);
+        assert!(result.is_ok(), "User onboarding workflow should parse: {:?}", result.err());
+    }
+
+    // === FOR LOOP TESTS ===
+
+    #[test]
+    fn test_simple_for_loop_inline_array() {
+        let source = r#"
+workflow(ctx, inputs) {
+  for (let item in [1, 2, 3]) {
+    task("process", { value: item })
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        assert_eq!(result[0]["type"], "for");
+        assert_eq!(result[0]["loop_variable"], "item");
+
+        // Check iterable is inline array
+        assert_eq!(result[0]["iterable"]["type"], "array");
+        let arr = result[0]["iterable"]["value"].as_array().unwrap();
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr[0], 1);
+        assert_eq!(arr[1], 2);
+        assert_eq!(arr[2], 3);
+
+        // Check body
+        let body = result[0]["body_statements"].as_array().unwrap();
+        assert_eq!(body.len(), 1);
+        assert_eq!(body[0]["type"], "task");
+        assert_eq!(body[0]["task"], "process");
+
+        // Check that loop variable is used in body and annotated
+        assert_eq!(body[0]["inputs"]["value"]["var"], "item");
+        assert_eq!(body[0]["inputs"]["value"]["depth"], 1); // Loop creates depth 1 scope
+    }
+
+    #[test]
+    fn test_for_loop_with_member_access_iterable() {
+        let source = r#"
+workflow(ctx, inputs) {
+  for (let item in inputs.items) {
+    task("process", { value: item })
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        assert_eq!(result[0]["type"], "for");
+        assert_eq!(result[0]["iterable"]["type"], "member_access");
+        assert_eq!(result[0]["iterable"]["value"], "inputs.items");
+    }
+
+    #[test]
+    fn test_for_loop_with_variable_iterable() {
+        let source = r#"
+workflow(ctx, inputs) {
+  let items = task("get_items", {})
+  for (let item in items) {
+    task("process", { value: item })
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 2);
+
+        assert_eq!(result[1]["type"], "for");
+        assert_eq!(result[1]["iterable"]["type"], "variable");
+        assert_eq!(result[1]["iterable"]["value"]["var"], "items");
+        assert_eq!(result[1]["iterable"]["value"]["depth"], 0);
+    }
+
+    #[test]
+    fn test_nested_for_loops() {
+        let source = r#"
+workflow(ctx, inputs) {
+  for (let outer in [1, 2]) {
+    for (let inner in [3, 4]) {
+      task("process", { o: outer, i: inner })
+    }
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+
+        // Check outer loop
+        assert_eq!(result[0]["type"], "for");
+        assert_eq!(result[0]["loop_variable"], "outer");
+
+        // Check inner loop is in outer's body
+        let outer_body = result[0]["body_statements"].as_array().unwrap();
+        assert_eq!(outer_body.len(), 1);
+        assert_eq!(outer_body[0]["type"], "for");
+        assert_eq!(outer_body[0]["loop_variable"], "inner");
+
+        // Check variables in inner loop body are annotated with correct depths
+        let inner_body = outer_body[0]["body_statements"].as_array().unwrap();
+        assert_eq!(inner_body.len(), 1);
+        assert_eq!(inner_body[0]["inputs"]["o"]["var"], "outer");
+        assert_eq!(inner_body[0]["inputs"]["o"]["depth"], 1); // Outer loop depth
+        assert_eq!(inner_body[0]["inputs"]["i"]["var"], "inner");
+        assert_eq!(inner_body[0]["inputs"]["i"]["depth"], 2); // Inner loop depth
+    }
+
+    #[test]
+    fn test_for_loop_with_await() {
+        let source = r#"
+workflow(ctx, inputs) {
+  for (let order in inputs.orders) {
+    await task("processOrder", { orderId: order.id })
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0]["type"], "for");
+        assert_eq!(result[0]["loop_variable"], "order");
+
+        let body = result[0]["body_statements"].as_array().unwrap();
+        assert_eq!(body.len(), 1);
+        assert_eq!(body[0]["type"], "task");
+        assert_eq!(body[0]["await"], true);
+        assert_eq!(body[0]["task"], "processOrder");
+    }
+
+    #[test]
+    fn test_for_loop_with_mixed_await() {
+        let source = r#"
+workflow(ctx, inputs) {
+  for (let item in inputs.items) {
+    task("log", { value: item })
+    await task("process", { value: item })
+    task("notify", { value: item })
+  }
+}
+        "#;
+        let result = parse_workflow(source).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0]["type"], "for");
+
+        let body = result[0]["body_statements"].as_array().unwrap();
+        assert_eq!(body.len(), 3);
+
+        // First task - fire-and-forget
+        assert_eq!(body[0]["type"], "task");
+        assert_eq!(body[0]["task"], "log");
+        assert_eq!(body[0]["await"], false);
+
+        // Second task - await
+        assert_eq!(body[1]["type"], "task");
+        assert_eq!(body[1]["task"], "process");
+        assert_eq!(body[1]["await"], true);
+
+        // Third task - fire-and-forget
+        assert_eq!(body[2]["type"], "task");
+        assert_eq!(body[2]["task"], "notify");
+        assert_eq!(body[2]["await"], false);
+    }
+
+    #[test]
+    fn test_for_loop_examples_workflow() {
+        let source = std::fs::read_to_string("../python/examples/workflows/for_loop_examples.flow")
+            .expect("Failed to read for_loop_examples.flow");
+        let result = parse_workflow(&source);
+        assert!(result.is_ok(), "For loop examples workflow should parse: {:?}", result.err());
+
+        let statements = result.unwrap();
+
+        // Should have 6 main examples plus final completion task
+        // Each example is either a for loop or let statement
+        assert!(statements.len() >= 7, "Expected at least 7 top-level statements");
+
+        // Check that we have for loops
+        let for_loops = statements.iter().filter(|s| s["type"] == "for").count();
+        assert!(for_loops >= 5, "Expected at least 5 for loops");
     }
 }

@@ -1,0 +1,73 @@
+// For Loop Examples Workflow
+// Demonstrates various for loop patterns with the Rhythm DSL
+
+workflow(ctx, inputs) {
+  // Example 1: Simple for loop with inline array
+  for (let num in [1, 2, 3]) {
+    task("log", { message: "Processing number", value: num })
+  }
+
+  // Example 2: For loop with member access iterable
+  for (let order in inputs.orders) {
+    await task("processOrder", {
+      orderId: order.id,
+      amount: order.amount
+    })
+  }
+
+  // Example 3: For loop with variable iterable
+  let items = await task("fetchItems", {})
+  for (let item in items) {
+    await task("processItem", {
+      itemId: item.id,
+      name: item.name
+    })
+  }
+
+  // Example 4: Mixed await and fire-and-forget in loop
+  for (let user in inputs.users) {
+    // Log the start (fire-and-forget)
+    task("logStart", { userId: user.id })
+
+    // Process user (await completion)
+    await task("processUser", { userId: user.id })
+
+    // Send notification (fire-and-forget)
+    task("sendNotification", { userId: user.id, type: "complete" })
+  }
+
+  // Example 5: Nested for loops
+  for (let category in inputs.categories) {
+    for (let product in category.products) {
+      await task("processProduct", {
+        categoryId: category.id,
+        productId: product.id,
+        name: product.name
+      })
+    }
+  }
+
+  // Example 6: Complex data transformation
+  let orders = await task("fetchOrders", { userId: inputs.userId })
+  for (let order in orders) {
+    // Validate order
+    let validation = await task("validateOrder", { orderId: order.id })
+
+    if (validation.isValid) {
+      // Process each item in the order
+      for (let item in order.items) {
+        await task("processOrderItem", {
+          orderId: order.id,
+          itemId: item.id,
+          quantity: item.quantity
+        })
+      }
+
+      // Send confirmation
+      task("sendConfirmation", { orderId: order.id })
+    }
+  }
+
+  // Return success
+  await task("complete", { status: "success" })
+}

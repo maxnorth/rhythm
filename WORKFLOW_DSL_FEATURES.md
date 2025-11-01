@@ -8,6 +8,41 @@ The Rhythm workflow DSL is a clean, expressive language for defining task workfl
 
 **Philosophy**: Strict where it matters, flexible where it helps.
 
+---
+
+## Why a DSL?
+
+### The Problem with Native Languages
+
+When using native language workflows (Python, TypeScript, etc.) with replay-based execution:
+
+- **Determinism required**: Every line must produce the same result on replay
+- **Language-specific linters**: Need tools to catch non-deterministic code (`time.now()`, `random()`, etc.)
+- **Versioning complexity**: SDK-specific rules for migrating in-flight workflows
+- **Testing overhead**: Replay mocks and history simulation
+- **Multiple implementations**: Each language needs its own runtime and versioning
+
+### The DSL Approach
+
+**Benefits**:
+- **No determinism constraints**: Runtime doesn't replay—non-deterministic code is allowed in tasks
+- **Single execution engine**: One Rust parser and interpreter, consistent behavior everywhere
+- **Auto-versioning**: Workflows version by content hash automatically
+- **Language-agnostic**: Write workflows once, call from Python, Node.js, or any language
+- **Simple mental model**: No replay, no event history—just checkpointed execution
+
+**Trade-offs**:
+- **New syntax**: Minimal learning curve (async/await style), but still another language
+- **Limited expressiveness**: Core control flow implemented (if/else, for loops), but missing some features (while loops, break/continue, etc.)
+- **Tooling**: No debuggers/IDE support yet (though planned via LSP)
+- **Smaller ecosystem**: Fewer examples and community resources
+
+**The bet**: For many workflows, eliminating determinism complexity is worth the DSL constraint.
+
+See [FAQ](FAQ.md#why-a-dsl-instead-of-pythontypescript) for more discussion.
+
+---
+
 ## Syntax Features
 
 ### 1. Task Execution
@@ -262,6 +297,170 @@ await task("update_order_status", {
 })
 ```
 
+### 9. Conditional Execution (If/Else)
+
+**Simple conditionals**:
+```flow
+if (status == "success") {
+  await task("send_confirmation", {})
+}
+
+if (amount > 100) {
+  await task("premium_processing", {})
+} else {
+  await task("standard_processing", {})
+}
+```
+
+**Comparison operators**:
+```flow
+// Equality
+if (status == "approved") { task("process", {}) }
+if (status != "failed") { task("continue", {}) }
+
+// Numeric comparisons
+if (amount > 1000) { task("high_value", {}) }
+if (quantity < 10) { task("low_stock_alert", {}) }
+if (score >= 80) { task("pass", {}) }
+if (age <= 18) { task("youth_discount", {}) }
+```
+
+**Logical operators**:
+```flow
+// AND - both conditions must be true
+if (amount > 100 && status == "approved") {
+  await task("process_premium", {})
+}
+
+// OR - either condition must be true
+if (status == "failed" || status == "cancelled") {
+  await task("cleanup", {})
+}
+
+// Complex conditions with parentheses
+if ((amount > 500 && priority == "high") || urgent == true) {
+  await task("fast_track", {})
+}
+```
+
+**Comparing variables and member access**:
+```flow
+let result = await task("check_status", {})
+
+// Compare variable properties
+if (result.success == true) {
+  await task("continue", {})
+}
+
+// Compare inputs
+if (inputs.userId == 123) {
+  await task("admin_action", {})
+}
+
+// Compare variables
+if (userId == adminId) {
+  await task("grant_access", {})
+}
+```
+
+**Nested conditionals**:
+```flow
+if (userType == "premium") {
+  if (region == "US") {
+    await task("us_premium_features", {})
+  } else {
+    await task("international_premium_features", {})
+  }
+} else {
+  await task("standard_features", {})
+}
+```
+
+**Null checking**:
+```flow
+if (optionalField != null) {
+  await task("process", { value: optionalField })
+} else {
+  await task("use_default", {})
+}
+```
+
+### 10. For Loops
+
+**Iterate over arrays** with full support for await, fire-and-forget, and nested loops:
+
+```flow
+// Simple iteration with inline array
+for (let item in [1, 2, 3]) {
+  task("process", { value: item })
+}
+
+// Iterate over inputs
+for (let order in inputs.orders) {
+  await task("processOrder", {
+    orderId: order.id,
+    amount: order.amount
+  })
+}
+
+// Iterate over task results
+let items = await task("fetchItems", {})
+for (let item in items) {
+  await task("processItem", { itemId: item.id })
+}
+```
+
+**Mixed await and fire-and-forget**:
+```flow
+for (let user in inputs.users) {
+  // Fire-and-forget
+  task("logStart", { userId: user.id })
+
+  // Await completion
+  await task("processUser", { userId: user.id })
+
+  // Fire-and-forget
+  task("sendNotification", { userId: user.id })
+}
+```
+
+**Nested loops**:
+```flow
+for (let category in inputs.categories) {
+  for (let product in category.products) {
+    await task("processProduct", {
+      categoryId: category.id,
+      productId: product.id
+    })
+  }
+}
+```
+
+**Loop with conditionals**:
+```flow
+let orders = await task("fetchOrders", {})
+for (let order in orders) {
+  let validation = await task("validateOrder", { orderId: order.id })
+
+  if (validation.isValid) {
+    for (let item in order.items) {
+      await task("processOrderItem", {
+        orderId: order.id,
+        itemId: item.id
+      })
+    }
+    task("sendConfirmation", { orderId: order.id })
+  }
+}
+```
+
+**Key features**:
+- ✅ `let` keyword required for loop variable declaration
+- ✅ Iterate over inline arrays, variables, or member access (inputs.field)
+- ✅ Full await/suspension support - workflow pauses and resumes correctly
+- ✅ Nested loops with proper scope isolation
+- ✅ Loop variable accessible in nested scopes
+
 ## What's NOT Supported
 
 To keep things simple and focused, these are intentionally excluded:
@@ -272,7 +471,10 @@ To keep things simple and focused, these are intentionally excluded:
 - ❌ **Comments inside JSON** - Comments only at statement level
 - ❌ **Computed keys** - Keys must be literals
 - ❌ **Template strings** - Use variables instead
-- ❌ **Expressions** - No arithmetic, only literal values and variable references
+- ❌ **Arithmetic expressions** - No `+`, `-`, `*`, `/` operators (yet)
+- ❌ **While loops** - Only `for..in` loops supported
+- ❌ **Break/Continue** - Loop control not yet supported
+- ❌ **Array/Object indexing** - No `array[0]` or `obj["key"]` (yet)
 
 ## Comparison with Standard JSON
 
@@ -297,10 +499,15 @@ To keep things simple and focused, these are intentionally excluded:
 5. **Add comments** to document complex workflows
 6. **One statement per line** for clarity
 7. **Use meaningful variable names**: `orderId` not `x`
+8. **Use `let` keyword** for all variable declarations including loop variables
+9. **Use parentheses** in complex conditions for clarity: `(a && b) || (c && d)`
+10. **Check for null** before using optional values: `if (value != null)`
+11. **Prefer simple conditions** - extract complex logic into task functions
+12. **Use await in loops** when you need sequential processing with results
 
 ## Testing
 
-All features are thoroughly tested with 73 test cases covering:
+All features are thoroughly tested with 108+ test cases covering:
 - ✅ All number formats (hex, binary, underscores, scientific notation)
 - ✅ Quoted and unquoted keys
 - ✅ Variable assignment and resolution
@@ -311,6 +518,17 @@ All features are thoroughly tested with 73 test cases covering:
 - ✅ Hash comment validation (disallowed, use //)
 - ✅ Line validation (one statement per line)
 - ✅ Edge cases (empty strings, negative numbers, deep nesting, etc.)
+- ✅ If/else conditionals with all operators
+- ✅ Logical operators (&&, ||)
+- ✅ Comparison operators (==, !=, <, >, <=, >=)
+- ✅ Nested conditionals
+- ✅ Complex boolean expressions
+- ✅ Member access in conditions
+- ✅ Null comparisons
+- ✅ For loops with inline arrays, variables, and member access
+- ✅ For loops with await/suspension support
+- ✅ Nested for loops with proper scope isolation
+- ✅ Mixed await and fire-and-forget in loops
 
 Run tests:
 ```bash
