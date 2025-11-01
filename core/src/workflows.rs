@@ -290,10 +290,11 @@ mod tests {
         assert_eq!(parsed[0]["assign_to"], "user_id");
         assert_eq!(parsed[0]["await"], true);
 
-        // Second task: uses variable
+        // Second task: uses variable (new format: {"var": "name", "depth": 0})
         assert_eq!(parsed[1]["type"], "task");
         assert_eq!(parsed[1]["task"], "send_email");
-        assert_eq!(parsed[1]["inputs"]["user_id"], "$user_id", "Variable reference uses JSON object format");
+        assert_eq!(parsed[1]["inputs"]["user_id"]["var"], "user_id");
+        assert_eq!(parsed[1]["inputs"]["user_id"]["depth"], 0);
         assert_eq!(parsed[1]["inputs"]["subject"], "Welcome");
     }
 
@@ -314,17 +315,18 @@ mod tests {
         assert_eq!(parsed[1]["assign_to"], "payment_id");
         assert_eq!(parsed[2]["assign_to"], "receipt_id");
 
-        // Check variable usage in second task
-        assert_eq!(parsed[1]["inputs"]["order_id"], "$order_id");
+        // Check variable usage in second task (new format)
+        assert_eq!(parsed[1]["inputs"]["order_id"]["var"], "order_id");
+        assert_eq!(parsed[1]["inputs"]["order_id"]["depth"], 0);
 
         // Check multiple variables in third task
-        assert_eq!(parsed[2]["inputs"]["order_id"], "$order_id");
-        assert_eq!(parsed[2]["inputs"]["payment_id"], "$payment_id");
+        assert_eq!(parsed[2]["inputs"]["order_id"]["var"], "order_id");
+        assert_eq!(parsed[2]["inputs"]["payment_id"]["var"], "payment_id");
 
         // Check all three variables in final task
-        assert_eq!(parsed[3]["inputs"]["order"], "$order_id");
-        assert_eq!(parsed[3]["inputs"]["payment"], "$payment_id");
-        assert_eq!(parsed[3]["inputs"]["receipt"], "$receipt_id");
+        assert_eq!(parsed[3]["inputs"]["order"]["var"], "order_id");
+        assert_eq!(parsed[3]["inputs"]["payment"]["var"], "payment_id");
+        assert_eq!(parsed[3]["inputs"]["receipt"]["var"], "receipt_id");
     }
 
     #[tokio::test]
@@ -419,20 +421,20 @@ mod tests {
 
         let inputs = &parsed[2]["inputs"];
 
-        // Check variable in array
-        assert_eq!(inputs["users"][0], "$user_id");
+        // Check variable in array (new format)
+        assert_eq!(inputs["users"][0]["var"], "user_id");
         assert_eq!(inputs["users"][1], "user2");
         assert_eq!(inputs["users"][2], "user3");
 
         // Check variables in nested objects
-        assert_eq!(inputs["settings"]["primary_user"], "$user_id");
-        assert_eq!(inputs["settings"]["config"], "$config");
-        assert_eq!(inputs["settings"]["metadata"]["created_by"], "$user_id");
+        assert_eq!(inputs["settings"]["primary_user"]["var"], "user_id");
+        assert_eq!(inputs["settings"]["config"]["var"], "config");
+        assert_eq!(inputs["settings"]["metadata"]["created_by"]["var"], "user_id");
 
         // Check variables in mixed array with objects
         assert_eq!(inputs["mixed"][0], 1);
-        assert_eq!(inputs["mixed"][1], "$user_id");
-        assert_eq!(inputs["mixed"][2]["nested"], "$config");
+        assert_eq!(inputs["mixed"][1]["var"], "user_id");
+        assert_eq!(inputs["mixed"][2]["nested"]["var"], "config");
         assert_eq!(inputs["mixed"][3], true);
     }
 

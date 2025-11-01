@@ -23,9 +23,9 @@ workflow_function = {
 // A statement is either a variable assignment, an await task, a fire-and-forget task, a sleep call, an if statement, a for loop, break, continue, or return
 statement = { assignment | await_statement | task_call | sleep_call | if_statement | for_loop | break_statement | continue_statement | return_statement }
 
-// let varname = task(...) or let varname = await task(...)
+// let varname = task(...) or let varname = await task(...) or let varname = value
 assignment = {
-    "let" ~ identifier ~ "=" ~ (await_statement | task_call)
+    "let" ~ identifier ~ "=" ~ (await_statement | task_call | json_value)
 }
 
 // await task("name", { ... }) or await sleep(10) - waits for completion
@@ -45,8 +45,14 @@ task_call = {
 // Variable identifier (alphanumeric + underscore)
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
-// Member access: inputs.fieldName or ctx.workflowId
-member_access = @{ identifier ~ ("." ~ identifier)+ }
+// Bracket accessor: [0] or ["key"] or [varName]
+bracket_accessor = { "[" ~ (integer | string | identifier) ~ "]" }
+
+// Property accessor: .fieldName or [0] or ["key"]
+property_accessor = { ("." ~ identifier) | bracket_accessor }
+
+// Member access: inputs.fieldName or data[0] or data["key"] or combinations
+member_access = { identifier ~ property_accessor+ }
 
 // sleep(10)
 sleep_call = {

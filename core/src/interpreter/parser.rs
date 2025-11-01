@@ -304,25 +304,53 @@ fn parse_assignment(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext) 
     // Declare the variable in current scope
     ctx.declare_variable(var_name.clone());
 
-    // Get the task expression (either await_statement or task_call)
-    let task_expr = inner.next()
-        .ok_or_else(|| ParseError::PestError("assignment requires task expression".to_string()))?;
+    // Get the right-hand side expression (task, await, or value)
+    let rhs_expr = inner.next()
+        .ok_or_else(|| ParseError::PestError("assignment requires right-hand side expression".to_string()))?;
 
-    // Parse the task (will have await field set appropriately)
-    let mut task_json = match task_expr.as_rule() {
-        Rule::await_statement | Rule::await_task => parse_await_statement(task_expr, ctx)?,
-        Rule::task_call => parse_task_call(task_expr, false, ctx)?,
-        Rule::sleep_call => parse_sleep_call(task_expr, false)?,
-        _ => return Err(ParseError::PestError("invalid assignment expression".to_string())),
-    };
+    let line = rhs_expr.as_span().start_pos().line_col().0;
 
-    // Add variable name and scope depth to task JSON
-    if let Some(obj) = task_json.as_object_mut() {
-        obj.insert("assign_to".to_string(), json!(var_name));
-        obj.insert("assign_to_depth".to_string(), json!(ctx.current_depth()));
+    // Handle different types of assignments
+    match rhs_expr.as_rule() {
+        Rule::await_statement | Rule::await_task => {
+            // Task assignment: let x = await task(...)
+            let mut task_json = parse_await_statement(rhs_expr, ctx)?;
+            if let Some(obj) = task_json.as_object_mut() {
+                obj.insert("assign_to".to_string(), json!(var_name));
+                obj.insert("assign_to_depth".to_string(), json!(ctx.current_depth()));
+            }
+            Ok(task_json)
+        }
+        Rule::task_call => {
+            // Task assignment: let x = task(...)
+            let mut task_json = parse_task_call(rhs_expr, false, ctx)?;
+            if let Some(obj) = task_json.as_object_mut() {
+                obj.insert("assign_to".to_string(), json!(var_name));
+                obj.insert("assign_to_depth".to_string(), json!(ctx.current_depth()));
+            }
+            Ok(task_json)
+        }
+        Rule::sleep_call => {
+            // Sleep assignment: let x = sleep(10)
+            let mut task_json = parse_sleep_call(rhs_expr, false)?;
+            if let Some(obj) = task_json.as_object_mut() {
+                obj.insert("assign_to".to_string(), json!(var_name));
+                obj.insert("assign_to_depth".to_string(), json!(ctx.current_depth()));
+            }
+            Ok(task_json)
+        }
+        Rule::json_value => {
+            // Value assignment: let x = 123 or let x = inputs.field
+            let value = parse_json_value(rhs_expr, line, ctx)?;
+            Ok(json!({
+                "type": "assignment",
+                "var": var_name,
+                "depth": ctx.current_depth(),
+                "value": value
+            }))
+        }
+        _ => Err(ParseError::PestError(format!("invalid assignment expression: {:?}", rhs_expr.as_rule()))),
     }
-
-    Ok(task_json)
 }
 
 fn parse_await_statement(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext) -> Result<JsonValue, ParseError> {
@@ -478,6 +506,116 @@ fn parse_json_object(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &Parse
     Ok(JsonValue::Object(obj))
 }
 
+/// Parse member access into a structured format
+/// Examples:
+///   inputs.user -> {"base": "inputs", "path": [{"type": "dot", "value": "user"}]}
+///   data[0] -> {"base": "data", "path": [{"type": "index", "value": 0}]}
+///   items[0].name -> {"base": "items", "path": [{"type": "index", "value": 0}, {"type": "dot", "value": "name"}]}
+///   obj["key"] -> {"base": "obj", "path": [{"type": "bracket", "value": "key"}]}
+fn parse_member_access(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &ParserContext) -> Result<JsonValue, ParseError> {
+    let mut inner = pair.into_inner();
+
+    // First part is always an identifier (the base)
+    let base = inner.next()
+        .ok_or_else(|| ParseError::InvalidJson {
+            line,
+            message: "Member access missing base identifier".to_string(),
+        })?
+        .as_str()
+        .to_string();
+
+    let mut path = Vec::new();
+
+    // Process property accessors
+    for accessor in inner {
+        match accessor.as_rule() {
+            Rule::property_accessor => {
+                let mut accessor_inner = accessor.into_inner();
+                let accessor_part = accessor_inner.next()
+                    .ok_or_else(|| ParseError::InvalidJson {
+                        line,
+                        message: "Empty property accessor".to_string(),
+                    })?;
+
+                match accessor_part.as_rule() {
+                    Rule::identifier => {
+                        // Dot notation: .fieldName
+                        path.push(json!({
+                            "type": "dot",
+                            "value": accessor_part.as_str()
+                        }));
+                    }
+                    Rule::bracket_accessor => {
+                        // Bracket notation: [0] or ["key"] or [varName]
+                        let mut bracket_inner = accessor_part.into_inner();
+                        let index_or_key = bracket_inner.next()
+                            .ok_or_else(|| ParseError::InvalidJson {
+                                line,
+                                message: "Empty bracket accessor".to_string(),
+                            })?;
+
+                        match index_or_key.as_rule() {
+                            Rule::integer => {
+                                // Numeric index: [0]
+                                let index = index_or_key.as_str().parse::<i64>()
+                                    .map_err(|_| ParseError::InvalidJson {
+                                        line,
+                                        message: format!("Invalid array index: {}", index_or_key.as_str()),
+                                    })?;
+                                path.push(json!({
+                                    "type": "index",
+                                    "value": index
+                                }));
+                            }
+                            Rule::string => {
+                                // String key: ["key"]
+                                let key = parse_string(index_or_key)?;
+                                path.push(json!({
+                                    "type": "bracket",
+                                    "value": key
+                                }));
+                            }
+                            Rule::identifier => {
+                                // Variable reference: [varName]
+                                // Store with depth for runtime resolution
+                                let var_name = index_or_key.as_str();
+                                path.push(json!({
+                                    "type": "bracket_var",
+                                    "value": var_name,
+                                    "depth": ctx.scope_depth
+                                }));
+                            }
+                            _ => {
+                                return Err(ParseError::InvalidJson {
+                                    line,
+                                    message: format!("Invalid bracket accessor content: {:?}", index_or_key.as_rule()),
+                                });
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err(ParseError::InvalidJson {
+                            line,
+                            message: format!("Invalid property accessor: {:?}", accessor_part.as_rule()),
+                        });
+                    }
+                }
+            }
+            _ => {
+                return Err(ParseError::InvalidJson {
+                    line,
+                    message: format!("Unexpected rule in member access: {:?}", accessor.as_rule()),
+                });
+            }
+        }
+    }
+
+    Ok(json!({
+        "base": base,
+        "path": path
+    }))
+}
+
 fn parse_json_value(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &ParserContext) -> Result<JsonValue, ParseError> {
     let inner = pair.into_inner().next()
         .ok_or_else(|| ParseError::InvalidJson {
@@ -553,10 +691,9 @@ fn parse_json_value(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &Parser
         }
         Rule::null => Ok(JsonValue::Null),
         Rule::member_access => {
-            // This is a member access like inputs.userId or ctx.workflowId
-            // Store as-is without $ prefix (unlike bare identifiers)
-            let member_str = inner.as_str();
-            Ok(JsonValue::String(member_str.to_string()))
+            // Parse member access into structured format
+            // Returns {"base": "inputs", "path": [{"type": "dot", "value": "user"}, ...]}
+            parse_member_access(inner, line, ctx)
         }
         Rule::identifier => {
             // This is a variable reference - add $ prefix and annotate with scope depth
@@ -670,9 +807,11 @@ fn parse_for_iterable(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &Pars
     match inner.as_rule() {
         Rule::member_access => {
             // Member access like inputs.items or result.data
+            // Parse into structured format and wrap in type envelope
+            let parsed = parse_member_access(inner, line, ctx)?;
             Ok(json!({
                 "type": "member_access",
-                "value": inner.as_str()
+                "value": parsed
             }))
         }
         Rule::identifier => {
@@ -924,7 +1063,8 @@ fn parse_comparison_value(pair: pest::iterators::Pair<Rule>, line: usize, ctx: &
     match inner.as_rule() {
         Rule::member_access => {
             // Member access like inputs.userId or result.status
-            Ok(JsonValue::String(inner.as_str().to_string()))
+            // Parse into structured format
+            parse_member_access(inner, line, ctx)
         }
         Rule::identifier => {
             // Variable reference in condition - annotate with scope depth
@@ -1733,7 +1873,7 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_inputs_member_access() {
-        // Test inputs.fieldName syntax (no $ prefix)
+        // Test inputs.fieldName syntax
         let source = r#"
 workflow(ctx, inputs) {
   await task("process", { userId: inputs.userId, orderId: inputs.orderId })
@@ -1742,9 +1882,14 @@ workflow(ctx, inputs) {
         let result = parse_workflow(source).unwrap();
         assert_eq!(result.len(), 1);
 
-        // Member access should NOT have $ prefix (unlike bare identifiers)
-        assert_eq!(result[0]["inputs"]["userId"], "inputs.userId");
-        assert_eq!(result[0]["inputs"]["orderId"], "inputs.orderId");
+        // Member access should be structured JSON
+        assert_eq!(result[0]["inputs"]["userId"]["base"], "inputs");
+        assert_eq!(result[0]["inputs"]["userId"]["path"][0]["type"], "dot");
+        assert_eq!(result[0]["inputs"]["userId"]["path"][0]["value"], "userId");
+
+        assert_eq!(result[0]["inputs"]["orderId"]["base"], "inputs");
+        assert_eq!(result[0]["inputs"]["orderId"]["path"][0]["type"], "dot");
+        assert_eq!(result[0]["inputs"]["orderId"]["path"][0]["value"], "orderId");
     }
 
     #[test]
@@ -1758,8 +1903,10 @@ workflow(ctx, inputs) {
         let result = parse_workflow(source).unwrap();
         assert_eq!(result.len(), 1);
 
-        // ctx.workflowId should be stored as-is
-        assert_eq!(result[0]["inputs"]["workflowId"], "ctx.workflowId");
+        // ctx.workflowId should be stored in structured format
+        assert_eq!(result[0]["inputs"]["workflowId"]["base"], "ctx");
+        assert_eq!(result[0]["inputs"]["workflowId"]["path"][0]["type"], "dot");
+        assert_eq!(result[0]["inputs"]["workflowId"]["path"][0]["value"], "workflowId");
     }
 
     #[test]
@@ -1779,14 +1926,20 @@ workflow(ctx, inputs) {
         assert_eq!(result.len(), 2);
 
         // First statement: task using inputs.userId
-        assert_eq!(result[0]["inputs"]["userId"], "inputs.userId");  // Member access
+        assert_eq!(result[0]["inputs"]["userId"]["base"], "inputs");
+        assert_eq!(result[0]["inputs"]["userId"]["path"][0]["type"], "dot");
+        assert_eq!(result[0]["inputs"]["userId"]["path"][0]["value"], "userId");
 
         // Second statement: mixed references
         // Bare variable reference now annotated with scope depth
         assert_eq!(result[1]["inputs"]["validationResult"]["var"], "result");
         assert_eq!(result[1]["inputs"]["validationResult"]["depth"], 0);
-        assert_eq!(result[1]["inputs"]["workflow"], "ctx.workflowId");  // Member access
-        assert_eq!(result[1]["inputs"]["order"], "inputs.orderId");  // Member access
+        assert_eq!(result[1]["inputs"]["workflow"]["base"], "ctx");
+        assert_eq!(result[1]["inputs"]["workflow"]["path"][0]["type"], "dot");
+        assert_eq!(result[1]["inputs"]["workflow"]["path"][0]["value"], "workflowId");
+        assert_eq!(result[1]["inputs"]["order"]["base"], "inputs");
+        assert_eq!(result[1]["inputs"]["order"]["path"][0]["type"], "dot");
+        assert_eq!(result[1]["inputs"]["order"]["path"][0]["value"], "orderId");
     }
 
     #[test]
@@ -1863,8 +2016,10 @@ workflow(ctx, inputs) {
         assert_eq!(result[0]["type"], "if");
         assert_eq!(result[0]["condition"]["type"], "comparison");
         assert_eq!(result[0]["condition"]["operator"], "==");
-        // Member access is preserved as-is
-        assert_eq!(result[0]["condition"]["left"], "inputs.status");
+        // Member access is now in structured format
+        assert_eq!(result[0]["condition"]["left"]["base"], "inputs");
+        assert_eq!(result[0]["condition"]["left"]["path"][0]["type"], "dot");
+        assert_eq!(result[0]["condition"]["left"]["path"][0]["value"], "status");
         assert_eq!(result[0]["condition"]["right"], "success");
 
         let then_stmts = result[0]["then_statements"].as_array().unwrap();
@@ -1890,7 +2045,9 @@ workflow(ctx, inputs) {
         assert_eq!(result[0]["type"], "if");
         assert_eq!(result[0]["condition"]["type"], "comparison");
         assert_eq!(result[0]["condition"]["operator"], ">");
-        assert_eq!(result[0]["condition"]["left"], "inputs.amount");
+        assert_eq!(result[0]["condition"]["left"]["base"], "inputs");
+        assert_eq!(result[0]["condition"]["left"]["path"][0]["type"], "dot");
+        assert_eq!(result[0]["condition"]["left"]["path"][0]["value"], "amount");
         assert_eq!(result[0]["condition"]["right"], 100);
 
         let then_stmts = result[0]["then_statements"].as_array().unwrap();
@@ -1914,7 +2071,9 @@ workflow(ctx, inputs) {
         let result = parse_workflow(source).unwrap();
         assert_eq!(result.len(), 1);
 
-        assert_eq!(result[0]["condition"]["left"], "payment.status");
+        assert_eq!(result[0]["condition"]["left"]["base"], "payment");
+        assert_eq!(result[0]["condition"]["left"]["path"][0]["type"], "dot");
+        assert_eq!(result[0]["condition"]["left"]["path"][0]["value"], "status");
         assert_eq!(result[0]["condition"]["right"], "completed");
     }
 
@@ -1930,7 +2089,9 @@ workflow(ctx, inputs) {
         let result = parse_workflow(source).unwrap();
         assert_eq!(result.len(), 1);
 
-        assert_eq!(result[0]["condition"]["left"], "inputs.userId");
+        assert_eq!(result[0]["condition"]["left"]["base"], "inputs");
+        assert_eq!(result[0]["condition"]["left"]["path"][0]["type"], "dot");
+        assert_eq!(result[0]["condition"]["left"]["path"][0]["value"], "userId");
         assert_eq!(result[0]["condition"]["right"], 123);
     }
 
@@ -1951,11 +2112,15 @@ workflow(ctx, inputs) {
         assert_eq!(operands.len(), 2);
 
         assert_eq!(operands[0]["operator"], ">");
-        assert_eq!(operands[0]["left"], "inputs.amount");
+        assert_eq!(operands[0]["left"]["base"], "inputs");
+        assert_eq!(operands[0]["left"]["path"][0]["type"], "dot");
+        assert_eq!(operands[0]["left"]["path"][0]["value"], "amount");
         assert_eq!(operands[0]["right"], 100);
 
         assert_eq!(operands[1]["operator"], "==");
-        assert_eq!(operands[1]["left"], "inputs.status");
+        assert_eq!(operands[1]["left"]["base"], "inputs");
+        assert_eq!(operands[1]["left"]["path"][0]["type"], "dot");
+        assert_eq!(operands[1]["left"]["path"][0]["value"], "status");
         assert_eq!(operands[1]["right"], "approved");
     }
 
@@ -1976,11 +2141,15 @@ workflow(ctx, inputs) {
         assert_eq!(operands.len(), 2);
 
         assert_eq!(operands[0]["operator"], "==");
-        assert_eq!(operands[0]["left"], "inputs.status");
+        assert_eq!(operands[0]["left"]["base"], "inputs");
+        assert_eq!(operands[0]["left"]["path"][0]["type"], "dot");
+        assert_eq!(operands[0]["left"]["path"][0]["value"], "status");
         assert_eq!(operands[0]["right"], "failed");
 
         assert_eq!(operands[1]["operator"], "==");
-        assert_eq!(operands[1]["left"], "inputs.status");
+        assert_eq!(operands[1]["left"]["base"], "inputs");
+        assert_eq!(operands[1]["left"]["path"][0]["type"], "dot");
+        assert_eq!(operands[1]["left"]["path"][0]["value"], "status");
         assert_eq!(operands[1]["right"], "cancelled");
     }
 
@@ -2080,7 +2249,9 @@ workflow(ctx, inputs) {
         assert_eq!(result[0]["assign_to"], "result");
 
         assert_eq!(result[1]["type"], "if");
-        assert_eq!(result[1]["condition"]["left"], "result.success");
+        assert_eq!(result[1]["condition"]["left"]["base"], "result");
+        assert_eq!(result[1]["condition"]["left"]["path"][0]["type"], "dot");
+        assert_eq!(result[1]["condition"]["left"]["path"][0]["value"], "success");
         assert_eq!(result[1]["condition"]["right"], true);
     }
 
@@ -2098,7 +2269,9 @@ workflow(ctx, inputs) {
         let result = parse_workflow(source).unwrap();
         assert_eq!(result.len(), 1);
 
-        assert_eq!(result[0]["condition"]["left"], "inputs.enabled");
+        assert_eq!(result[0]["condition"]["left"]["base"], "inputs");
+        assert_eq!(result[0]["condition"]["left"]["path"][0]["type"], "dot");
+        assert_eq!(result[0]["condition"]["left"]["path"][0]["value"], "enabled");
         assert_eq!(result[0]["condition"]["right"], true);
     }
 
@@ -2114,7 +2287,9 @@ workflow(ctx, inputs) {
         let result = parse_workflow(source).unwrap();
         assert_eq!(result.len(), 1);
 
-        assert_eq!(result[0]["condition"]["left"], "inputs.optionalValue");
+        assert_eq!(result[0]["condition"]["left"]["base"], "inputs");
+        assert_eq!(result[0]["condition"]["left"]["path"][0]["type"], "dot");
+        assert_eq!(result[0]["condition"]["left"]["path"][0]["value"], "optionalValue");
         assert_eq!(result[0]["condition"]["right"], JsonValue::Null);
     }
 
@@ -2224,7 +2399,9 @@ workflow(ctx, inputs) {
 
         assert_eq!(result[0]["type"], "for");
         assert_eq!(result[0]["iterable"]["type"], "member_access");
-        assert_eq!(result[0]["iterable"]["value"], "inputs.items");
+        assert_eq!(result[0]["iterable"]["value"]["base"], "inputs");
+        assert_eq!(result[0]["iterable"]["value"]["path"][0]["type"], "dot");
+        assert_eq!(result[0]["iterable"]["value"]["path"][0]["value"], "items");
     }
 
     #[test]
@@ -2704,5 +2881,129 @@ workflow(ctx, inputs) {
         for stmt in statements {
             assert_ne!(stmt["type"], "return");
         }
+    }
+
+    #[test]
+    fn test_numeric_member_access_rejected() {
+        // data.0 should be rejected - identifiers can't start with numbers
+        let workflow = r#"
+            task foo:
+                let data = {"0": "value"}
+                let x = data.0
+        "#;
+
+        let result = parse_workflow(workflow);
+        assert!(result.is_err(), "data.0 should be rejected by parser");
+    }
+
+    #[test]
+    fn test_bracket_notation_array_index() {
+        let workflow = r#"
+workflow(ctx, inputs) {
+  let item = inputs.items[0]
+  let name = inputs.items[1].name
+}
+        "#;
+        let result = parse_workflow(workflow).unwrap();
+        assert_eq!(result.len(), 2);
+
+        // First assignment: inputs.items[0]
+        let first_value = &result[0]["value"];
+        assert_eq!(first_value["base"], "inputs");
+        let path = first_value["path"].as_array().unwrap();
+        assert_eq!(path[0]["type"], "dot");
+        assert_eq!(path[0]["value"], "items");
+        assert_eq!(path[1]["type"], "index");
+        assert_eq!(path[1]["value"], 0);
+
+        // Second assignment: inputs.items[1].name
+        let second_value = &result[1]["value"];
+        assert_eq!(second_value["base"], "inputs");
+        let path = second_value["path"].as_array().unwrap();
+        assert_eq!(path[0]["type"], "dot");
+        assert_eq!(path[0]["value"], "items");
+        assert_eq!(path[1]["type"], "index");
+        assert_eq!(path[1]["value"], 1);
+        assert_eq!(path[2]["type"], "dot");
+        assert_eq!(path[2]["value"], "name");
+    }
+
+    #[test]
+    fn test_bracket_notation_string_key() {
+        let workflow = r#"
+workflow(ctx, inputs) {
+  let val = data["key"]
+  let nested = obj["outer"]["inner"]
+}
+        "#;
+        let result = parse_workflow(workflow).unwrap();
+        assert_eq!(result.len(), 2);
+
+        // First: data["key"]
+        let first_value = &result[0]["value"];
+        assert_eq!(first_value["base"], "data");
+        let path = first_value["path"].as_array().unwrap();
+        assert_eq!(path[0]["type"], "bracket");
+        assert_eq!(path[0]["value"], "key");
+
+        // Second: obj["outer"]["inner"]
+        let second_value = &result[1]["value"];
+        assert_eq!(second_value["base"], "obj");
+        let path = second_value["path"].as_array().unwrap();
+        assert_eq!(path[0]["type"], "bracket");
+        assert_eq!(path[0]["value"], "outer");
+        assert_eq!(path[1]["type"], "bracket");
+        assert_eq!(path[1]["value"], "inner");
+    }
+
+    #[test]
+    fn test_bracket_notation_variable_index() {
+        let workflow = r#"
+workflow(ctx, inputs) {
+  let i = 0
+  let item = data[i]
+  let field = obj[keyName]
+}
+        "#;
+        let result = parse_workflow(workflow).unwrap();
+        assert_eq!(result.len(), 3);
+
+        // Second: data[i]
+        let second_value = &result[1]["value"];
+        assert_eq!(second_value["base"], "data");
+        let path = second_value["path"].as_array().unwrap();
+        assert_eq!(path[0]["type"], "bracket_var");
+        assert_eq!(path[0]["value"], "i");
+
+        // Third: obj[keyName]
+        let third_value = &result[2]["value"];
+        assert_eq!(third_value["base"], "obj");
+        let path = third_value["path"].as_array().unwrap();
+        assert_eq!(path[0]["type"], "bracket_var");
+        assert_eq!(path[0]["value"], "keyName");
+    }
+
+    #[test]
+    fn test_bracket_notation_mixed() {
+        let workflow = r#"
+workflow(ctx, inputs) {
+  let val = data.items[0].fields["name"]
+}
+        "#;
+        let result = parse_workflow(workflow).unwrap();
+        assert_eq!(result.len(), 1);
+
+        let value = &result[0]["value"];
+        assert_eq!(value["base"], "data");
+        let path = value["path"].as_array().unwrap();
+        assert_eq!(path.len(), 4);
+        assert_eq!(path[0]["type"], "dot");
+        assert_eq!(path[0]["value"], "items");
+        assert_eq!(path[1]["type"], "index");
+        assert_eq!(path[1]["value"], 0);
+        assert_eq!(path[2]["type"], "dot");
+        assert_eq!(path[2]["value"], "fields");
+        assert_eq!(path[3]["type"], "bracket");
+        assert_eq!(path[3]["value"], "name");
     }
 }

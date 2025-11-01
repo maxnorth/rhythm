@@ -109,19 +109,19 @@ fn resolve_variables(value: &JsonValue, locals: &JsonValue) -> JsonValue {
                 }
             }
 
-            // Not a variable reference - resolve all values recursively
+            // Check if this is a member access: {"base": "inputs", "path": [...]}
+            if obj.contains_key("base") && obj.contains_key("path") {
+                return resolve_member_access(value, locals);
+            }
+
+            // Not a variable reference or member access - resolve all values recursively
             let mut resolved = Map::new();
             for (k, v) in obj.iter() {
                 resolved.insert(k.clone(), resolve_variables(v, locals));
             }
             JsonValue::Object(resolved)
         }
-        JsonValue::String(s) => {
-            // Check for member access (e.g., "inputs.userId", "ctx.workflowId")
-            if s.contains('.') {
-                return resolve_member_access(s, locals);
-            }
-
+        JsonValue::String(_) => {
             // Plain string value
             value.clone()
         }
@@ -134,6 +134,26 @@ fn resolve_variables(value: &JsonValue, locals: &JsonValue) -> JsonValue {
         }
         _ => value.clone(),
     }
+}
+
+/// Look up a variable by name without scope depth - searches from current scope backwards
+fn resolve_variable(var_name: &str, locals: &JsonValue) -> JsonValue {
+    // Access scope_stack
+    let scope_stack = locals.get("scope_stack")
+        .and_then(|v| v.as_array())
+        .expect("scope_stack must exist in locals");
+
+    // Search from the most recent scope backwards (dynamic scoping)
+    for scope in scope_stack.iter().rev() {
+        if let Some(variables) = scope.get("variables") {
+            if let Some(value) = variables.get(var_name) {
+                return value.clone();
+            }
+        }
+    }
+
+    // Variable not found - return null
+    JsonValue::Null
 }
 
 /// Look up a variable with known scope depth - O(1) operation
@@ -181,35 +201,101 @@ fn resolve_iterable(iterable_spec: &JsonValue, locals: &JsonValue) -> Result<Jso
             Ok(resolve_variables(var_ref, locals))
         }
         "member_access" => {
-            // Member access like inputs.items
-            let path = iterable_spec["value"].as_str()
-                .ok_or_else(|| anyhow::anyhow!("Member access missing value string"))?;
-            Ok(resolve_member_access(path, locals))
+            // Member access like inputs.items - value is structured JSON
+            let access_spec = &iterable_spec["value"];
+            Ok(resolve_member_access(access_spec, locals))
         }
         _ => Err(anyhow::anyhow!("Unknown iterable type: {}", iterable_type))
     }
 }
 
 /// Resolve member access like "inputs.userId" or "ctx.workflowId"
-fn resolve_member_access(path: &str, locals: &JsonValue) -> JsonValue {
-    let parts: Vec<&str> = path.split('.').collect();
-    if parts.is_empty() {
-        return JsonValue::Null;
-    }
+/// Resolve member access from structured format
+/// Input: {"base": "inputs", "path": [{"type": "dot", "value": "user"}, {"type": "index", "value": 0}]}
+/// This function is null-safe - if any intermediate value is null, it returns null
+fn resolve_member_access(access: &JsonValue, locals: &JsonValue) -> JsonValue {
+    // Extract base and path from structured format
+    let base = match access.get("base").and_then(|v| v.as_str()) {
+        Some(b) => b,
+        None => return JsonValue::Null,
+    };
 
-    // Start with the root object
-    let mut current = locals.get(parts[0]);
+    let path = match access.get("path").and_then(|v| v.as_array()) {
+        Some(p) => p,
+        None => return JsonValue::Null,
+    };
 
-    // Navigate through the path
-    for part in &parts[1..] {
-        if let Some(obj) = current {
-            current = obj.get(part);
-        } else {
+    // Start with the base variable
+    let mut current = match locals.get(base) {
+        Some(val) => val.clone(),
+        None => return JsonValue::Null,
+    };
+
+    // Navigate through the path (null-safe)
+    for accessor in path {
+        let accessor_type = accessor.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+        match accessor_type {
+            "dot" => {
+                // Dot notation: .fieldName
+                let field = accessor.get("value").and_then(|v| v.as_str()).unwrap_or("");
+                current = current.get(field).cloned().unwrap_or(JsonValue::Null);
+            }
+            "index" => {
+                // Array index: [0]
+                let index = accessor.get("value").and_then(|v| v.as_i64()).unwrap_or(-1);
+                if index >= 0 {
+                    if let Some(arr) = current.as_array() {
+                        current = arr.get(index as usize).cloned().unwrap_or(JsonValue::Null);
+                    } else {
+                        return JsonValue::Null;
+                    }
+                } else {
+                    return JsonValue::Null;
+                }
+            }
+            "bracket" => {
+                // String key: ["key"]
+                let key = accessor.get("value").and_then(|v| v.as_str()).unwrap_or("");
+                current = current.get(key).cloned().unwrap_or(JsonValue::Null);
+            }
+            "bracket_var" => {
+                // Variable reference: [varName]
+                // First resolve the variable to get the key/index
+                let var_name = accessor.get("value").and_then(|v| v.as_str()).unwrap_or("");
+                let var_value = resolve_variable(var_name, locals);
+
+                // Use the resolved value as key or index
+                if let Some(key) = var_value.as_str() {
+                    // String key
+                    current = current.get(key).cloned().unwrap_or(JsonValue::Null);
+                } else if let Some(index) = var_value.as_i64() {
+                    // Numeric index
+                    if index >= 0 {
+                        if let Some(arr) = current.as_array() {
+                            current = arr.get(index as usize).cloned().unwrap_or(JsonValue::Null);
+                        } else {
+                            return JsonValue::Null;
+                        }
+                    } else {
+                        return JsonValue::Null;
+                    }
+                } else {
+                    return JsonValue::Null;
+                }
+            }
+            _ => {
+                return JsonValue::Null;
+            }
+        }
+
+        // Null-safe: if we hit null at any point, stop and return null
+        if current.is_null() {
             return JsonValue::Null;
         }
     }
 
-    current.cloned().unwrap_or(JsonValue::Null)
+    current
 }
 
 /// Assign a variable to the correct scope in the scope_stack
@@ -916,6 +1002,48 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
                 }
             }
         }
+        "assignment" => {
+            // Simple value assignment: let x = 123 or let x = inputs.field
+            let var_name = statement.get("var")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Assignment missing variable name"))?;
+
+            let depth = statement.get("depth")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| anyhow::anyhow!("Assignment missing depth"))?;
+
+            let value_template = statement.get("value")
+                .ok_or_else(|| anyhow::anyhow!("Assignment missing value"))?;
+
+            // Resolve variables in the value
+            let resolved_value = resolve_variables(value_template, &locals);
+
+            // Assign to the correct scope
+            assign_variable(&mut locals, var_name, resolved_value, Some(depth as usize));
+
+            // Update workflow context with new locals
+            sqlx::query(
+                r#"
+                UPDATE workflow_execution_context
+                SET locals = $1
+                WHERE execution_id = $2
+                "#,
+            )
+            .bind(&locals)
+            .bind(execution_id)
+            .execute(pool.as_ref())
+            .await
+            .context("Failed to update workflow context with assignment")?;
+
+            // Move to next statement
+            sqlx::query("UPDATE workflow_execution_context SET statement_index = statement_index + 1 WHERE execution_id = $1")
+                .bind(execution_id)
+                .execute(pool.as_ref())
+                .await
+                .context("Failed to increment statement index")?;
+
+            Ok(StepResult::Continue)
+        }
         "return" => {
             // Return statement - exit workflow with value
             let return_value = statement.get("value")
@@ -1330,7 +1458,12 @@ mod tests {
 
         let iterable_spec = json!({
             "type": "member_access",
-            "value": "inputs.orders"
+            "value": {
+                "base": "inputs",
+                "path": [
+                    {"type": "dot", "value": "orders"}
+                ]
+            }
         });
 
         let result = resolve_iterable(&iterable_spec, &locals).unwrap();
@@ -1338,6 +1471,241 @@ mod tests {
             {"id": "order1"},
             {"id": "order2"}
         ]));
+    }
+
+    #[test]
+    fn test_member_access_nested_objects() {
+        // Test arbitrary depth object access with dot notation
+        let locals = json!({
+            "inputs": {
+                "user": {
+                    "profile": {
+                        "name": "Alice",
+                        "settings": {
+                            "theme": "dark"
+                        }
+                    }
+                }
+            }
+        });
+
+        // inputs.user.profile.name
+        let access = json!({
+            "base": "inputs",
+            "path": [
+                {"type": "dot", "value": "user"},
+                {"type": "dot", "value": "profile"},
+                {"type": "dot", "value": "name"}
+            ]
+        });
+        let result = resolve_member_access(&access, &locals);
+        assert_eq!(result, "Alice");
+
+        // inputs.user.profile.settings.theme
+        let access = json!({
+            "base": "inputs",
+            "path": [
+                {"type": "dot", "value": "user"},
+                {"type": "dot", "value": "profile"},
+                {"type": "dot", "value": "settings"},
+                {"type": "dot", "value": "theme"}
+            ]
+        });
+        let result = resolve_member_access(&access, &locals);
+        assert_eq!(result, "dark");
+    }
+
+    #[test]
+    fn test_member_access_array_index() {
+        let locals = json!({
+            "items": [
+                {"id": 1, "name": "first"},
+                {"id": 2, "name": "second"},
+                {"id": 3, "name": "third"}
+            ]
+        });
+
+        // items[0]
+        let access = json!({
+            "base": "items",
+            "path": [
+                {"type": "index", "value": 0}
+            ]
+        });
+        let result = resolve_member_access(&access, &locals);
+        assert_eq!(result["id"], 1);
+        assert_eq!(result["name"], "first");
+
+        // items[1].name
+        let access = json!({
+            "base": "items",
+            "path": [
+                {"type": "index", "value": 1},
+                {"type": "dot", "value": "name"}
+            ]
+        });
+        let result = resolve_member_access(&access, &locals);
+        assert_eq!(result, "second");
+    }
+
+    #[test]
+    fn test_member_access_bracket_string_key() {
+        let locals = json!({
+            "data": {
+                "0": "zero",
+                "key-with-dash": "value",
+                "nested": {
+                    "inner": "found"
+                }
+            }
+        });
+
+        // data["0"] - numeric string key using brackets
+        let access = json!({
+            "base": "data",
+            "path": [
+                {"type": "bracket", "value": "0"}
+            ]
+        });
+        let result = resolve_member_access(&access, &locals);
+        assert_eq!(result, "zero");
+
+        // data["key-with-dash"]
+        let access = json!({
+            "base": "data",
+            "path": [
+                {"type": "bracket", "value": "key-with-dash"}
+            ]
+        });
+        let result = resolve_member_access(&access, &locals);
+        assert_eq!(result, "value");
+
+        // data["nested"]["inner"]
+        let access = json!({
+            "base": "data",
+            "path": [
+                {"type": "bracket", "value": "nested"},
+                {"type": "bracket", "value": "inner"}
+            ]
+        });
+        let result = resolve_member_access(&access, &locals);
+        assert_eq!(result, "found");
+    }
+
+    #[test]
+    fn test_member_access_variable_index() {
+        let locals = json!({
+            "scope_stack": [{
+                "depth": 0,
+                "variables": {
+                    "i": 1,
+                    "key": "name"
+                }
+            }],
+            "items": [
+                {"name": "first"},
+                {"name": "second"}
+            ],
+            "obj": {
+                "name": "value",
+                "id": 42
+            }
+        });
+
+        // items[i] where i = 1
+        let access = json!({
+            "base": "items",
+            "path": [
+                {"type": "bracket_var", "value": "i"}
+            ]
+        });
+        let result = resolve_member_access(&access, &locals);
+        assert_eq!(result["name"], "second");
+
+        // obj[key] where key = "name"
+        let access = json!({
+            "base": "obj",
+            "path": [
+                {"type": "bracket_var", "value": "key"}
+            ]
+        });
+        let result = resolve_member_access(&access, &locals);
+        assert_eq!(result, "value");
+    }
+
+    #[test]
+    fn test_member_access_null_safe() {
+        let locals = json!({
+            "data": {
+                "present": null,
+                "nested": {
+                    "value": "here"
+                }
+            }
+        });
+
+        // data.missing.deeply.nested - should return null, not error
+        let access = json!({
+            "base": "data",
+            "path": [
+                {"type": "dot", "value": "missing"},
+                {"type": "dot", "value": "deeply"},
+                {"type": "dot", "value": "nested"}
+            ]
+        });
+        let result = resolve_member_access(&access, &locals);
+        assert_eq!(result, JsonValue::Null);
+
+        // data.present.field - accessing property of null
+        let access = json!({
+            "base": "data",
+            "path": [
+                {"type": "dot", "value": "present"},
+                {"type": "dot", "value": "field"}
+            ]
+        });
+        let result = resolve_member_access(&access, &locals);
+        assert_eq!(result, JsonValue::Null);
+
+        // data.nested[100] - out of bounds array access
+        let access = json!({
+            "base": "data",
+            "path": [
+                {"type": "dot", "value": "nested"},
+                {"type": "index", "value": 100}
+            ]
+        });
+        let result = resolve_member_access(&access, &locals);
+        assert_eq!(result, JsonValue::Null);
+    }
+
+    #[test]
+    fn test_member_access_mixed_notation() {
+        let locals = json!({
+            "data": {
+                "items": [
+                    {
+                        "fields": {
+                            "name": "Alice",
+                            "age": 30
+                        }
+                    }
+                ]
+            }
+        });
+
+        // data.items[0].fields["name"]
+        let access = json!({
+            "base": "data",
+            "path": [
+                {"type": "dot", "value": "items"},
+                {"type": "index", "value": 0},
+                {"type": "dot", "value": "fields"},
+                {"type": "bracket", "value": "name"}
+            ]
+        });
+        let result = resolve_member_access(&access, &locals);
+        assert_eq!(result, "Alice");
     }
 
     #[test]
