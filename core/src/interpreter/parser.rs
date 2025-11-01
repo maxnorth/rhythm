@@ -13,8 +13,6 @@ struct ParserContext {
     scope_depth: usize,
     /// Stack of scopes, each containing variable name -> depth where defined
     symbol_table: Vec<HashMap<String, usize>>,
-    /// Number of nested loops we're currently inside (0 = not in any loop)
-    loop_depth: usize,
 }
 
 impl ParserContext {
@@ -22,7 +20,6 @@ impl ParserContext {
         Self {
             scope_depth: 0,
             symbol_table: vec![HashMap::new()], // Start with global scope
-            loop_depth: 0,
         }
     }
 
@@ -61,21 +58,6 @@ impl ParserContext {
 
     fn current_depth(&self) -> usize {
         self.scope_depth
-    }
-
-    /// Enter a loop (increment loop depth)
-    fn enter_loop(&mut self) {
-        self.loop_depth += 1;
-    }
-
-    /// Exit a loop (decrement loop depth)
-    fn exit_loop(&mut self) {
-        self.loop_depth = self.loop_depth.saturating_sub(1);
-    }
-
-    /// Check if we're currently inside a loop
-    fn in_loop(&self) -> bool {
-        self.loop_depth > 0
     }
 }
 
@@ -123,16 +105,25 @@ impl From<pest::error::Error<Rule>> for ParseError {
 /// Input example:
 /// ```
 /// Task.run("do-something", { "hey": "hello" })
-/// Sleep.await(10)
+/// Task.delay(10)
 /// Task.run("do-another")
 /// ```
 ///
 /// Output:
 /// ```json
 /// [
-///   { "type": "task", "task": "do-something", "inputs": { "hey": "hello" } },
-///   { "type": "sleep", "duration": 10 },
-///   { "type": "task", "task": "do-another", "inputs": {} }
+///   {
+///     "type": "expression_statement",
+///     "expression": { "type": "function_call", "name": ["Task", "run"], "args": ["do-something", { "hey": "hello" }] }
+///   },
+///   {
+///     "type": "await",
+///     "expression": { "type": "function_call", "name": ["Task", "delay"], "args": [10] }
+///   },
+///   {
+///     "type": "expression_statement",
+///     "expression": { "type": "function_call", "name": ["Task", "run"], "args": ["do-another", {}] }
+///   }
 /// ]
 /// ```
 pub fn parse_workflow(source: &str) -> Result<Vec<JsonValue>, ParseError> {
@@ -768,7 +759,6 @@ fn parse_for_loop(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext) ->
 
     // Enter a new scope for the loop body
     ctx.enter_scope();
-    ctx.enter_loop(); // Track that we're inside a loop
 
     // Declare the loop variable in the new scope
     ctx.declare_variable(loop_variable.clone());
@@ -785,7 +775,6 @@ fn parse_for_loop(pair: pest::iterators::Pair<Rule>, ctx: &mut ParserContext) ->
     }
 
     // Exit the loop scope
-    ctx.exit_loop(); // Exit loop tracking
     ctx.exit_scope();
 
     Ok(json!({
@@ -1085,7 +1074,7 @@ mod tests {
         let source = r#"
 workflow(ctx, inputs) {
   Task.run("do-something", { "hey": "hello" })
-  await Sleep.await(10)
+  await Task.delay(10)
   Task.run("do-another", {})
 }
                 "#;
@@ -1101,10 +1090,10 @@ workflow(ctx, inputs) {
         assert_eq!(result[0]["expression"]["args"][0], "do-something");
         assert_eq!(result[0]["expression"]["args"][1]["hey"], "hello");
 
-        // Second statement: await Sleep.await (await statement)
+        // Second statement: await Task.delay (await statement)
         assert_eq!(result[1]["type"], "await");
         assert_eq!(result[1]["expression"]["type"], "function_call");
-        assert_eq!(result[1]["expression"]["name"], json!(["Sleep", "await"]));
+        assert_eq!(result[1]["expression"]["name"], json!(["Task", "delay"]));
         assert_eq!(result[1]["expression"]["args"][0], 10);
 
         // Third statement: Task.run with empty object
@@ -1198,12 +1187,12 @@ workflow(ctx, inputs) {
     fn test_parse_sleep_non_numeric() {
         // With generic function system, parser allows any argument type
         // Runtime validation happens in the executor
-        let source = r#"workflow(ctx, inputs) { await Sleep.await("not a number") }"#;
+        let source = r#"workflow(ctx, inputs) { await Task.delay("not a number") }"#;
         let result = parse_workflow(source);
         assert!(result.is_ok(), "Parser should accept any argument type");
         let parsed = result.unwrap();
         assert_eq!(parsed[0]["type"], "await");
-        assert_eq!(parsed[0]["expression"]["name"], json!(["Sleep", "await"]));
+        assert_eq!(parsed[0]["expression"]["name"], json!(["Task", "delay"]));
         assert_eq!(parsed[0]["expression"]["args"][0], "not a number");
     }
 
@@ -1222,7 +1211,7 @@ workflow(ctx, inputs) {
   // This is a comment
   Task.run("first", {})
   // Another comment
-  await Sleep.await(5)
+  await Task.delay(5)
 }
                 "#;
         let result = parse_workflow(source).unwrap();
@@ -1926,11 +1915,11 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_await_sleep() {
-        // Test await Sleep.await() syntax
+        // Test await Task.delay() syntax
         let source = r#"
 workflow(ctx, inputs) {
   await Task.run("start", {})
-  await Sleep.await(5)
+  await Task.delay(5)
   await Task.run("finish", {})
 }
         "#;
@@ -1943,7 +1932,7 @@ workflow(ctx, inputs) {
 
         // Sleep with await
         assert_eq!(result[1]["type"], "await");
-        assert_eq!(result[1]["expression"]["name"], json!(["Sleep", "await"]));
+        assert_eq!(result[1]["expression"]["name"], json!(["Task", "delay"]));
         assert_eq!(result[1]["expression"]["args"][0], 5);
 
         // Last task
@@ -1968,10 +1957,10 @@ workflow(ctx, inputs) {
 
     #[test]
     fn test_sleep_without_await() {
-        // Test that Sleep.await() without await creates expression_statement
+        // Test that Task.delay() without await creates expression_statement
         let source = r#"
 workflow(ctx, inputs) {
-  Sleep.await(10)
+  Task.delay(10)
 }
         "#;
         let result = parse_workflow(source).unwrap();
@@ -1979,7 +1968,7 @@ workflow(ctx, inputs) {
 
         assert_eq!(result[0]["type"], "expression_statement");
         assert_eq!(result[0]["expression"]["type"], "function_call");
-        assert_eq!(result[0]["expression"]["name"], json!(["Sleep", "await"]));
+        assert_eq!(result[0]["expression"]["name"], json!(["Task", "delay"]));
         assert_eq!(result[0]["expression"]["args"][0], 10);
     }
 

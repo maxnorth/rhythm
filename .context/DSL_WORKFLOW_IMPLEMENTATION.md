@@ -38,28 +38,48 @@ This single constraint drives all design decisions. State is:
 
 **Purpose**: Convert `.flow` files to JSON AST (once, at registration time)
 
-**Current Syntax** (as of Oct 2024):
+**Current Syntax**:
 ```flow
-task("functionName", { "key": "value" })
-sleep(10)
+workflow(ctx, inputs) {
+    await Task.run("functionName", {"key": "value"})
+    await Task.delay(10)
+}
 ```
 
 **Output Format**:
 ```json
 [
-  {"type": "task", "task": "functionName", "inputs": {"key": "value"}},
-  {"type": "sleep", "duration": 10}
+  {
+    "type": "await",
+    "expression": {
+      "type": "function_call",
+      "name": ["Task", "run"],
+      "args": ["functionName", {"key": "value"}]
+    }
+  },
+  {
+    "type": "await",
+    "expression": {
+      "type": "function_call",
+      "name": ["Task", "delay"],
+      "args": [10]
+    }
+  }
 ]
 ```
 
-**Design Decision**: Line-based parsing (not multi-line yet)
-- Simple regex/manual parsing
-- Fast and sufficient for current needs
-- Can evolve to proper parser later if needed
+**Design Decision**: Full PEG parser using Pest
+- Supports full JavaScript-like syntax
+- Handles control flow (if/else, for loops, break/continue)
+- Variables with lexical scoping
+- Return statements
 
 **Key Files**:
 - Parser: `core/src/interpreter/parser.rs`
-- Tests: 8 tests passing
+- Semantic Validator: `core/src/interpreter/semantic_validator.rs`
+- Stdlib: `core/src/interpreter/stdlib.rs`
+- Executor: `core/src/interpreter/executor.rs`
+- Tests: 141 tests passing
 
 ---
 
@@ -150,8 +170,9 @@ async fn execute_workflow_step(execution_id: &str) -> Result<StepResult>
 3. Load workflow definition (cached `parsed_steps` JSONB)
 4. Get statement at current index
 5. Execute statement:
-   - **task()**: Create child execution, set `awaiting_task_id`, return `Suspended`
-   - **sleep()**: Currently skips (TODO), increment index, return `Continue`
+   - **Task.run()**: Create child execution, return task ID
+   - **Task.delay()**: Set wake_time for workflow resumption, return `Suspended`
+   - **if/for/assignment/return**: Execute according to control flow
 6. If index >= length: Mark workflow `Completed`
 
 **Result Enum**:
@@ -549,75 +570,84 @@ if execution.type == ExecutionType.WORKFLOW:
         await self._execute_dsl_workflow(execution)  # DSL
 ```
 
-### Decision 6: Keep `sleep()` as Placeholder
+### Decision 6: Stdlib Module Architecture
 
-**Context**: DSL has `sleep(seconds)` but no implementation yet
+**Context**: Function implementations were hardcoded in executor with switch statement
 
-**Options**:
-1. Implement full sleep scheduling
-2. Skip sleep, continue immediately
-3. Remove from DSL until ready
+**Problem**: Not extensible, mixes concerns
 
-**Decision**: Option 2 (skip for now)
+**Solution**: Created `stdlib.rs` module with clean function registry
 
-**Rationale**:
-- Shows DSL syntax working
-- Demonstrates `Continue` return type
-- Can implement properly later (requires scheduling system)
-- Doesn't block other development
+**Implementation**:
+- `task_run()` - Handles Task.run() calls
+- `task_delay()` - Handles Task.delay() calls
+- `StdlibRegistry::call()` - Clean dispatch mechanism
 
-**Current Implementation**:
-```rust
-"sleep" => {
-    // TODO: Implement actual sleep scheduling
-    println!("Sleep({}) - skipping for now", duration);
-    sqlx::query("UPDATE workflow_execution_context SET statement_index = statement_index + 1 WHERE execution_id = $1")
-        .execute(...)
-        .await?;
-    Ok(StepResult::Continue)
-}
-```
+**Benefits**:
+- Easy to add new stdlib functions
+- Functions testable in isolation
+- Separation of concerns (executor vs stdlib)
 
 ---
 
-## Future Syntax Plans
+## Current Feature Support
 
-### Confirmed Features (To Be Added)
-
-**Variables**:
+**Variables** ✅:
 ```flow
 orderId = inputs.orderId
-result = task("charge", { orderId })
+result = await Task.run("charge", {orderId: orderId})
 ```
 
-**Conditionals**:
+**Conditionals** ✅:
 ```flow
 if (payment.success) {
-  task("ship", { orderId })
+  await Task.run("ship", {orderId: orderId})
 } else {
-  task("refund", { orderId })
+  await Task.run("refund", {orderId: orderId})
 }
 ```
 
-**Loops**:
+**Loops** ✅:
 ```flow
 for (item in inputs.items) {
-  task("processItem", { item })
+  await Task.run("processItem", {item: item})
 }
 ```
 
-**Parallel Execution**:
+**Break/Continue** ✅:
+```flow
+for (item in items) {
+  if (item.skip) {
+    continue
+  }
+  if (item.stop) {
+    break
+  }
+  await Task.run("process", {item: item})
+}
+```
+
+**Return Statements** ✅:
+```flow
+if (inputs.fastPath) {
+  return {result: "cached"}
+}
+result = await Task.run("compute", {})
+return result
+```
+
+**Parallel Execution** (Future):
 ```flow
 // Wait for all
-[payment, inventory] = all([
-  task("charge", { orderId }),
-  task("reserve", { orderId })
+[payment, inventory] = await Task.all([
+  Task.run("charge", {orderId: orderId}),
+  Task.run("reserve", {orderId: orderId})
 ])
 
 // Wait for first
-winner = any([
-  task("provider1", { request }),
-  task("provider2", { request })
+winner = await Task.any([
+  Task.run("provider1", {request: request}),
+  Task.run("provider2", {request: request})
 ])
 ```
 
@@ -626,8 +656,8 @@ winner = any([
 **❌ No Nested Awaits**:
 ```flow
 // FORBIDDEN
-task("outer", {
-  callback: task("inner")  // ❌ Creates call stack
+await Task.run("outer", {
+  callback: await Task.run("inner", {})  // ❌ Creates call stack
 })
 ```
 
@@ -635,26 +665,26 @@ task("outer", {
 ```flow
 // FORBIDDEN
 for (i in range) {
-  task("process", {
-    getValue: () => i  // ❌ Captures scope
+  await Task.run("process", {
+    getValue: () => i  // ❌ Captures scope - not supported
   })
 }
 ```
 
-**❌ No Await Outside Top Level**:
+**❌ No User-Defined Functions**:
 ```flow
 // FORBIDDEN
 function helper() {
-  return task("something")  // ❌ Not at top level
+  return await Task.run("something", {})  // ❌ Not supported
 }
 ```
 
 **✅ All Awaits Must Be Top-Level Statements**:
 ```flow
 // CORRECT
-result1 = task("first", {})
-result2 = task("second", { result1 })
-result3 = task("third", { result2 })
+result1 = await Task.run("first", {})
+result2 = await Task.run("second", {result1: result1})
+result3 = await Task.run("third", {result2: result2})
 ```
 
 ### State Implications

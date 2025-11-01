@@ -240,23 +240,25 @@ task_id = await send_email.queue(to="user@example.com", subject="Hi")
 - Versioning support (for Python workflows)
 - CLI tools
 - Migrations
-- **DSL-based workflows** (basic implementation):
-  - Parser for `.flow` files
+- **DSL-based workflows** ✅:
+  - Full PEG parser for `.flow` files
   - Workflow registration from filesystem
   - Tree-walking interpreter
-  - `task()` and `sleep()` statements (sleep not yet scheduled)
+  - Control flow (if/else, for loops, break/continue)
+  - Variables with lexical scoping
+  - Return statements
+  - Stdlib functions (`Task.run()`, `Task.delay()`)
+  - Semantic validation (separate from parsing)
   - Worker integration (auto-detects DSL vs Python workflows)
   - Flat state serialization
-  - End-to-end working example
+  - End-to-end working examples
 
 ### 📋 Future Roadmap
-- **DSL completion**:
-  - Control flow (if/else, loops)
-  - Expressions and operators
-  - Sleep scheduling implementation
-  - Error handling
-  - Standard library helpers
+- **DSL enhancements**:
+  - Parallel execution (`Task.all()`, `Task.any()`)
+  - Error handling patterns
   - Better error messages
+  - Workflow visualization
 - Additional language adapters (Go, Rust native, Ruby, etc.)
 - Distributed tracing integration
 - Metrics and observability

@@ -18,6 +18,7 @@
 pub mod parser;
 pub mod semantic_validator;
 pub mod executor;
+pub mod stdlib;
 
 pub use parser::{parse_workflow, ParseError};
 pub use semantic_validator::{validate_workflow, ValidationError};

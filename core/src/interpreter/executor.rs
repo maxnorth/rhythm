@@ -4,6 +4,7 @@ use serde_json::{json, Value as JsonValue, Map};
 use crate::db;
 use crate::executions;
 use crate::types::{ExecutionStatus, ExecutionType, CreateExecutionParams};
+use crate::interpreter::stdlib::StdlibRegistry;
 
 /// Result of executing a workflow step
 #[derive(Debug)]
@@ -16,25 +17,6 @@ pub enum StepResult {
     Continue,
 }
 
-/// Standard library of built-in functions
-/// This is an immutable global scope, not part of the snapshot
-/// Functions are organized in namespaces like Task.run(), Sleep.await()
-fn get_stdlib() -> JsonValue {
-    json!({
-        "Task": {
-            "run": {
-                "type": "builtin",
-                "handler": "task"
-            }
-        },
-        "Sleep": {
-            "await": {
-                "type": "builtin",
-                "handler": "sleep"
-            }
-        }
-    })
-}
 
 /// Evaluate a condition expression
 ///
@@ -402,97 +384,13 @@ async fn execute_function_call(
     execution_id: &str,
     pool: &sqlx::PgPool,
 ) -> Result<JsonValue> {
-    // Resolve function from stdlib
-    let stdlib = get_stdlib();
-    let mut current = &stdlib;
-
-    // Navigate through namespace path
-    for part in name_parts {
-        current = current.get(part)
-            .ok_or_else(|| anyhow::anyhow!("Undefined function: {}", name_parts.join(".")))?;
-    }
-
-    // Check if it's a builtin
-    let handler = current.get("handler")
-        .and_then(|h| h.as_str())
-        .ok_or_else(|| anyhow::anyhow!("Function {} is not callable", name_parts.join(".")))?;
-
     // Resolve arguments
     let resolved_args: Vec<JsonValue> = args.iter()
         .map(|arg| resolve_variables(arg, locals))
         .collect();
 
-    // Execute based on handler type
-    match handler {
-        "task" => {
-            // Task.run(task_name, inputs)
-            if resolved_args.is_empty() {
-                anyhow::bail!("Task.run() requires at least a task name");
-            }
-
-            let task_name = resolved_args[0].as_str()
-                .ok_or_else(|| anyhow::anyhow!("Task.run() first argument must be a string (task name)"))?;
-
-            let inputs = if resolved_args.len() > 1 {
-                resolved_args[1].clone()
-            } else {
-                json!({})
-            };
-
-            // Create child task execution
-            let task_id = executions::create_execution(CreateExecutionParams {
-                id: None,
-                exec_type: ExecutionType::Task,
-                function_name: task_name.to_string(),
-                queue: "default".to_string(),
-                priority: 5,
-                args: serde_json::json!([]),
-                kwargs: inputs,
-                max_retries: 3,
-                timeout_seconds: None,
-                parent_workflow_id: Some(execution_id.to_string()),
-            })
-            .await
-            .context("Failed to create task execution")?;
-
-            // Return the task ID
-            Ok(JsonValue::String(task_id))
-        }
-        "sleep" => {
-            // Sleep.await(duration_ms)
-            if resolved_args.is_empty() {
-                anyhow::bail!("Sleep.await() requires a duration in milliseconds");
-            }
-
-            let duration = resolved_args[0].as_i64()
-                .ok_or_else(|| anyhow::anyhow!("Sleep.await() argument must be a number (milliseconds)"))?;
-
-            if duration < 0 {
-                anyhow::bail!("Sleep duration must be non-negative");
-            }
-
-            // Calculate wake time
-            let wake_time = chrono::Utc::now() + chrono::Duration::milliseconds(duration);
-
-            // Update execution to sleep
-            sqlx::query(
-                r#"
-                UPDATE workflow_execution_context
-                SET wake_time = $1
-                WHERE execution_id = $2
-                "#,
-            )
-            .bind(wake_time)
-            .bind(execution_id)
-            .execute(pool)
-            .await
-            .context("Failed to set wake time")?;
-
-            // Return null (sleep doesn't return a value)
-            Ok(JsonValue::Null)
-        }
-        _ => anyhow::bail!("Unknown builtin handler: {}", handler),
-    }
+    // Call the stdlib function
+    StdlibRegistry::call(name_parts, &resolved_args, pool, execution_id).await
 }
 
 /// Execute a single workflow step
@@ -755,7 +653,7 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
                             .context("Failed to suspend workflow")?;
 
                         return Ok(StepResult::Suspended);
-                    } else if name_strings.join(".") == "Sleep.await" {
+                    } else if name_strings.join(".") == "Task.delay" {
                         // Sleep suspends the workflow
                         sqlx::query("UPDATE executions SET status = $1 WHERE id = $2")
                             .bind(&ExecutionStatus::Suspended)
@@ -882,29 +780,6 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
 
                 Ok(StepResult::Continue)
             }
-        }
-        "sleep" => {
-            let duration = statement["duration"].as_i64()
-                .ok_or_else(|| anyhow::anyhow!("Sleep statement missing 'duration' field"))?;
-
-            // For now, just move to next statement immediately
-            // TODO: Implement actual sleep scheduling
-            sqlx::query(
-                r#"
-                UPDATE workflow_execution_context
-                SET statement_index = statement_index + 1
-                WHERE execution_id = $1
-                "#,
-            )
-            .bind(execution_id)
-            .execute(pool.as_ref())
-            .await
-            .context("Failed to advance past sleep")?;
-
-            println!("Sleep({}) - skipping for now", duration);
-
-            // Continue to next step
-            Ok(StepResult::Continue)
         }
         "if" => {
             // Evaluate the condition

@@ -320,7 +320,7 @@ fn validate_function_call(expr: &JsonValue, ctx: &ValidationContext) -> Result<(
     // Validate based on known functions
     match func_name.as_str() {
         "Task.run" => validate_task_run(args, ctx)?,
-        "Sleep.await" => validate_sleep_await(args, ctx)?,
+        "Task.delay" => validate_task_delay(args, ctx)?,
         _ => {
             // Unknown function - could be extensible, so just warn or allow
             // For now, we'll validate the arguments as expressions
@@ -384,12 +384,12 @@ fn validate_task_run(args: &[JsonValue], ctx: &ValidationContext) -> Result<()> 
     Ok(())
 }
 
-/// Validate Sleep.await() function call
-fn validate_sleep_await(args: &[JsonValue], ctx: &ValidationContext) -> Result<()> {
-    // Sleep.await(duration: number)
+/// Validate Task.delay() function call
+fn validate_task_delay(args: &[JsonValue], ctx: &ValidationContext) -> Result<()> {
+    // Task.delay(duration: number)
     if args.len() != 1 {
         return Err(ValidationError::WrongArgumentCount {
-            function: "Sleep.await".to_string(),
+            function: "Task.delay".to_string(),
             expected_min: 1,
             expected_max: 1,
             got: args.len(),
@@ -400,7 +400,7 @@ fn validate_sleep_await(args: &[JsonValue], ctx: &ValidationContext) -> Result<(
     // Argument must be a number
     if !args[0].is_number() && !is_variable_or_expression(&args[0]) {
         return Err(ValidationError::InvalidArgumentType {
-            function: "Sleep.await".to_string(),
+            function: "Task.delay".to_string(),
             argument_index: 0,
             expected: "number (milliseconds)".to_string(),
             got: format!("{:?}", args[0]),
@@ -412,7 +412,7 @@ fn validate_sleep_await(args: &[JsonValue], ctx: &ValidationContext) -> Result<(
     if let Some(duration) = args[0].as_i64() {
         if duration < 0 {
             return Err(ValidationError::Other {
-                message: "Sleep.await() duration must be non-negative".to_string(),
+                message: "Task.delay() duration must be non-negative".to_string(),
                 line: None,
             }.into());
         }
@@ -504,10 +504,10 @@ workflow(ctx, inputs) {
     }
 
     #[test]
-    fn test_validate_sleep_await_valid() {
+    fn test_validate_task_delay_valid() {
         let source = r#"
 workflow(ctx, inputs) {
-    await Sleep.await(1000)
+    await Task.delay(1000)
 }
         "#;
         let ast = parse_workflow(source).unwrap();
@@ -517,11 +517,11 @@ workflow(ctx, inputs) {
     }
 
     #[test]
-    fn test_validate_sleep_await_wrong_type() {
+    fn test_validate_task_delay_wrong_type() {
         // Parser accepts strings as args, so we need to test that validator catches wrong type
         let source = r#"
 workflow(ctx, inputs) {
-    await Sleep.await("not a number")
+    await Task.delay("not a number")
 }
         "#;
         let ast = parse_workflow(source).unwrap();

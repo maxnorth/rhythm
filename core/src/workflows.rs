@@ -512,46 +512,36 @@ mod tests {
     // === SEMANTIC VALIDATION TESTS ===
 
     #[test]
-    fn test_semantic_validation_sleep_wrong_type() {
-        use crate::interpreter::validate_workflow;
-        use serde_json::json;
+    fn test_semantic_validation_delay_wrong_type() {
+        use crate::interpreter::{parse_workflow, validate_workflow};
 
-        // Sleep.await with string instead of number should fail
-        let ast = json!([
-            {
-                "type": "await",
-                "expression": {
-                    "type": "function_call",
-                    "name": ["Sleep", "await"],
-                    "args": ["not a number"]
-                }
-            }
-        ]);
+        let source = r#"
+workflow(ctx, inputs) {
+    await Task.delay("not a number")
+}
+        "#;
+        let ast = parse_workflow(source).unwrap();
+        let ast_json = serde_json::to_value(&ast).unwrap();
 
-        let result = validate_workflow(&ast);
-        assert!(result.is_err(), "Expected validation to fail for Sleep.await with string argument");
+        let result = validate_workflow(&ast_json);
+        assert!(result.is_err(), "Expected validation to fail for Task.delay with string argument");
         let err = result.unwrap_err();
         assert!(err.to_string().contains("expects number"), "Error should mention type mismatch");
     }
 
     #[test]
     fn test_semantic_validation_task_run_missing_args() {
-        use crate::interpreter::validate_workflow;
-        use serde_json::json;
+        use crate::interpreter::{parse_workflow, validate_workflow};
 
-        // Task.run with no arguments should fail
-        let ast = json!([
-            {
-                "type": "expression_statement",
-                "expression": {
-                    "type": "function_call",
-                    "name": ["Task", "run"],
-                    "args": []
-                }
-            }
-        ]);
+        let source = r#"
+workflow(ctx, inputs) {
+    Task.run()
+}
+        "#;
+        let ast = parse_workflow(source).unwrap();
+        let ast_json = serde_json::to_value(&ast).unwrap();
 
-        let result = validate_workflow(&ast);
+        let result = validate_workflow(&ast_json);
         assert!(result.is_err(), "Expected validation to fail for Task.run with no arguments");
         let err = result.unwrap_err();
         assert!(err.to_string().contains("expects 1-2 arguments"), "Error should mention argument count");
@@ -559,17 +549,17 @@ mod tests {
 
     #[test]
     fn test_semantic_validation_break_outside_loop() {
-        use crate::interpreter::validate_workflow;
-        use serde_json::json;
+        use crate::interpreter::{parse_workflow, validate_workflow};
 
-        // Break outside loop should fail
-        let ast = json!([
-            {
-                "type": "break"
-            }
-        ]);
+        let source = r#"
+workflow(ctx, inputs) {
+    break
+}
+        "#;
+        let ast = parse_workflow(source).unwrap();
+        let ast_json = serde_json::to_value(&ast).unwrap();
 
-        let result = validate_workflow(&ast);
+        let result = validate_workflow(&ast_json);
         assert!(result.is_err(), "Expected validation to fail for break outside loop");
         let err = result.unwrap_err();
         assert!(err.to_string().contains("outside of loop"), "Error should mention loop requirement");
@@ -577,28 +567,17 @@ mod tests {
 
     #[test]
     fn test_semantic_validation_undefined_variable() {
-        use crate::interpreter::validate_workflow;
-        use serde_json::json;
+        use crate::interpreter::{parse_workflow, validate_workflow};
 
-        // Using undefined variable should fail
-        let ast = json!([
-            {
-                "type": "await",
-                "expression": {
-                    "type": "function_call",
-                    "name": ["Task", "run"],
-                    "args": ["task1", {
-                        "value": {
-                            "type": "variable",
-                            "name": "undefined_var",
-                            "depth": 0
-                        }
-                    }]
-                }
-            }
-        ]);
+        let source = r#"
+workflow(ctx, inputs) {
+    await Task.run("task1", { value: undefined_var })
+}
+        "#;
+        let ast = parse_workflow(source).unwrap();
+        let ast_json = serde_json::to_value(&ast).unwrap();
 
-        let result = validate_workflow(&ast);
+        let result = validate_workflow(&ast_json);
         assert!(result.is_err(), "Expected validation to fail for undefined variable");
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Undefined variable"), "Error should mention undefined variable");
@@ -606,38 +585,18 @@ mod tests {
 
     #[test]
     fn test_semantic_validation_valid_workflow() {
-        use crate::interpreter::validate_workflow;
-        use serde_json::json;
+        use crate::interpreter::{parse_workflow, validate_workflow};
 
-        // Valid workflow should pass validation
-        let ast = json!([
-            {
-                "type": "assignment",
-                "left": {
-                    "type": "variable",
-                    "name": "result",
-                    "depth": 0
-                },
-                "right": {
-                    "type": "await",
-                    "expression": {
-                        "type": "function_call",
-                        "name": ["Task", "run"],
-                        "args": ["my-task", {}]
-                    }
-                }
-            },
-            {
-                "type": "await",
-                "expression": {
-                    "type": "function_call",
-                    "name": ["Sleep", "await"],
-                    "args": [1000]
-                }
-            }
-        ]);
+        let source = r#"
+workflow(ctx, inputs) {
+    let result = await Task.run("my-task", {})
+    await Task.delay(1000)
+}
+        "#;
+        let ast = parse_workflow(source).unwrap();
+        let ast_json = serde_json::to_value(&ast).unwrap();
 
-        let result = validate_workflow(&ast);
-        assert!(result.is_ok(), "Expected validation to pass for valid workflow");
+        let result = validate_workflow(&ast_json);
+        assert!(result.is_ok(), "Expected validation to pass for valid workflow: {:?}", result.err());
     }
 }

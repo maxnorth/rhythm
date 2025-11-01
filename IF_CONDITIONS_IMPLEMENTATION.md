@@ -203,10 +203,9 @@ comparison_value = {
 ## Future Enhancements
 
 ### Near-term
-1. Support all statement types in if branches (nested ifs, sleep, etc.)
-2. Track multiple awaited tasks in branches properly
-3. Add NOT operator (`!`)
-4. Short-circuit evaluation for && and ||
+1. Add NOT operator (`!`)
+2. Short-circuit evaluation for && and ||
+3. Else-if chains optimization
 
 ### Medium-term
 1. String concatenation operator (`+`)
