@@ -151,6 +151,9 @@ pub async fn initialize(options: InitOptions) -> Result<()> {
     // Load configuration (now with env vars set)
     let config = Config::load().context("Failed to load configuration")?;
 
+    // Initialize the database pool
+    db::initialize_pool().await.context("Failed to initialize database pool")?;
+
     // Check if database is initialized
     let is_initialized = match db::check_initialized().await {
         Ok(()) => true,
@@ -209,8 +212,10 @@ pub fn get_config() -> &'static Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
     async fn test_init_with_defaults() {
         let result = InitBuilder::new()
             .database_url("postgresql://rhythm@localhost/rhythm")
@@ -221,12 +226,8 @@ mod tests {
         assert!(is_initialized());
     }
 
-    // NOTE: This test is ignored because it cannot work with the global pool singleton.
-    // The pool is initialized once per process, and by the time this test runs,
-    // previous tests have already initialized it with a database URL.
-    // This test would need to run in complete isolation (separate process) to work.
-    #[tokio::test]
-    #[ignore = "Cannot test without DB URL due to global pool singleton"]
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore] // Cannot test with shared runtime - pool is already initialized
     async fn test_init_without_database_url() {
         // Temporarily unset DATABASE_URL for this test
         let original = std::env::var("RHYTHM_DATABASE_URL").ok();

@@ -3,11 +3,11 @@ target-dir = "target"
 
 [env]
 RHYTHM_DATABASE_URL = "postgresql://rhythm@localhost/rhythm"
-RHYTHM_DATABASE_MAX_CONNECTIONS = "100"
+RHYTHM_DATABASE_MAX_CONNECTIONS = "1000"
 RHYTHM_DATABASE_MIN_CONNECTIONS = "10"
 RHYTHM_DATABASE_ACQUIRE_TIMEOUT_SECS = "30"
-RHYTHM_DATABASE_IDLE_TIMEOUT_SECS = "30"
-RHYTHM_DATABASE_MAX_LIFETIME_SECS = "1800"
+RHYTHM_DATABASE_IDLE_TIMEOUT_SECS = "60"
+RHYTHM_DATABASE_MAX_LIFETIME_SECS = "600"
 
 # Force sequential test execution to avoid test interference
 # Tests share a global connection pool and database, so parallel execution causes failures

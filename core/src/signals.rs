@@ -104,23 +104,13 @@ pub async fn consume_signal(signal_id: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::test_helpers::*;
     use crate::executions::create_execution;
     use crate::types::{CreateExecutionParams, ExecutionType};
 
-    /// Helper function to reset the test database by truncating all tables
-    async fn reset_db() {
-        let pool = crate::db::get_pool().await.unwrap();
-
-        // Single query with multiple truncates - uses only one connection
-        sqlx::query("TRUNCATE TABLE signals, executions CASCADE")
-            .execute(pool.as_ref())
-            .await
-            .unwrap();
-    }
-
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_send_and_get_signal() {
-        reset_db().await;
+        let _guard = with_test_db().await;
 
         // Create a workflow first
         let params = CreateExecutionParams {

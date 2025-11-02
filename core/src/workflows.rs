@@ -176,6 +176,7 @@ pub async fn start_workflow(
 mod tests {
     use super::*;
     use serde_json::json;
+    
 
     #[test]
     fn test_hash_source() {
@@ -192,13 +193,13 @@ mod tests {
         assert_ne!(hash, hash_source(different));
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_register_empty_workflows() {
         let result = register_workflows(vec![]).await;
         assert!(result.is_ok());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_register_workflow_parsing() {
         let source = r#"workflow(ctx, inputs) {
     Task.run("myTask", { "input": "value" })
@@ -209,7 +210,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_register_workflow_parse_error() {
         let source = "invalid syntax here";
 
@@ -220,7 +221,7 @@ mod tests {
 
     // E2E Tests for various workflow syntax patterns
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_workflow_basic_sequential() {
         let source = r#"workflow(ctx, inputs) {
     await Task.run("task1", { "step": 1 })
@@ -240,7 +241,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_workflow_fire_and_forget() {
         let source = r#"workflow(ctx, inputs) {
     Task.run("task1", { "async": true })
@@ -259,7 +260,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_workflow_mixed_await() {
         let source = r#"workflow(ctx, inputs) {
     await Task.run("init", { "step": 1 })
@@ -282,7 +283,7 @@ mod tests {
         assert_eq!(parsed[5]["type"], "await");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_workflow_variables_simple() {
         let source = r#"workflow(ctx, inputs) {
     let user_id = await Task.run("create_user", { "name": "Alice" })
@@ -310,7 +311,7 @@ mod tests {
         assert_eq!(parsed[1]["expression"]["args"][1]["subject"], "Welcome");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_workflow_variables_multiple() {
         let source = r#"workflow(ctx, inputs) {
     let order_id = await Task.run("create_order", { "amount": 100, "currency": "USD" })
@@ -342,7 +343,7 @@ mod tests {
         assert_eq!(parsed[3]["expression"]["args"][1]["receipt"]["type"], "variable");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_workflow_variables_fire_and_forget() {
         let source = r#"workflow(ctx, inputs) {
     let result1 = Task.run("background_job1", { "priority": "low" })
@@ -365,7 +366,7 @@ mod tests {
         assert_eq!(parsed[2]["type"], "await");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_workflow_json_all_types() {
         let source = r#"workflow(ctx, inputs) {
     await Task.run("test_types", {
@@ -412,7 +413,7 @@ mod tests {
         assert_eq!(obj["count"], 10);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_workflow_variables_in_complex_json() {
         let source = r#"workflow(ctx, inputs) {
     let user_id = await Task.run("get_user", { "email": "test@example.com" })
@@ -459,7 +460,7 @@ mod tests {
         assert_eq!(inputs["mixed"][3], true);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_workflow_comments_and_whitespace() {
         let source = r#"workflow(ctx, inputs) {
     // This is a comment
@@ -477,7 +478,7 @@ mod tests {
         assert_eq!(parsed[1]["expression"]["args"][0], "task2");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_workflow_single_quotes() {
         let source = r#"workflow(ctx, inputs) {
     await Task.run('task_with_single_quotes', { 'key': 'value' })
@@ -489,7 +490,7 @@ mod tests {
         assert_eq!(parsed[0]["expression"]["args"][1]["key"], "value");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_workflow_variable_naming_conventions() {
         let source = r#"workflow(ctx, inputs) {
     let snake_case_var = await Task.run("test1", {})
