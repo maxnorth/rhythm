@@ -13,6 +13,7 @@ from rhythm.rust_bridge import RustBridge
 from rhythm.models import Execution, ExecutionType, WorkerStatus
 from rhythm.registry import get_function
 from rhythm.utils import generate_id, calculate_retry_delay
+from rhythm import rhythm_core
 
 logger = logging.getLogger(__name__)
 
@@ -303,8 +304,10 @@ class Worker:
         try:
             logger.info(f"Executing {execution.type} {execution.id}: {execution.function_name}")
 
-            # Execute based on type
-            if execution.type == ExecutionType.WORKFLOW:
+            # Check for builtin task types first
+            if execution.function_name == "builtin.resume_workflow":
+                await self._execute_builtin_resume_workflow(execution)
+            elif execution.type == ExecutionType.WORKFLOW:
                 # DSL-based workflow
                 await self._execute_dsl_workflow(execution)
             else:
@@ -333,6 +336,29 @@ class Worker:
         except asyncio.TimeoutError:
             raise TimeoutError(f"Execution timed out after {timeout} seconds")
 
+    async def _execute_builtin_resume_workflow(self, execution: Execution):
+        """Execute builtin.resume_workflow - resume a suspended workflow"""
+        logger.info(f"Executing builtin.resume_workflow for execution {execution.id}")
+
+        # Extract workflow_id from args (first element)
+        if not execution.args or len(execution.args) == 0:
+            raise ValueError("builtin.resume_workflow requires workflow_id in args[0]")
+
+        workflow_id = execution.args[0]
+        logger.info(f"Resuming workflow {workflow_id}")
+
+        # Call Rust execute_workflow_step to resume the workflow
+        result_str = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: rhythm_core.execute_workflow_step_sync(workflow_id)
+        )
+
+        logger.info(f"Resume workflow result: {result_str}")
+
+        # Mark the resume task itself as completed
+        # The workflow's state is managed by the Rust executor
+        await self._complete_execution(execution, {"status": "resumed", "result": result_str})
+
     async def _execute_dsl_workflow(self, execution: Execution):
         """Execute a DSL-based workflow by calling Rust executor"""
         logger.info(f"Executing DSL workflow {execution.id}")
@@ -340,7 +366,7 @@ class Worker:
         # Call Rust execute_workflow_step
         result_str = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: __import__('rhythm').rhythm_core.execute_workflow_step_sync(execution.id)
+            lambda: rhythm_core.execute_workflow_step_sync(execution.id)
         )
 
         logger.info(f"DSL workflow step result: {result_str}")

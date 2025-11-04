@@ -5,16 +5,36 @@ use uuid::Uuid;
 use crate::db::get_pool;
 
 /// Complete an execution successfully
+///
+/// Atomically marks the execution as completed and enqueues a resume task
+/// for the parent workflow (if any). Uses a CTE to perform both operations
+/// in a single round-trip to the database.
 pub async fn complete_execution(execution_id: &str, result: JsonValue) -> Result<()> {
     let pool = get_pool().await?;
 
     sqlx::query(
         r#"
-        UPDATE executions
-        SET status = 'completed',
-            result = $1,
-            completed_at = NOW()
-        WHERE id = $2
+        WITH completed_task AS (
+            UPDATE executions
+            SET status = 'completed',
+                result = $1,
+                completed_at = NOW()
+            WHERE id = $2
+            RETURNING parent_workflow_id
+        )
+        INSERT INTO executions (id, type, function_name, queue, status, args, kwargs, priority, max_retries)
+        SELECT
+            gen_random_uuid()::text,
+            'task',
+            'builtin.resume_workflow',
+            'system',
+            'pending',
+            jsonb_build_array(parent_workflow_id),
+            '{}'::jsonb,
+            10,
+            0
+        FROM completed_task
+        WHERE parent_workflow_id IS NOT NULL
         "#,
     )
     .bind(result)
@@ -81,14 +101,30 @@ pub async fn fail_execution(execution_id: &str, error: JsonValue, retry: bool) -
         .await
         .context("Failed to update execution for retry")?;
     } else {
-        // Mark as permanently failed
+        // Mark as permanently failed and enqueue resume task for parent workflow
         sqlx::query(
             r#"
-            UPDATE executions
-            SET status = 'failed',
-                error = $1,
-                completed_at = NOW()
-            WHERE id = $2
+            WITH failed_task AS (
+                UPDATE executions
+                SET status = 'failed',
+                    error = $1,
+                    completed_at = NOW()
+                WHERE id = $2
+                RETURNING parent_workflow_id
+            )
+            INSERT INTO executions (id, type, function_name, queue, status, args, kwargs, priority, max_retries)
+            SELECT
+                gen_random_uuid()::text,
+                'task',
+                'builtin.resume_workflow',
+                'system',
+                'pending',
+                jsonb_build_array(parent_workflow_id),
+                '{}'::jsonb,
+                10,
+                0
+            FROM failed_task
+            WHERE parent_workflow_id IS NOT NULL
             "#,
         )
         .bind(&error)
