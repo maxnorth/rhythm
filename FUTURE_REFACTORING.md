@@ -2,6 +2,29 @@
 
 This document tracks design improvements and refactoring work to be done later.
 
+## Parser Improvements
+
+**Priority:** Medium
+**Status:** To Do
+
+### Issue: Parse errors should be semantic validation errors
+
+Currently the parser rejects workflows with helpful error messages at parse time, but these should really be semantic validation errors:
+
+1. **Function signature validation**: `workflow test_name(inputs)` is rejected as a parse error, but the syntax is valid - it should parse and then fail semantic validation with "workflow names are not supported in signature" or similar
+2. **Assignment of await expressions**: `result = await Task.run()` is rejected as a parse error ("expected statement"), but this is valid syntax that should parse and potentially be supported
+
+**Desired behavior:**
+- Parser should accept any syntactically valid JavaScript-like code
+- Semantic validator should check:
+  - Workflow signature is `workflow(ctx, inputs)`
+  - Unsupported features are used (if `result = await` is not supported yet)
+  - Type checking and other semantic rules
+
+This separation makes error messages clearer and makes it easier to add language features incrementally.
+
+---
+
 ## Separate Execution Queue Table
 
 **Priority:** High (performance-critical)
