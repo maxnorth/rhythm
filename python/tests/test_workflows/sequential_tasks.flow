@@ -1,0 +1,6 @@
+workflow(ctx, inputs) {
+  let step1 = await Task.run("increment", {value: inputs.start})
+  let step2 = await Task.run("increment", {value: step1.result})
+  let step3 = await Task.run("increment", {value: step2.result})
+  return step3
+}

@@ -39,8 +39,8 @@ pub async fn task_run(
         function_name: task_name.to_string(),
         queue: "default".to_string(),
         priority: 5,
-        args: json!([]),
-        kwargs: inputs,
+        args: json!([inputs]),  // Pass inputs as args[0], not as kwargs
+        kwargs: json!({}),
         max_retries: 3,
         timeout_seconds: None,
         parent_workflow_id: Some(execution_id.to_string()),

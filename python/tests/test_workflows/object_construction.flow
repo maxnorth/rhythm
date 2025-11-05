@@ -1,0 +1,10 @@
+workflow(ctx, inputs) {
+  let firstName = await Task.run("get_first_name", {user_id: inputs.user_id})
+  let lastName = await Task.run("get_last_name", {user_id: inputs.user_id})
+  let formatted = await Task.run("format_name", {
+    first: firstName.name,
+    last: lastName.name,
+    title: inputs.title
+  })
+  return formatted
+}

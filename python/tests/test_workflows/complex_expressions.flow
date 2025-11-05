@@ -1,0 +1,7 @@
+workflow(ctx, inputs) {
+  let a = await Task.run("get_number", {key: "a"})
+  let b = await Task.run("get_number", {key: "b"})
+  let sum = await Task.run("add", {a: a.value, b: b.value})
+  let doubled = await Task.run("multiply", {a: sum.result, b: 2})
+  return doubled
+}

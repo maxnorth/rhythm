@@ -1,0 +1,4 @@
+workflow(ctx, inputs) {
+  let result = await Task.run("get_defaults", {})
+  return result
+}

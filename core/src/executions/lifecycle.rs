@@ -60,14 +60,30 @@ pub async fn complete_executions_batch(completions: Vec<(String, JsonValue)>) ->
 
     sqlx::query(
         r#"
-        UPDATE executions
-        SET status = 'completed',
-            result = data.result,
-            completed_at = NOW()
-        FROM (
-            SELECT UNNEST($1::text[]) as id, UNNEST($2::jsonb[]) as result
-        ) data
-        WHERE executions.id = data.id
+        WITH completed_tasks AS (
+            UPDATE executions
+            SET status = 'completed',
+                result = data.result,
+                completed_at = NOW()
+            FROM (
+                SELECT UNNEST($1::text[]) as id, UNNEST($2::jsonb[]) as result
+            ) data
+            WHERE executions.id = data.id
+            RETURNING parent_workflow_id
+        )
+        INSERT INTO executions (id, type, function_name, queue, status, args, kwargs, priority, max_retries)
+        SELECT
+            gen_random_uuid()::text,
+            'task',
+            'builtin.resume_workflow',
+            'system',
+            'pending',
+            jsonb_build_array(parent_workflow_id),
+            '{}'::jsonb,
+            10,
+            0
+        FROM completed_tasks
+        WHERE parent_workflow_id IS NOT NULL
         "#,
     )
     .bind(&ids)

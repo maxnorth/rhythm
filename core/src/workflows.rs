@@ -162,13 +162,6 @@ pub async fn start_workflow(
     .await
     .context("Failed to create workflow execution context")?;
 
-    // 4. Send notification to default queue
-    sqlx::query("NOTIFY \"default\", $1")
-        .bind(&execution_id)
-        .execute(pool.as_ref())
-        .await
-        .ok(); // Don't fail if notify fails
-
     Ok(execution_id)
 }
 

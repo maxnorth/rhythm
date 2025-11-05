@@ -238,10 +238,16 @@ fn resolve_member_access(access: &JsonValue, locals: &JsonValue) -> JsonValue {
         None => return JsonValue::Null,
     };
 
-    // Start with the base variable
-    let mut current = match locals.get(base) {
-        Some(val) => val.clone(),
-        None => return JsonValue::Null,
+    // Start with the base variable - check if it's a top-level special variable or in scope_stack
+    let mut current = if base == "inputs" || base == "ctx" {
+        // Special top-level variables
+        match locals.get(base) {
+            Some(val) => val.clone(),
+            None => return JsonValue::Null,
+        }
+    } else {
+        // Regular variable - look it up in scope_stack (depth 0 for now, we don't have depth info here)
+        lookup_scoped_variable(base, 0, locals)
     };
 
     // Navigate through the path (null-safe)
@@ -419,6 +425,24 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
     let (workflow_def_id, statement_index, mut locals, awaiting_task_id) = context
         .ok_or_else(|| anyhow::anyhow!("Workflow context not found for execution {}", execution_id))?;
 
+    // On first execution, initialize inputs from the execution's kwargs
+    if statement_index == 0 && !locals.get("inputs").is_some() {
+        // Load execution to get kwargs (which contains the workflow inputs)
+        let exec_info: Option<(JsonValue,)> = sqlx::query_as(
+            "SELECT kwargs FROM executions WHERE id = $1"
+        )
+        .bind(execution_id)
+        .fetch_optional(pool.as_ref())
+        .await
+        .context("Failed to load execution info")?;
+
+        if let Some((kwargs,)) = exec_info {
+            if let Some(obj) = locals.as_object_mut() {
+                obj.insert("inputs".to_string(), kwargs);
+            }
+        }
+    }
+
     // Ensure scope_stack exists (migrate old workflows if needed)
     ensure_scope_stack(&mut locals);
 
@@ -453,13 +477,26 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
 
                 // Get the current statement (the one that created the task we were awaiting)
                 if let Some(statement) = statements.get(statement_index as usize) {
-                    if let Some(var_name) = statement.get("assign_to").and_then(|v| v.as_str()) {
-                        // Get the scope depth for this variable (if available)
+                    // Check if this is an assignment statement (new format)
+                    let statement_type = statement.get("type").and_then(|v| v.as_str());
+
+                    if statement_type == Some("assignment") {
+                        // New format: {"type": "assignment", "left": {"name": "x", "depth": 0}, ...}
+                        if let Some(left) = statement.get("left") {
+                            if let Some(var_name) = left.get("name").and_then(|v| v.as_str()) {
+                                let depth = left.get("depth")
+                                    .and_then(|v| v.as_u64())
+                                    .map(|d| d as usize);
+
+                                assign_variable(&mut locals, var_name, task_result.unwrap_or(JsonValue::Null), depth);
+                            }
+                        }
+                    } else if let Some(var_name) = statement.get("assign_to").and_then(|v| v.as_str()) {
+                        // Old format: {"assign_to": "x", ...}
                         let depth = statement.get("assign_to_depth")
                             .and_then(|v| v.as_u64())
                             .map(|d| d as usize);
 
-                        // Store the task result in the correct scope
                         assign_variable(&mut locals, var_name, task_result.unwrap_or(JsonValue::Null), depth);
                     }
                 }
@@ -578,11 +615,76 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
             let right = statement.get("right")
                 .ok_or_else(|| anyhow::anyhow!("Assignment missing 'right' field"))?;
 
-            // Evaluate the right side expression
-            let value = resolve_variables(right, &locals);
+            // Check if right side is an await expression
+            let right_type = right.get("type").and_then(|v| v.as_str());
 
-            // Assign to the correct scope
-            assign_variable(&mut locals, var_name, value, Some(depth));
+            if right_type == Some("await") {
+                // Handle: let var = await Task.run(...)
+                // This needs to execute the task and suspend
+                let expression = right.get("expression")
+                    .ok_or_else(|| anyhow::anyhow!("Await expression missing 'expression' field"))?;
+
+                let expr_type = expression.get("type")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("Await expression missing 'type' field"))?;
+
+                if expr_type == "function_call" {
+                    // Execute the function call
+                    let name_parts = expression.get("name")
+                        .and_then(|v| v.as_array())
+                        .ok_or_else(|| anyhow::anyhow!("Function call missing 'name' field"))?;
+
+                    let name_strings: Vec<String> = name_parts.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+
+                    let args = expression.get("args")
+                        .and_then(|v| v.as_array())
+                        .ok_or_else(|| anyhow::anyhow!("Function call missing 'args' field"))?;
+
+                    let task_id = execute_function_call(&name_strings, args, &locals, execution_id, pool.as_ref()).await?;
+
+                    // For Task.run(), we need to await the result and assign it
+                    if name_strings.join(".") == "Task.run" {
+                        // Suspend workflow and wait for task to complete
+                        let task_id_str = task_id.as_str()
+                            .ok_or_else(|| anyhow::anyhow!("Task.run() should return a task ID string"))?;
+
+                        // Store assignment info in the statement for when we resume
+                        // Update context to mark which variable to assign to
+                        sqlx::query(
+                            r#"
+                            UPDATE workflow_execution_context
+                            SET awaiting_task_id = $1
+                            WHERE execution_id = $2
+                            "#,
+                        )
+                        .bind(task_id_str)
+                        .bind(execution_id)
+                        .execute(pool.as_ref())
+                        .await
+                        .context("Failed to update workflow context")?;
+
+                        sqlx::query("UPDATE executions SET status = $1 WHERE id = $2")
+                            .bind(&ExecutionStatus::Suspended)
+                            .bind(execution_id)
+                            .execute(pool.as_ref())
+                            .await
+                            .context("Failed to suspend workflow")?;
+
+                        return Ok(StepResult::Suspended);
+                    } else {
+                        // Non-suspending function - assign immediately
+                        assign_variable(&mut locals, var_name, task_id, Some(depth));
+                    }
+                } else {
+                    anyhow::bail!("Assignment with await only supports function calls, got: {}", expr_type);
+                }
+            } else {
+                // Regular assignment: evaluate the right side expression
+                let value = resolve_variables(right, &locals);
+                assign_variable(&mut locals, var_name, value, Some(depth));
+            }
 
             // Update workflow context with new locals
             sqlx::query(

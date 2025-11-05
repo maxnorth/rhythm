@@ -1,0 +1,3 @@
+workflow(ctx, inputs) {
+  return {status: "success", code: 200}
+}

@@ -1,12 +1,10 @@
 """Worker implementation for executing tasks and workflows"""
 
 import asyncio
-import asyncpg
 import logging
 import signal
 from typing import Optional, List
 import traceback
-import os
 
 from rhythm.config import settings
 from rhythm.rust_bridge import RustBridge
@@ -28,11 +26,8 @@ class Worker:
         self.current_executions = 0
         self.listener_task: Optional[asyncio.Task] = None
         self.heartbeat_task: Optional[asyncio.Task] = None
-        self.poll_task: Optional[asyncio.Task] = None
-        self.recovery_task: Optional[asyncio.Task] = None
         self.claimer_task: Optional[asyncio.Task] = None
-        self.notify_conn: Optional[asyncpg.Connection] = None
-        self.notify_event: asyncio.Event = asyncio.Event()
+        self.recovery_task: Optional[asyncio.Task] = None
 
         # Local task queue for prefetching
         self.local_queue: asyncio.Queue = asyncio.Queue(maxsize=settings.worker_max_concurrent * 2)
@@ -53,15 +48,11 @@ class Worker:
         # Register signal handlers
         self._setup_signal_handlers()
 
-        # Setup LISTEN connection
-        await self._setup_listen_connection()
-
         # Start background tasks
         self.heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         self.listener_task = asyncio.create_task(self._listener_loop())
-        self.poll_task = asyncio.create_task(self._poll_loop())
-        self.recovery_task = asyncio.create_task(self._recovery_loop())
         self.claimer_task = asyncio.create_task(self._claimer_loop())
+        self.recovery_task = asyncio.create_task(self._recovery_loop())
         self.completer_task = asyncio.create_task(self._completer_loop())
 
         # Wait for shutdown
@@ -69,9 +60,8 @@ class Worker:
             await asyncio.gather(
                 self.heartbeat_task,
                 self.listener_task,
-                self.poll_task,
-                self.recovery_task,
                 self.claimer_task,
+                self.recovery_task,
                 self.completer_task,
             )
         except asyncio.CancelledError:
@@ -83,16 +73,12 @@ class Worker:
         self.running = False
 
         # Cancel background tasks
-        for task in [self.heartbeat_task, self.listener_task, self.poll_task, self.recovery_task, self.claimer_task, self.completer_task]:
+        for task in [self.heartbeat_task, self.listener_task, self.claimer_task, self.recovery_task, self.completer_task]:
             if task and not task.done():
                 task.cancel()
 
         # Flush any pending completions
         await self._flush_completions()
-
-        # Close LISTEN connection
-        if self.notify_conn:
-            await self.notify_conn.close()
 
         # Update worker status via Rust
         RustBridge.stop_worker(self.worker_id)
@@ -107,29 +93,6 @@ class Worker:
             await asyncio.sleep(0.5)
 
         logger.info(f"Worker {self.worker_id} stopped")
-
-    async def _setup_listen_connection(self):
-        """Setup dedicated connection for LISTEN/NOTIFY"""
-        try:
-            db_url = os.getenv("RHYTHM_DATABASE_URL")
-            if not db_url:
-                logger.warning("RHYTHM_DATABASE_URL not set, LISTEN/NOTIFY disabled")
-                return
-
-            self.notify_conn = await asyncpg.connect(db_url)
-
-            # Setup notification callback
-            def on_notification(conn, pid, channel, payload):
-                self.notify_event.set()
-
-            # Listen on all queues
-            for queue in self.queues:
-                await self.notify_conn.add_listener(queue, on_notification)
-                logger.info(f"Listening on queue: {queue}")
-
-        except Exception as e:
-            logger.warning(f"Failed to setup LISTEN connection: {e}, falling back to polling")
-            self.notify_conn = None
 
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown"""
@@ -194,16 +157,9 @@ class Worker:
                         await self.local_queue.put(execution)
 
                     # If we claimed fewer than requested, no more tasks available
-                    # Wait for notification before trying again
+                    # Wait before trying again (configured poll interval)
                     if len(claimed) < queue_space:
-                        if self.notify_conn:
-                            try:
-                                await asyncio.wait_for(self.notify_event.wait(), timeout=5.0)
-                                self.notify_event.clear()
-                            except asyncio.TimeoutError:
-                                pass
-                        else:
-                            await asyncio.sleep(1.0)
+                        await asyncio.sleep(settings.worker_poll_interval)
                 else:
                     # Queue full, wait for space
                     await asyncio.sleep(0.1)
@@ -213,21 +169,6 @@ class Worker:
             except Exception as e:
                 logger.error(f"Error in claimer loop: {e}")
                 await asyncio.sleep(1)
-
-    async def _poll_loop(self):
-        """Fallback polling loop in case notifications are missed"""
-        while self.running:
-            try:
-                # Poll less aggressively when LISTEN/NOTIFY is working
-                poll_interval = 5.0 if self.notify_conn else settings.worker_poll_interval
-                await asyncio.sleep(poll_interval)
-                # Trigger the claimer to check for work
-                self.notify_event.set()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Error in poll loop: {e}")
-                await asyncio.sleep(5.0)
 
     async def _recovery_loop(self):
         """Periodically check for dead workers and recover their work"""
@@ -363,24 +304,32 @@ class Worker:
         """Execute a DSL-based workflow by calling Rust executor"""
         logger.info(f"Executing DSL workflow {execution.id}")
 
-        # Call Rust execute_workflow_step
-        result_str = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: rhythm_core.execute_workflow_step_sync(execution.id)
-        )
+        # Keep executing steps while workflow wants to continue
+        while True:
+            # Call Rust execute_workflow_step
+            result_str = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: rhythm_core.execute_workflow_step_sync(execution.id)
+            )
 
-        logger.info(f"DSL workflow step result: {result_str}")
+            logger.info(f"DSL workflow step result: {result_str}")
 
-        # Result will be "Suspended", "Completed", or "Continue"
-        # The Rust code handles all state updates, we just need to log
-        if "Completed" in result_str:
-            logger.info(f"DSL workflow {execution.id} completed")
-        elif "Suspended" in result_str:
-            logger.info(f"DSL workflow {execution.id} suspended")
-        elif "Continue" in result_str:
-            # Workflow wants to continue immediately to next step
-            # Schedule it to execute again
-            logger.info(f"DSL workflow {execution.id} continuing to next step")
+            # Result will be "Suspended", "Completed", or "Continue"
+            if "Completed" in result_str:
+                logger.info(f"DSL workflow {execution.id} completed")
+                break
+            elif "Suspended" in result_str:
+                logger.info(f"DSL workflow {execution.id} suspended")
+                break
+            elif "Continue" in result_str:
+                # Workflow wants to continue immediately to next step
+                # Loop and execute again
+                logger.info(f"DSL workflow {execution.id} continuing to next step")
+                continue
+            else:
+                # Unknown result, break to be safe
+                logger.warning(f"Unknown workflow step result: {result_str}")
+                break
 
     async def _complete_execution(self, execution: Execution, result: any):
         """Mark execution as completed via Rust"""
@@ -419,6 +368,13 @@ class Worker:
 
 async def run_worker(queues: list[str], worker_id: Optional[str] = None):
     """Run a worker (main entry point)"""
+    # Ensure Rust bridge is initialized before starting worker
+    # This initializes the database pool without running migrations
+    try:
+        RustBridge.initialize(auto_migrate=False, require_initialized=False)
+    except Exception as e:
+        logger.warning(f"Failed to initialize Rust bridge: {e}")
+
     worker = Worker(queues, worker_id)
 
     try:

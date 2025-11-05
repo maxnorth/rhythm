@@ -1,0 +1,7 @@
+workflow(ctx, inputs) {
+  let data = await Task.run("get_nested_data", {})
+  let value = await Task.run("process_value", {
+    val: data.level1.level2.level3.value
+  })
+  return value
+}

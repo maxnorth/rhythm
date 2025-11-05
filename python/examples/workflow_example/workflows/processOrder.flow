@@ -3,7 +3,7 @@ workflow(ctx, inputs) {
       "orderId": "order-123",
       "amount": 99.99
   })
-  await Task.delay(500)
+  // await Task.delay(500)
   await Task.run("shipOrder", { "orderId": "order-123" })
   Task.run("sendEmail", { "to": "customer@example.com", "subject": "Order shipped!", "body": "Your order is on the way" })
 }

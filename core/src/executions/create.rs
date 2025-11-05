@@ -41,11 +41,7 @@ pub async fn create_execution(params: CreateExecutionParams) -> Result<String> {
 
     match result {
         Some((id, true)) => {
-            // Successfully inserted - send notification
-            sqlx::query(&format!("NOTIFY \"{}\", '{}'", params.queue, id))
-                .execute(pool.as_ref())
-                .await
-                .ok(); // Don't fail if notify fails
+            // Successfully inserted
             Ok(id)
         }
         Some((_, false)) | None => {

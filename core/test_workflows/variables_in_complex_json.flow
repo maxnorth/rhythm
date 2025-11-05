@@ -1,6 +1,6 @@
 // Test: Variables used in nested JSON structures
 // Expected: Variable resolution works in arrays and nested objects
-workflow(ctx, inputs) {
+ workflow(ctx, inputs) {
   let user_id = await Task.run("get_user", { "email": "test@example.com" })
   let config = await Task.run("get_config", { "env": "production" })
 

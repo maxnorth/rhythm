@@ -1,0 +1,9 @@
+workflow(ctx, inputs) {
+  let result = await Task.run("create_record", {
+    id: 123,
+    name: "test",
+    active: true,
+    score: 99.5
+  })
+  return result
+}

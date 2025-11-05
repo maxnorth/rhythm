@@ -1,0 +1,5 @@
+workflow(ctx, inputs) {
+  let user = await Task.run("create_user", {name: inputs.name, age: inputs.age})
+  let greeting = await Task.run("greet_user", {user_name: user.data.name, user_age: user.data.age})
+  return greeting
+}
