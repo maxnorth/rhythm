@@ -3,7 +3,7 @@ Comprehensive workflow test suite covering various DSL syntax and functionality.
 
 ## Test Coverage
 
-### Currently Tested (12 tests passing):
+### Basic Functionality (12 tests):
 1. **test_sequential_tasks**: Simple sequential execution of multiple tasks
 2. **test_property_access**: Accessing nested properties from task results
 3. **test_complex_expressions**: Multiple operations with property access
@@ -17,13 +17,20 @@ Comprehensive workflow test suite covering various DSL syntax and functionality.
 11. **test_empty_object**: Passing empty object {} to tasks
 12. **test_return_literal**: Returning literal object without tasks
 
+### Control Flow (3 tests):
+13. **test_if_simple**: Simple if/else branching
+14. **test_if_nested**: Nested if/else statements
+15. **test_if_with_logical_operators**: If statements with && operators
+
 ### Future Tests (Not Yet Implemented):
-- Conditional logic (if/else)
-- Variable reassignment (without 'let')
-- Array operations
+- For loops (simple iteration)
+- Nested for loops
+- If statements inside for loops
+- Array methods (.concat, .push, .length, etc.)
 - Error handling (try/catch)
 - Parallel execution (Promise.all)
-- Loops (for/while)
+- While loops
+- Break/continue statements
 """
 
 import subprocess
@@ -254,3 +261,55 @@ def test_return_literal(worker_process):
     result = wait_for_workflow_completion(workflow_id)
 
     assert result['result'] == {"status": "success", "code": 200}
+
+
+# ============================================================================
+# Control Flow Tests
+# ============================================================================
+
+def test_if_simple(worker_process):
+    """Test simple if/else branching"""
+    # Test "greater" branch
+    workflow_id = RustBridge.start_workflow("if_simple", {"start": 10})
+    result = wait_for_workflow_completion(workflow_id)
+    # 10 + 1 = 11, 11 > 5, so 11 * 2 = 22
+    assert result['result'] == {"value": 22, "branch": "greater"}
+
+    # Test "less_or_equal" branch
+    workflow_id = RustBridge.start_workflow("if_simple", {"start": 3})
+    result = wait_for_workflow_completion(workflow_id)
+    # 3 + 1 = 4, 4 <= 5, so 4 + 10 = 14
+    assert result['result'] == {"value": 14, "branch": "less_or_equal"}
+
+
+def test_if_nested(worker_process):
+    """Test nested if/else statements"""
+    # Test "high" category
+    workflow_id = RustBridge.start_workflow("if_nested", {"key": "c"})
+    result = wait_for_workflow_completion(workflow_id)
+    # c = 10, 10 > 8
+    assert result['result'] == {"category": "high", "value": 10}
+
+    # Test "low" category
+    workflow_id = RustBridge.start_workflow("if_nested", {"key": "b"})
+    result = wait_for_workflow_completion(workflow_id)
+    # b = 3, 3 <= 5
+    assert result['result'] == {"category": "low", "value": 3}
+
+
+def test_if_with_logical_operators(worker_process):
+    """Test if statements with logical operators (&&)"""
+    # Test adult (18-64)
+    workflow_id = RustBridge.start_workflow("if_with_logical_operators", {"name": "Alice", "age": 30})
+    result = wait_for_workflow_completion(workflow_id)
+    assert result['result'] == {"status": "adult", "eligible": True}
+
+    # Test minor (<18)
+    workflow_id = RustBridge.start_workflow("if_with_logical_operators", {"name": "Bob", "age": 15})
+    result = wait_for_workflow_completion(workflow_id)
+    assert result['result'] == {"status": "minor", "eligible": False}
+
+    # Test senior (>=65)
+    workflow_id = RustBridge.start_workflow("if_with_logical_operators", {"name": "Charlie", "age": 70})
+    result = wait_for_workflow_completion(workflow_id)
+    assert result['result'] == {"status": "senior", "eligible": True}

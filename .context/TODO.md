@@ -477,6 +477,13 @@ These are planned but not actively worked on until Python/Node are mature.
 
 ## Notes
 
+### Future Refactoring Items
+
+**Database schema cleanup** (Low priority - breaking change):
+- [ ] Rename `executions.kwargs` to `executions.inputs` for consistency with DSL workflows
+- [ ] Drop `executions.args` column (unused, deprecated)
+- [x] Drop `workflow_execution_context.statement_index` column (replaced by ast_path) - Migration 6
+
 ### Architectural Decisions Reference
 
 See `.claude/CONTEXT.md` for detailed architectural decisions including:

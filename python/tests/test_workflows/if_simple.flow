@@ -1,0 +1,11 @@
+workflow(ctx, inputs) {
+  let value = await Task.run("increment", {value: inputs.start})
+
+  if (value.result > 5) {
+    let result = await Task.run("multiply", {a: value.result, b: 2})
+    return {value: result.result, branch: "greater"}
+  } else {
+    let result = await Task.run("add", {a: value.result, b: 10})
+    return {value: result.result, branch: "less_or_equal"}
+  }
+}

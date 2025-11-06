@@ -1,0 +1,13 @@
+workflow(ctx, inputs) {
+  let value = await Task.run("get_number", {key: inputs.key})
+
+  if (value.value > 5) {
+    if (value.value > 8) {
+      return {category: "high", value: value.value}
+    } else {
+      return {category: "medium", value: value.value}
+    }
+  } else {
+    return {category: "low", value: value.value}
+  }
+}

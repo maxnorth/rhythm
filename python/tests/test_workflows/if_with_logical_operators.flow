@@ -1,0 +1,13 @@
+workflow(ctx, inputs) {
+  let user = await Task.run("create_user", {name: inputs.name, age: inputs.age})
+
+  if (user.data.age >= 18 && user.data.age < 65) {
+    return {status: "adult", eligible: true}
+  } else {
+    if (user.data.age < 18) {
+      return {status: "minor", eligible: false}
+    } else {
+      return {status: "senior", eligible: true}
+    }
+  }
+}

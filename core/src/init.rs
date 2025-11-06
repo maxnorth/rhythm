@@ -134,11 +134,6 @@ impl Default for InitBuilder {
 ///
 /// Calling this function multiple times is safe - subsequent calls are no-ops.
 pub async fn initialize(options: InitOptions) -> Result<()> {
-    // If already initialized, this is a no-op
-    if INIT_STATE.get().is_some() {
-        return Ok(());
-    }
-
     // Apply options to environment variables so they're used by config loading
     if let Some(url) = &options.database_url {
         std::env::set_var("RHYTHM_DATABASE_URL", url);
@@ -148,11 +143,16 @@ pub async fn initialize(options: InitOptions) -> Result<()> {
         std::env::set_var("RHYTHM_CONFIG_PATH", path);
     }
 
-    // Load configuration (now with env vars set)
-    let config = Config::load().context("Failed to load configuration")?;
+    // If already initialized in this process, skip the rest but still run migrations if requested
+    let already_initialized = INIT_STATE.get().is_some();
 
-    // Initialize the database pool
-    db::initialize_pool().await.context("Failed to initialize database pool")?;
+    if !already_initialized {
+        // Load configuration (now with env vars set)
+        let config = Config::load().context("Failed to load configuration")?;
+
+        // Initialize the database pool
+        db::initialize_pool().await.context("Failed to initialize database pool")?;
+    }
 
     // Check if database is initialized
     let is_initialized = match db::check_initialized().await {
@@ -160,24 +160,29 @@ pub async fn initialize(options: InitOptions) -> Result<()> {
         Err(_) => false,
     };
 
-    // Handle uninitialized database based on options
-    if !is_initialized {
-        if options.auto_migrate {
-            // Automatically run migrations
-            db::migrate()
-                .await
-                .context("Failed to run automatic migrations")?;
-        } else if options.require_initialized {
-            // Fail if database is not initialized
-            anyhow::bail!(
-                "Database has not been initialized\n\n\
-                Please run migrations first using your language adapter:\n\
-                  Python: python -m rhythm migrate\n\
-                  Node:   npx rhythm migrate"
-            );
-        }
-        // If neither auto_migrate nor require_initialized, allow uninitialized database
+    // Handle migrations based on options
+    if options.auto_migrate {
+        // Always run migrations when auto_migrate is true (sqlx migrate is idempotent)
+        db::migrate()
+            .await
+            .context("Failed to run automatic migrations")?;
+    } else if !is_initialized && options.require_initialized {
+        // Fail if database is not initialized
+        anyhow::bail!(
+            "Database has not been initialized\n\n\
+            Please run migrations first using your language adapter:\n\
+              Python: python -m rhythm migrate\n\
+              Node:   npx rhythm migrate"
+        );
     }
+
+    // If we already initialized, we're done
+    if already_initialized {
+        return Ok(());
+    }
+
+    // First time initialization - store config
+    let config = Config::load().context("Failed to load configuration")?;
 
     // Register workflows after migrations (if any provided)
     if !options.workflows.is_empty() {

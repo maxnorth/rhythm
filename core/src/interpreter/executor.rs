@@ -17,6 +17,79 @@ pub enum StepResult {
     Continue,
 }
 
+/// Navigate to a node in the AST using a dot-separated path
+/// Path format: "1.then_statements.0" means statements[1].then_statements[0]
+fn get_node_at_path<'a>(statements: &'a JsonValue, path: &str) -> Option<&'a JsonValue> {
+    if path.is_empty() || path == "0" {
+        return statements.get(0);
+    }
+
+    let segments: Vec<&str> = path.split('.').collect();
+    let mut current = statements;
+
+    for segment in segments {
+        if let Ok(index) = segment.parse::<usize>() {
+            current = current.get(index)?;
+        } else {
+            current = current.get(segment)?;
+        }
+    }
+
+    Some(current)
+}
+
+/// Advance an AST path to the next node at the same level
+/// "1.then_statements.0" -> "1.then_statements.1"
+/// "2" -> "3"
+fn advance_path(path: &str) -> String {
+    if path.is_empty() {
+        return "1".to_string();
+    }
+
+    let mut segments: Vec<String> = path.split('.').map(|s| s.to_string()).collect();
+
+    // Find the last numeric segment and increment it
+    for i in (0..segments.len()).rev() {
+        if let Ok(index) = segments[i].parse::<usize>() {
+            segments[i] = (index + 1).to_string();
+            break;
+        }
+    }
+
+    segments.join(".")
+}
+
+/// Enter a sub-structure (like if branch or for loop)
+/// "1" + "then_statements.0" -> "1.then_statements.0"
+fn enter_path(current_path: &str, sub_path: &str) -> String {
+    if current_path.is_empty() {
+        sub_path.to_string()
+    } else {
+        format!("{}.{}", current_path, sub_path)
+    }
+}
+
+/// Exit from a nested structure to parent level
+/// "1.then_statements.2" -> "1" (when then_statements only has 2 items)
+/// "1" -> "" (at top level)
+fn exit_to_parent_path(path: &str) -> Option<String> {
+    let segments: Vec<&str> = path.split('.').collect();
+
+    if segments.len() <= 1 {
+        return None; // Already at top level
+    }
+
+    // Remove last two segments (e.g., "then_statements" and "0")
+    // to get back to parent statement
+    let parent_segments = &segments[0..segments.len()-2];
+
+    if parent_segments.is_empty() {
+        Some("".to_string())
+    } else {
+        Some(parent_segments.join("."))
+    }
+}
+
 
 /// Evaluate a condition expression
 ///
@@ -174,7 +247,7 @@ fn resolve_variable(var_name: &str, locals: &JsonValue) -> JsonValue {
 
 /// Look up a variable with known scope depth - O(1) operation
 fn lookup_scoped_variable(var_name: &str, depth: usize, locals: &JsonValue) -> JsonValue {
-    // Access scope_stack - this MUST exist (initialized by ensure_scope_stack)
+    // Access scope_stack - this MUST exist (initialized by create_scope_stack)
     let scope_stack = locals.get("scope_stack")
         .and_then(|v| v.as_array())
         .expect("scope_stack must exist in locals");
@@ -338,46 +411,17 @@ fn assign_variable(locals: &mut JsonValue, var_name: &str, value: JsonValue, dep
 
 /// Initialize scope_stack structure in locals if it doesn't exist
 ///
-/// Creates a single global scope (depth 0) and migrates any existing flat variables into it.
-fn ensure_scope_stack(locals: &mut JsonValue) {
-    // Check if scope_stack already exists
-    if locals.get("scope_stack").is_some() {
-        return;
-    }
-
-    // Create new scope_stack with global scope
-    let mut global_variables = Map::new();
-
-    // Migrate existing flat variables to global scope
-    if let Some(obj) = locals.as_object() {
-        for (key, value) in obj.iter() {
-            // Don't migrate special fields like "inputs", "ctx"
-            if key != "inputs" && key != "ctx" && key != "scope_stack" {
-                global_variables.insert(key.clone(), value.clone());
-            }
-        }
-    }
-
-    // Create global scope
+/// Creates a single empty global scope (depth 0).
+fn create_scope_stack(locals: &mut JsonValue) {
+    // Create new scope_stack with empty global scope
     let global_scope = serde_json::json!({
         "depth": 0,
         "scope_type": "global",
-        "variables": global_variables
+        "variables": {}
     });
 
-    // Update locals to use scope_stack
+    // Add scope_stack to locals
     if let Some(obj) = locals.as_object_mut() {
-        // Remove migrated variables
-        let keys_to_remove: Vec<String> = obj.keys()
-            .filter(|k| *k != "inputs" && *k != "ctx")
-            .cloned()
-            .collect();
-
-        for key in keys_to_remove {
-            obj.remove(&key);
-        }
-
-        // Add scope_stack
         obj.insert("scope_stack".to_string(), serde_json::json!([global_scope]));
     }
 }
@@ -399,10 +443,130 @@ async fn execute_function_call(
     StdlibRegistry::call(name_parts, &resolved_args, pool, execution_id).await
 }
 
+/// Handle resumption of a workflow that is waiting for a task to complete
+async fn handle_awaiting_task(
+    execution_id: &str,
+    task_id: &str,
+    workflow_def_id: i32,
+    ast_path: &str,
+    mut locals: JsonValue,
+    pool: &sqlx::PgPool,
+) -> Result<StepResult> {
+    let task_info: Option<(ExecutionStatus, Option<JsonValue>)> = sqlx::query_as(
+        "SELECT status, result FROM executions WHERE id = $1"
+    )
+    .bind(task_id)
+    .fetch_optional(pool)
+    .await
+    .context("Failed to check task status")?;
+
+    match task_info {
+        Some((ExecutionStatus::Completed, task_result)) => {
+            // Check if we need to assign the result to a variable
+            // We need to get the statement that spawned this task to check for assign_to
+            let workflow_def: Option<(JsonValue,)> = sqlx::query_as(
+                "SELECT parsed_steps FROM workflow_definitions WHERE id = $1"
+            )
+            .bind(workflow_def_id)
+            .fetch_optional(pool)
+            .await
+            .context("Failed to load workflow definition")?;
+
+            let (parsed_steps_value,) = workflow_def
+                .ok_or_else(|| anyhow::anyhow!("Workflow definition {} not found", workflow_def_id))?;
+
+            // Get the current statement (the one that created the task we were awaiting)
+            if let Some(statement) = get_node_at_path(&parsed_steps_value, ast_path) {
+                // Check if this is an assignment statement (new format)
+                let statement_type = statement.get("type").and_then(|v| v.as_str());
+
+                if statement_type == Some("assignment") {
+                    // New format: {"type": "assignment", "left": {"name": "x", "depth": 0}, ...}
+                    if let Some(left) = statement.get("left") {
+                        if let Some(var_name) = left.get("name").and_then(|v| v.as_str()) {
+                            let depth = left.get("depth")
+                                .and_then(|v| v.as_u64())
+                                .map(|d| d as usize);
+
+                            assign_variable(&mut locals, var_name, task_result.unwrap_or(JsonValue::Null), depth);
+                        }
+                    }
+                } else if let Some(var_name) = statement.get("assign_to").and_then(|v| v.as_str()) {
+                    // Old format: {"assign_to": "x", ...}
+                    let depth = statement.get("assign_to_depth")
+                        .and_then(|v| v.as_u64())
+                        .map(|d| d as usize);
+
+                    assign_variable(&mut locals, var_name, task_result.unwrap_or(JsonValue::Null), depth);
+                }
+            }
+
+            // Check if we're inside a for loop
+            let scope_stack = locals.get("scope_stack")
+                .and_then(|v| v.as_array());
+            let in_for_loop = scope_stack
+                .and_then(|stack| stack.last())
+                .and_then(|scope| scope.get("scope_type"))
+                .and_then(|t| t.as_str()) == Some("for_loop");
+
+            if in_for_loop {
+                // We're inside a for loop - don't advance ast_path
+                // The loop manages its own iteration. Just clear awaiting_task_id
+                sqlx::query(
+                    r#"
+                    UPDATE workflow_execution_context
+                    SET awaiting_task_id = NULL, locals = $2
+                    WHERE execution_id = $1
+                    "#,
+                )
+                .bind(execution_id)
+                .bind(&locals)
+                .execute(pool)
+                .await
+                .context("Failed to clear awaiting_task_id")?;
+            } else {
+                // Regular task - advance to next statement using path
+                let next_path = advance_path(ast_path);
+                sqlx::query(
+                    r#"
+                    UPDATE workflow_execution_context
+                    SET ast_path = $1, awaiting_task_id = NULL, locals = $2
+                    WHERE execution_id = $3
+                    "#,
+                )
+                .bind(&next_path)
+                .bind(&locals)
+                .bind(execution_id)
+                .execute(pool)
+                .await
+                .context("Failed to advance to next statement")?;
+            }
+
+            // Continue executing from next statement/iteration
+            Box::pin(execute_workflow_step(execution_id)).await
+        }
+        Some((ExecutionStatus::Failed, _)) => {
+            // Task failed, fail the workflow
+            sqlx::query("UPDATE executions SET status = $1 WHERE id = $2")
+                .bind(&ExecutionStatus::Failed)
+                .bind(execution_id)
+                .execute(pool)
+                .await
+                .context("Failed to mark workflow as failed")?;
+
+            Ok(StepResult::Completed) // Workflow is done (failed)
+        }
+        _ => {
+            // Task still running/pending, stay suspended
+            Ok(StepResult::Suspended)
+        }
+    }
+}
+
 /// Execute a single workflow step
 ///
 /// This is the core of the workflow execution engine. It:
-/// 1. Loads the workflow context (which statement we're at)
+/// 1. Loads the workflow context (current AST path position)
 /// 2. Loads and parses the workflow definition
 /// 3. Executes the current statement
 /// 4. Updates state based on what happened
@@ -410,9 +574,9 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
     let pool = db::get_pool().await?;
 
     // 1. Load workflow execution context
-    let context: Option<(i32, i32, JsonValue, Option<String>)> = sqlx::query_as(
+    let context: Option<(i32, String, JsonValue, Option<String>)> = sqlx::query_as(
         r#"
-        SELECT workflow_definition_id, statement_index, locals, awaiting_task_id
+        SELECT workflow_definition_id, ast_path, locals, awaiting_task_id
         FROM workflow_execution_context
         WHERE execution_id = $1
         "#,
@@ -422,11 +586,11 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
     .await
     .context("Failed to load workflow context")?;
 
-    let (workflow_def_id, statement_index, mut locals, awaiting_task_id) = context
+    let (workflow_def_id, mut ast_path, mut locals, awaiting_task_id) = context
         .ok_or_else(|| anyhow::anyhow!("Workflow context not found for execution {}", execution_id))?;
 
     // On first execution, initialize inputs from the execution's kwargs
-    if statement_index == 0 && !locals.get("inputs").is_some() {
+    if ast_path == "0" && !locals.get("inputs").is_some() {
         // Load execution to get kwargs (which contains the workflow inputs)
         let exec_info: Option<(JsonValue,)> = sqlx::query_as(
             "SELECT kwargs FROM executions WHERE id = $1"
@@ -441,124 +605,21 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
                 obj.insert("inputs".to_string(), kwargs);
             }
         }
-    }
 
-    // Ensure scope_stack exists (migrate old workflows if needed)
-    ensure_scope_stack(&mut locals);
+        // Initialize scope_stack on first execution
+        create_scope_stack(&mut locals);
+    }
 
     // If we're awaiting a task, check if it's done
     if let Some(task_id) = awaiting_task_id {
-        let task_info: Option<(ExecutionStatus, Option<JsonValue>)> = sqlx::query_as(
-            "SELECT status, result FROM executions WHERE id = $1"
-        )
-        .bind(&task_id)
-        .fetch_optional(pool.as_ref())
-        .await
-        .context("Failed to check task status")?;
-
-        match task_info {
-            Some((ExecutionStatus::Completed, task_result)) => {
-                // Check if we need to assign the result to a variable
-                // We need to get the statement that spawned this task to check for assign_to
-                let workflow_def: Option<(JsonValue,)> = sqlx::query_as(
-                    "SELECT parsed_steps FROM workflow_definitions WHERE id = $1"
-                )
-                .bind(workflow_def_id)
-                .fetch_optional(pool.as_ref())
-                .await
-                .context("Failed to load workflow definition")?;
-
-                let (parsed_steps_value,) = workflow_def
-                    .ok_or_else(|| anyhow::anyhow!("Workflow definition {} not found", workflow_def_id))?;
-
-                let statements = parsed_steps_value
-                    .as_array()
-                    .ok_or_else(|| anyhow::anyhow!("Parsed steps is not an array"))?;
-
-                // Get the current statement (the one that created the task we were awaiting)
-                if let Some(statement) = statements.get(statement_index as usize) {
-                    // Check if this is an assignment statement (new format)
-                    let statement_type = statement.get("type").and_then(|v| v.as_str());
-
-                    if statement_type == Some("assignment") {
-                        // New format: {"type": "assignment", "left": {"name": "x", "depth": 0}, ...}
-                        if let Some(left) = statement.get("left") {
-                            if let Some(var_name) = left.get("name").and_then(|v| v.as_str()) {
-                                let depth = left.get("depth")
-                                    .and_then(|v| v.as_u64())
-                                    .map(|d| d as usize);
-
-                                assign_variable(&mut locals, var_name, task_result.unwrap_or(JsonValue::Null), depth);
-                            }
-                        }
-                    } else if let Some(var_name) = statement.get("assign_to").and_then(|v| v.as_str()) {
-                        // Old format: {"assign_to": "x", ...}
-                        let depth = statement.get("assign_to_depth")
-                            .and_then(|v| v.as_u64())
-                            .map(|d| d as usize);
-
-                        assign_variable(&mut locals, var_name, task_result.unwrap_or(JsonValue::Null), depth);
-                    }
-                }
-
-                // Check if we're inside a for loop
-                let scope_stack = locals.get("scope_stack")
-                    .and_then(|v| v.as_array());
-                let in_for_loop = scope_stack
-                    .and_then(|stack| stack.last())
-                    .and_then(|scope| scope.get("scope_type"))
-                    .and_then(|t| t.as_str()) == Some("for_loop");
-
-                if in_for_loop {
-                    // We're inside a for loop - don't advance statement_index
-                    // The loop manages its own iteration. Just clear awaiting_task_id
-                    sqlx::query(
-                        r#"
-                        UPDATE workflow_execution_context
-                        SET awaiting_task_id = NULL, locals = $2
-                        WHERE execution_id = $1
-                        "#,
-                    )
-                    .bind(execution_id)
-                    .bind(&locals)
-                    .execute(pool.as_ref())
-                    .await
-                    .context("Failed to clear awaiting_task_id")?;
-                } else {
-                    // Regular task - advance to next statement
-                    sqlx::query(
-                        r#"
-                        UPDATE workflow_execution_context
-                        SET statement_index = statement_index + 1, awaiting_task_id = NULL, locals = $2
-                        WHERE execution_id = $1
-                        "#,
-                    )
-                    .bind(execution_id)
-                    .bind(&locals)
-                    .execute(pool.as_ref())
-                    .await
-                    .context("Failed to advance to next statement")?;
-                }
-
-                // Continue executing from next statement/iteration
-                return Box::pin(execute_workflow_step(execution_id)).await;
-            }
-            Some((ExecutionStatus::Failed, _)) => {
-                // Task failed, fail the workflow
-                sqlx::query("UPDATE executions SET status = $1 WHERE id = $2")
-                    .bind(&ExecutionStatus::Failed)
-                    .bind(execution_id)
-                    .execute(pool.as_ref())
-                    .await
-                    .context("Failed to mark workflow as failed")?;
-
-                return Ok(StepResult::Completed); // Workflow is done (failed)
-            }
-            _ => {
-                // Task still running/pending, stay suspended
-                return Ok(StepResult::Suspended);
-            }
-        }
+        return handle_awaiting_task(
+            execution_id,
+            &task_id,
+            workflow_def_id,
+            &ast_path,
+            locals,
+            pool.as_ref(),
+        ).await;
     }
 
     // 2. Load workflow definition (with cached parsed steps)
@@ -578,23 +639,48 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
         .ok_or_else(|| anyhow::anyhow!("Parsed steps is not an array"))?
         .clone();
 
-    // Check if we've reached the end
-    if statement_index >= statements.len() as i32 {
-        // Workflow is complete - no more statements to execute
-        // Set result to null explicitly (no return statement was encountered)
-        sqlx::query("UPDATE executions SET status = $1, result = $2, completed_at = NOW() WHERE id = $3")
-            .bind(&ExecutionStatus::Completed)
-            .bind(&JsonValue::Null)
-            .bind(execution_id)
-            .execute(pool.as_ref())
-            .await
-            .context("Failed to mark workflow as completed")?;
+    // 3. Navigate to current statement using path
+    let statements_value = serde_json::Value::Array(statements);
+    let statement = match get_node_at_path(&statements_value, &ast_path) {
+        Some(stmt) => stmt.clone(),
+        None => {
+            // Statement path points to non-existent location
+            // Check if we can exit to parent and continue
+            if let Some(parent_path) = exit_to_parent_path(&ast_path) {
+                // Try to advance at parent level
+                let next_parent_path = advance_path(&parent_path);
 
-        return Ok(StepResult::Completed);
-    }
+                // Update path and continue
+                sqlx::query(
+                    r#"
+                    UPDATE workflow_execution_context
+                    SET ast_path = $1
+                    WHERE execution_id = $2
+                    "#,
+                )
+                .bind(&next_parent_path)
+                .bind(execution_id)
+                .execute(pool.as_ref())
+                .await
+                .context("Failed to update AST path after exiting branch")?;
 
-    // 3. Execute current statement
-    let statement = &statements[statement_index as usize];
+                // Recursively execute the next statement
+                return Box::pin(execute_workflow_step(execution_id)).await;
+            } else {
+                // No parent and statement doesn't exist - workflow is complete
+                sqlx::query("UPDATE executions SET status = $1, result = $2, completed_at = NOW() WHERE id = $3")
+                    .bind(&ExecutionStatus::Completed)
+                    .bind(&JsonValue::Null)
+                    .bind(execution_id)
+                    .execute(pool.as_ref())
+                    .await
+                    .context("Failed to mark workflow as completed")?;
+
+                return Ok(StepResult::Completed);
+            }
+        }
+    };
+
     let statement_type = statement["type"].as_str()
         .ok_or_else(|| anyhow::anyhow!("Statement missing 'type' field"))?;
 
@@ -686,15 +772,17 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
                 assign_variable(&mut locals, var_name, value, Some(depth));
             }
 
-            // Update workflow context with new locals
+            // Update workflow context with new locals and advance path
+            let next_path = advance_path(&ast_path);
             sqlx::query(
                 r#"
                 UPDATE workflow_execution_context
-                SET locals = $1, statement_index = statement_index + 1
-                WHERE execution_id = $2
+                SET locals = $1, ast_path = $2
+                WHERE execution_id = $3
                 "#,
             )
             .bind(&locals)
+            .bind(&next_path)
             .bind(execution_id)
             .execute(pool.as_ref())
             .await
@@ -768,7 +856,9 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
                     }
 
                     // Move to next statement
-                    sqlx::query("UPDATE workflow_execution_context SET statement_index = statement_index + 1 WHERE execution_id = $1")
+                    let next_path = advance_path(&ast_path);
+                    sqlx::query("UPDATE workflow_execution_context SET ast_path = $1 WHERE execution_id = $2")
+                        .bind(&next_path)
                         .bind(execution_id)
                         .execute(pool.as_ref())
                         .await
@@ -807,7 +897,9 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
                     let _ = execute_function_call(&name_strings, args, &locals, execution_id, pool.as_ref()).await?;
 
                     // Move to next statement immediately
-                    sqlx::query("UPDATE workflow_execution_context SET statement_index = statement_index + 1 WHERE execution_id = $1")
+                    let next_path = advance_path(&ast_path);
+                    sqlx::query("UPDATE workflow_execution_context SET ast_path = $1 WHERE execution_id = $2")
+                        .bind(&next_path)
                         .bind(execution_id)
                         .execute(pool.as_ref())
                         .await
@@ -868,13 +960,15 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
                 Ok(StepResult::Suspended)
             } else {
                 // Fire-and-forget: move to next statement immediately
+                let next_path = advance_path(&ast_path);
                 sqlx::query(
                     r#"
                     UPDATE workflow_execution_context
-                    SET statement_index = statement_index + 1
-                    WHERE execution_id = $1
+                    SET ast_path = $1
+                    WHERE execution_id = $2
                     "#,
                 )
+                .bind(&next_path)
                 .bind(execution_id)
                 .execute(pool.as_ref())
                 .await
@@ -889,97 +983,56 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
             let is_true = evaluate_condition(condition, &locals)
                 .context("Failed to evaluate if condition")?;
 
-            // Get the appropriate branch
-            let branch_statements = if is_true {
-                statement["then_statements"].as_array()
+            // Determine which branch to enter
+            let branch_key = if is_true {
+                "then_statements"
             } else {
-                statement.get("else_statements")
-                    .and_then(|v| v.as_array())
+                "else_statements"
             };
 
-            // If we have statements to execute, flatten them into the workflow
-            // For now, we'll execute them inline and advance past the if statement
-            if let Some(stmts) = branch_statements {
-                // Execute each statement in the branch
-                for branch_stmt in stmts {
-                    let stmt_type = branch_stmt["type"].as_str()
-                        .ok_or_else(|| anyhow::anyhow!("Branch statement missing 'type' field"))?;
+            // Check if the branch exists and has statements
+            let has_statements = statement.get(branch_key)
+                .and_then(|v| v.as_array())
+                .map(|arr| !arr.is_empty())
+                .unwrap_or(false);
 
-                    match stmt_type {
-                        "task" => {
-                            let task_name = branch_stmt["task"].as_str()
-                                .ok_or_else(|| anyhow::anyhow!("Task statement missing 'task' field"))?;
-                            let inputs_template = branch_stmt["inputs"].clone();
-                            let should_await = branch_stmt["await"].as_bool().unwrap_or(true);
+            if has_statements {
+                // Enter the branch by updating ast_path
+                let branch_path = enter_path(&ast_path, &format!("{}.0", branch_key));
+                sqlx::query(
+                    r#"
+                    UPDATE workflow_execution_context
+                    SET ast_path = $1
+                    WHERE execution_id = $2
+                    "#,
+                )
+                .bind(&branch_path)
+                .bind(execution_id)
+                .execute(pool.as_ref())
+                .await
+                .context("Failed to enter if branch")?;
 
-                            let inputs = resolve_variables(&inputs_template, &locals);
+                // Continue execution in the branch
+                return Box::pin(execute_workflow_step(execution_id)).await;
+            } else {
+                // No statements in branch, move past the if statement
+                let next_path = advance_path(&ast_path);
+                sqlx::query(
+                    r#"
+                    UPDATE workflow_execution_context
+                    SET ast_path = $1
+                    WHERE execution_id = $2
+                    "#,
+                )
+                .bind(&next_path)
+                .bind(execution_id)
+                .execute(pool.as_ref())
+                .await
+                .context("Failed to advance past if statement")?;
 
-                            let task_id = executions::create_execution(CreateExecutionParams {
-                                id: None,
-                                exec_type: ExecutionType::Task,
-                                function_name: task_name.to_string(),
-                                queue: "default".to_string(),
-                                priority: 5,
-                                args: serde_json::json!([]),
-                                kwargs: inputs,
-                                max_retries: 3,
-                                timeout_seconds: None,
-                                parent_workflow_id: Some(execution_id.to_string()),
-                            })
-                            .await
-                            .context("Failed to create task execution")?;
-
-                            if should_await {
-                                // Suspend workflow and wait for task to complete
-                                // NOTE: This is a simplified implementation - it only supports
-                                // awaiting the last task in the branch. For multiple awaited tasks
-                                // in a branch, we'd need more sophisticated state tracking.
-                                sqlx::query(
-                                    r#"
-                                    UPDATE workflow_execution_context
-                                    SET awaiting_task_id = $1
-                                    WHERE execution_id = $2
-                                    "#,
-                                )
-                                .bind(&task_id)
-                                .bind(execution_id)
-                                .execute(pool.as_ref())
-                                .await
-                                .context("Failed to update workflow context")?;
-
-                                sqlx::query("UPDATE executions SET status = $1 WHERE id = $2")
-                                    .bind(&ExecutionStatus::Suspended)
-                                    .bind(execution_id)
-                                    .execute(pool.as_ref())
-                                    .await
-                                    .context("Failed to suspend workflow")?;
-
-                                return Ok(StepResult::Suspended);
-                            }
-                        }
-                        _ => {
-                            // For now, only tasks are supported in if branches
-                            anyhow::bail!("Unsupported statement type in if branch: {}", stmt_type);
-                        }
-                    }
-                }
+                // Continue to next step
+                Ok(StepResult::Continue)
             }
-
-            // Move to next statement after the if
-            sqlx::query(
-                r#"
-                UPDATE workflow_execution_context
-                SET statement_index = statement_index + 1
-                WHERE execution_id = $1
-                "#,
-            )
-            .bind(execution_id)
-            .execute(pool.as_ref())
-            .await
-            .context("Failed to advance past if statement")?;
-
-            // Continue to next step
-            Ok(StepResult::Continue)
         }
         "for" => {
             // For loop execution with scope management and await support
@@ -995,7 +1048,6 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
             let items = collection.as_array()
                 .ok_or_else(|| anyhow::anyhow!("For loop iterable must be an array"))?;
 
-            ensure_scope_stack(&mut locals);
             let scope_stack = locals.get_mut("scope_stack")
                 .and_then(|v| v.as_array_mut())
                 .expect("scope_stack must exist");
@@ -1043,15 +1095,17 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
                     .expect("scope_stack must exist");
                 scope_stack.pop();
 
+                let next_path = advance_path(&ast_path);
                 sqlx::query(
                     r#"
                     UPDATE workflow_execution_context
-                    SET statement_index = statement_index + 1, locals = $2
-                    WHERE execution_id = $1
+                    SET ast_path = $1, locals = $2
+                    WHERE execution_id = $3
                     "#,
                 )
-                .bind(execution_id)
+                .bind(&next_path)
                 .bind(&locals)
+                .bind(execution_id)
                 .execute(pool.as_ref())
                 .await
                 .context("Failed to advance past for loop")?;
@@ -1073,15 +1127,17 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
                             .expect("scope_stack must exist");
                         scope_stack.pop();
 
+                        let next_path = advance_path(&ast_path);
                         sqlx::query(
                             r#"
                             UPDATE workflow_execution_context
-                            SET statement_index = statement_index + 1, locals = $2
-                            WHERE execution_id = $1
+                            SET ast_path = $1, locals = $2
+                            WHERE execution_id = $3
                             "#,
                         )
-                        .bind(execution_id)
+                        .bind(&next_path)
                         .bind(&locals)
+                        .bind(execution_id)
                         .execute(pool.as_ref())
                         .await
                         .context("Failed to exit loop after break")?;
@@ -1124,15 +1180,17 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
                             // No more items - exit loop
                             scope_stack.pop();
 
+                            let next_path = advance_path(&ast_path);
                             sqlx::query(
                                 r#"
                                 UPDATE workflow_execution_context
-                                SET statement_index = statement_index + 1, locals = $2
-                                WHERE execution_id = $1
+                                SET ast_path = $1, locals = $2
+                                WHERE execution_id = $3
                                 "#,
                             )
-                            .bind(execution_id)
+                            .bind(&next_path)
                             .bind(&locals)
+                            .bind(execution_id)
                             .execute(pool.as_ref())
                             .await
                             .context("Failed to advance past for loop")?;
@@ -1248,15 +1306,17 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
                     // All iterations complete - exit loop
                     scope_stack.pop();
 
+                    let next_path = advance_path(&ast_path);
                     sqlx::query(
                         r#"
                         UPDATE workflow_execution_context
-                        SET statement_index = statement_index + 1, locals = $2
-                        WHERE execution_id = $1
+                        SET ast_path = $1, locals = $2
+                        WHERE execution_id = $3
                         "#,
                     )
-                    .bind(execution_id)
+                    .bind(&next_path)
                     .bind(&locals)
+                    .bind(execution_id)
                     .execute(pool.as_ref())
                     .await
                     .context("Failed to advance past for loop")?;
@@ -1284,26 +1344,21 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
             // Assign to the correct scope
             assign_variable(&mut locals, var_name, resolved_value, Some(depth as usize));
 
-            // Update workflow context with new locals
+            // Update workflow context with new locals and advance path
+            let next_path = advance_path(&ast_path);
             sqlx::query(
                 r#"
                 UPDATE workflow_execution_context
-                SET locals = $1
-                WHERE execution_id = $2
+                SET locals = $1, ast_path = $2
+                WHERE execution_id = $3
                 "#,
             )
             .bind(&locals)
+            .bind(&next_path)
             .bind(execution_id)
             .execute(pool.as_ref())
             .await
             .context("Failed to update workflow context with assignment")?;
-
-            // Move to next statement
-            sqlx::query("UPDATE workflow_execution_context SET statement_index = statement_index + 1 WHERE execution_id = $1")
-                .bind(execution_id)
-                .execute(pool.as_ref())
-                .await
-                .context("Failed to increment statement index")?;
 
             Ok(StepResult::Continue)
         }

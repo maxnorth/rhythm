@@ -121,7 +121,7 @@ pub async fn start_workflow(
     // 2. Create execution record
     let execution_id = Uuid::new_v4().to_string();
 
-    sqlx::query(
+    let exec_result = sqlx::query(
         r#"
         INSERT INTO executions (
             id, type, function_name, queue, status, priority,
@@ -141,21 +141,24 @@ pub async fn start_workflow(
     .bind(0) // No retries for workflows
     .bind(None::<i32>) // No timeout
     .execute(pool.as_ref())
-    .await
-    .context("Failed to create workflow execution")?;
+    .await;
+
+    if let Err(e) = exec_result {
+        return Err(anyhow::anyhow!("Failed to create workflow execution (INSERT into executions): {}", e));
+    }
 
     // 3. Create workflow execution context with initial state
     sqlx::query(
         r#"
         INSERT INTO workflow_execution_context (
             execution_id, workflow_definition_id,
-            statement_index, locals, awaiting_task_id
+            ast_path, locals, awaiting_task_id
         ) VALUES ($1, $2, $3, $4, $5)
         "#,
     )
     .bind(&execution_id)
     .bind(workflow_def_id)
-    .bind(0) // Start at statement 0
+    .bind("0") // Start at path "0"
     .bind(serde_json::json!({})) // Empty locals initially
     .bind(None::<String>) // Not awaiting any task
     .execute(pool.as_ref())
