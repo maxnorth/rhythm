@@ -17,6 +17,15 @@ pub enum StepResult {
     Continue,
 }
 
+/// Result of evaluating an expression
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExpressionResult {
+    /// Expression evaluated to a value
+    Value(JsonValue),
+    /// Expression suspended (waiting for task to complete)
+    Suspended(String), // task_id
+}
+
 /// Navigate to a node in the AST using a dot-separated path
 /// Path format: "1.then_statements.0" means statements[1].then_statements[0]
 fn get_node_at_path<'a>(statements: &'a JsonValue, path: &str) -> Option<&'a JsonValue> {
@@ -263,6 +272,35 @@ fn lookup_scoped_variable(var_name: &str, depth: usize, locals: &JsonValue) -> J
 
     // Variable not found - return null
     JsonValue::Null
+}
+
+/// Evaluate an expression to a value or suspension point
+///
+/// This is a pure function that:
+/// - Takes an expression AST node and current locals
+/// - Returns ExpressionResult (Value or Suspended)
+/// - Does NOT modify ast_path
+/// - Does NOT write to database
+///
+/// For now, this handles only non-suspending expressions.
+/// Await expression handling will be added in Phase 3.
+pub fn evaluate_expression(expr: &JsonValue, locals: &JsonValue) -> ExpressionResult {
+    // For Phase 2, we'll use resolve_variables for most expression evaluation
+    // This is a placeholder that will be expanded with proper expression handling
+
+    // Literals and simple values - already resolved
+    if expr.is_null() || expr.is_boolean() || expr.is_number() || expr.is_string() {
+        return ExpressionResult::Value(expr.clone());
+    }
+
+    // Arrays and objects - resolve recursively
+    if expr.is_array() || expr.is_object() {
+        let resolved = resolve_variables(expr, locals);
+        return ExpressionResult::Value(resolved);
+    }
+
+    // Default: resolve variables
+    ExpressionResult::Value(resolve_variables(expr, locals))
 }
 
 /// Resolve a for loop iterable specification to get the actual collection
