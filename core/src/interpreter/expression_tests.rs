@@ -1021,4 +1021,190 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_await_task_run() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
+        // await Task.run("taskName", {input: "value"})
+        let expr = json!({
+            "type": "await",
+            "expression": {
+                "type": "task",
+                "method": "run",
+                "args": ["taskName", {"input": "value"}]
+            }
+        });
+
+        let locals = create_locals();
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
+            ExpressionResult::Suspended(task_id) => {
+                // await should suspend on the task
+                assert!(!task_id.is_empty());
+
+                // Verify the task was added to pending_tasks
+                assert_eq!(pending_tasks.len(), 1);
+                assert_eq!(pending_tasks[0].task_id, task_id);
+                assert_eq!(pending_tasks[0].task_type, "run");
+                assert_eq!(pending_tasks[0].args[0], "taskName");
+                assert_eq!(pending_tasks[0].args[1]["input"], "value");
+            },
+            ExpressionResult::Value(_) => panic!("await Task.run should suspend"),
+        }
+    }
+
+    #[test]
+    fn test_await_task_delay() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
+        // await Task.delay(1000)
+        let expr = json!({
+            "type": "await",
+            "expression": {
+                "type": "task",
+                "method": "delay",
+                "args": [1000]
+            }
+        });
+
+        let locals = create_locals();
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
+            ExpressionResult::Suspended(task_id) => {
+                // await should suspend on the delay
+                assert!(!task_id.is_empty());
+
+                // Verify the task was added to pending_tasks
+                assert_eq!(pending_tasks.len(), 1);
+                assert_eq!(pending_tasks[0].task_id, task_id);
+                assert_eq!(pending_tasks[0].task_type, "delay");
+                assert_eq!(pending_tasks[0].args[0], 1000);
+            },
+            ExpressionResult::Value(_) => panic!("await Task.delay should suspend"),
+        }
+    }
+
+    #[test]
+    fn test_await_task_all() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
+        // await Task.all([Task.run("task1"), Task.run("task2")])
+        let expr = json!({
+            "type": "await",
+            "expression": {
+                "type": "task",
+                "method": "all",
+                "args": [
+                    [
+                        {"type": "task", "method": "run", "args": ["task1", {}]},
+                        {"type": "task", "method": "run", "args": ["task2", {}]}
+                    ]
+                ]
+            }
+        });
+
+        let locals = create_locals();
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
+            ExpressionResult::Suspended(task_id) => {
+                // await Task.all should suspend (on first task for now)
+                assert!(!task_id.is_empty());
+
+                // Both Task.run calls should be in pending_tasks
+                assert_eq!(pending_tasks.len(), 2);
+                assert_eq!(pending_tasks[0].task_type, "run");
+                assert_eq!(pending_tasks[0].args[0], "task1");
+                assert_eq!(pending_tasks[1].task_type, "run");
+                assert_eq!(pending_tasks[1].args[0], "task2");
+            },
+            ExpressionResult::Value(_) => panic!("await Task.all should suspend"),
+        }
+    }
+
+    #[test]
+    fn test_await_with_variable() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
+        // await Task.run("taskName", {user_id: user_id})
+        let mut locals = create_locals();
+
+        // Set up a variable in scope
+        locals["scope_stack"][0]["variables"]["user_id"] = json!("user123");
+
+        let expr = json!({
+            "type": "await",
+            "expression": {
+                "type": "task",
+                "method": "run",
+                "args": [
+                    "taskName",
+                    {
+                        "user_id": {"type": "variable", "name": "user_id", "depth": 0}
+                    }
+                ]
+            }
+        });
+
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
+            ExpressionResult::Suspended(task_id) => {
+                // await should suspend on the task
+                assert!(!task_id.is_empty());
+
+                // Verify the variable was resolved in the args
+                assert_eq!(pending_tasks.len(), 1);
+                assert_eq!(pending_tasks[0].args[1]["user_id"], "user123");
+            },
+            ExpressionResult::Value(_) => panic!("await Task.run should suspend"),
+        }
+    }
+
+    #[test]
+    fn test_await_resumption_with_suspended_task() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
+        let expr = json!({
+            "type": "await",
+            "expression": {
+                "type": "task",
+                "method": "run",
+                "args": ["taskName", {}]
+            }
+        });
+
+        // Create locals with __suspended_task set (simulating resumption)
+        let mut locals = create_locals();
+        locals["__suspended_task"] = json!("task-123-456");
+
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
+            ExpressionResult::Suspended(task_id) => {
+                // Should return the suspended task_id
+                assert_eq!(task_id, "task-123-456");
+
+                // Should NOT create new tasks
+                assert_eq!(pending_tasks.len(), 0);
+            },
+            ExpressionResult::Value(_) => panic!("await with __suspended_task should stay suspended"),
+        }
+    }
+
+    #[test]
+    fn test_await_resumption_with_suspended_task_object() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
+        let expr = json!({
+            "type": "await",
+            "expression": {
+                "type": "task",
+                "method": "run",
+                "args": ["taskName", {}]
+            }
+        });
+
+        // Create locals with __suspended_task as object (simulating resumption)
+        let mut locals = create_locals();
+        locals["__suspended_task"] = json!({"task_id": "task-789"});
+
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
+            ExpressionResult::Suspended(task_id) => {
+                // Should return the suspended task_id
+                assert_eq!(task_id, "task-789");
+
+                // Should NOT create new tasks
+                assert_eq!(pending_tasks.len(), 0);
+            },
+            ExpressionResult::Value(_) => panic!("await with __suspended_task should stay suspended"),
+        }
+    }
+
 }

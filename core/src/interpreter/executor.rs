@@ -589,6 +589,95 @@ pub fn evaluate_expression(
                 }
             }
 
+            // Await expression: {"type": "await", "expression": <expr>}
+            // Returns Suspended(task_id) to signal the workflow should suspend
+            "await" => {
+                // Check if we have a resolved result from a completed task
+                // This happens when execute_workflow_step resolved the suspended task before calling us
+                if let Some(result) = locals.get("__suspended_task_result") {
+                    // Task completed - return the result
+                    return ExpressionResult::Value(result.clone());
+                }
+
+                // Get the expression being awaited
+                let awaited_expr = expr.get("expression")
+                    .ok_or_else(|| anyhow::anyhow!("Await expression missing 'expression' field"))
+                    .map_err(|e| {
+                        eprintln!("Error: {}", e);
+                        return ExpressionResult::Value(JsonValue::Null);
+                    })
+                    .unwrap();
+
+                // Check if we're resuming from a suspended task (still pending)
+                if let Some(suspended_task) = locals.get("__suspended_task") {
+                    // This is a resumption path - check if the task is complete
+                    // The suspended_task should contain the task_id(s) we're waiting for
+
+                    // For now, we'll extract the task_id and return Suspended
+                    // The actual task status checking happens at the execute_workflow_step level
+                    if let Some(task_id) = suspended_task.as_str() {
+                        return ExpressionResult::Suspended(task_id.to_string());
+                    } else if let Some(task_id) = suspended_task.get("task_id").and_then(|v| v.as_str()) {
+                        return ExpressionResult::Suspended(task_id.to_string());
+                    }
+
+                    // If suspended_task exists but doesn't have a task_id, something went wrong
+                    eprintln!("Warning: __suspended_task exists but has no task_id: {:?}", suspended_task);
+                }
+
+                // First evaluation path - evaluate the awaited expression
+                let result = evaluate_expression(awaited_expr, locals, pending_tasks);
+
+                match result {
+                    ExpressionResult::Value(v) => {
+                        // Check what we got back
+                        if let Some(task_id) = v.get("task_id").and_then(|id| id.as_str()) {
+                            // This is a Task.run or Task.delay result - suspend on it
+                            return ExpressionResult::Suspended(task_id.to_string());
+                        } else if v.get("type").and_then(|t| t.as_str()) == Some("task") {
+                            // This is a coordination primitive (Task.all/any/race)
+                            // We need to extract all task_ids and return the coordination structure
+                            // wrapped in a Suspended result
+
+                            // For now, extract the first task_id we can find to suspend on
+                            // The actual coordination logic will be handled by the caller
+                            if let Some(method) = v.get("method").and_then(|m| m.as_str()) {
+                                match method {
+                                    "all" | "any" | "race" => {
+                                        // Extract all task_ids from args
+                                        if let Some(args) = v.get("args").and_then(|a| a.as_array()) {
+                                            if let Some(first_array) = args.get(0).and_then(|a| a.as_array()) {
+                                                // Get first task_id from the array
+                                                if let Some(first_task) = first_array.get(0) {
+                                                    if let Some(task_id) = first_task.get("task_id").and_then(|id| id.as_str()) {
+                                                        // For coordination primitives, we return Suspended with the whole structure
+                                                        // For now, just return the first task_id
+                                                        // TODO: Proper coordination primitive handling
+                                                        return ExpressionResult::Suspended(task_id.to_string());
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        } else {
+                            // Not a task result - this is an error, can't await non-task expressions
+                            eprintln!("Error: Cannot await non-task expression: {:?}", v);
+                            return ExpressionResult::Value(JsonValue::Null);
+                        }
+
+                        // If we get here, we couldn't extract a task_id
+                        return ExpressionResult::Value(v);
+                    }
+                    ExpressionResult::Suspended(task_id) => {
+                        // The awaited expression itself suspended - propagate it
+                        return ExpressionResult::Suspended(task_id);
+                    }
+                }
+            }
+
             // Task expressions: {"type": "task", "method": "run"|"all"|"any"|"race"|"delay", "args": [...]}
             // For Task.run and Task.delay: Add to pending_tasks and return __task_ref
             // For Task.all/any/race: Just evaluate args and return coordination structure
@@ -855,6 +944,144 @@ async fn execute_function_call(
     StdlibRegistry::call(name_parts, &resolved_args, pool, execution_id).await
 }
 
+/// Bulk create all pending tasks
+///
+/// This function creates all tasks that were accumulated during expression evaluation.
+/// Using pre-generated UUIDs ensures idempotency and allows task IDs to be stored in
+/// variables before the tasks are actually created in the database.
+async fn bulk_create_pending_tasks(
+    pending_tasks: &[PendingTask],
+    parent_workflow_id: &str,
+) -> Result<()> {
+    if pending_tasks.is_empty() {
+        return Ok(());
+    }
+
+    // Create all tasks
+    for pending_task in pending_tasks {
+        // Map task_type to function name
+        let function_name = match pending_task.task_type.as_str() {
+            "run" => {
+                // For "run" tasks, the first argument is the function name
+                pending_task.args.get(0)
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("Task.run missing function name"))?
+                    .to_string()
+            }
+            "delay" => "delay".to_string(),
+            _ => anyhow::bail!("Unknown task type: {}", pending_task.task_type),
+        };
+
+        // For Task.run, the second argument is kwargs
+        let kwargs = if pending_task.task_type == "run" {
+            pending_task.args.get(1).cloned().unwrap_or_else(|| json!({}))
+        } else {
+            json!({})
+        };
+
+        // For Task.delay, the first argument is the delay duration
+        let args = if pending_task.task_type == "delay" {
+            pending_task.args.clone()
+        } else {
+            vec![]
+        };
+
+        let params = CreateExecutionParams {
+            id: Some(pending_task.task_id.clone()),
+            exec_type: ExecutionType::Task,
+            function_name,
+            queue: "default".to_string(),
+            priority: 5,
+            args: json!(args),
+            kwargs,
+            max_retries: 3,
+            timeout_seconds: None,
+            parent_workflow_id: Some(parent_workflow_id.to_string()),
+        };
+
+        // Create the task
+        executions::create_execution(params).await?;
+    }
+
+    Ok(())
+}
+
+/// Resolve a suspended task and inject its result into locals
+///
+/// This function checks if a task is complete and, if so, clears __suspended_task
+/// and sets __suspended_task_result in locals for the await expression to consume.
+///
+/// Returns:
+/// - Ok(true) if task is complete (result injected into locals)
+/// - Ok(false) if task is still pending (locals unchanged)
+/// - Err if there was a database error or task failed
+async fn resolve_suspended_task(
+    locals: &mut JsonValue,
+    pool: &sqlx::PgPool,
+) -> Result<bool> {
+    // Check if there's a suspended task
+    let suspended_task = match locals.get("__suspended_task") {
+        Some(task) => task.clone(),
+        None => return Ok(false), // No suspended task, nothing to resolve
+    };
+
+    // Extract task_id from suspended_task
+    let task_id = if let Some(id) = suspended_task.as_str() {
+        id.to_string()
+    } else if let Some(id) = suspended_task.get("task_id").and_then(|v| v.as_str()) {
+        id.to_string()
+    } else {
+        // Suspended task exists but has no task_id - this is an error
+        anyhow::bail!("Suspended task exists but has no task_id: {:?}", suspended_task);
+    };
+
+    // Query task status from database
+    let task_info: Option<(ExecutionStatus, Option<JsonValue>)> = sqlx::query_as(
+        "SELECT status, result FROM executions WHERE id = $1"
+    )
+    .bind(&task_id)
+    .fetch_optional(pool)
+    .await
+    .context("Failed to check task status")?;
+
+    match task_info {
+        Some((ExecutionStatus::Completed, Some(result))) => {
+            // Task completed successfully - inject result and clear suspended_task
+            locals["__suspended_task_result"] = result;
+
+            // Remove __suspended_task from locals
+            if let Some(obj) = locals.as_object_mut() {
+                obj.remove("__suspended_task");
+            }
+
+            Ok(true)
+        }
+        Some((ExecutionStatus::Completed, None)) => {
+            // Task completed but has no result - treat as null
+            locals["__suspended_task_result"] = JsonValue::Null;
+
+            // Remove __suspended_task from locals
+            if let Some(obj) = locals.as_object_mut() {
+                obj.remove("__suspended_task");
+            }
+
+            Ok(true)
+        }
+        Some((ExecutionStatus::Failed, _)) => {
+            // Task failed - this should terminate the workflow
+            anyhow::bail!("Task {} failed", task_id);
+        }
+        Some((_, _)) => {
+            // Task is still pending or in another non-complete state
+            Ok(false)
+        }
+        None => {
+            // Task doesn't exist in database - this shouldn't happen
+            anyhow::bail!("Suspended task {} not found in database", task_id);
+        }
+    }
+}
+
 /// Handle resumption of a workflow that is waiting for a task to complete
 async fn handle_awaiting_task(
     execution_id: &str,
@@ -1020,6 +1247,16 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
 
         // Initialize scope_stack on first execution
         create_scope_stack(&mut locals);
+    }
+
+    // Check if we have a suspended task and try to resolve it
+    // This will inject __suspended_task_result into locals if the task is complete
+    let task_resolved = resolve_suspended_task(&mut locals, pool.as_ref()).await?;
+
+    if task_resolved {
+        // Task completed - we'll continue execution and the await expression
+        // will see __suspended_task_result and return it
+        // Don't return yet, continue with statement execution
     }
 
     // If we're awaiting a task, check if it's done
