@@ -6,7 +6,7 @@
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use crate::interpreter::executor::{evaluate_expression, ExpressionResult};
+    use crate::interpreter::executor::{evaluate_expression, ExpressionResult, PendingTask};
 
     /// Helper to create a basic locals context with scope_stack
     fn create_locals() -> serde_json::Value {
@@ -55,10 +55,12 @@ mod tests {
 
     #[test]
     fn test_null_literal() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
         let expr = json!(null);
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert!(v.is_null()),
             ExpressionResult::Suspended(_) => panic!("Null literal should not suspend"),
         }
@@ -66,18 +68,19 @@ mod tests {
 
     #[test]
     fn test_boolean_literals() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
 
         // Test true
         let expr = json!(true);
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, true),
             ExpressionResult::Suspended(_) => panic!("Boolean literal should not suspend"),
         }
 
         // Test false
         let expr = json!(false);
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, false),
             ExpressionResult::Suspended(_) => panic!("Boolean literal should not suspend"),
         }
@@ -85,32 +88,33 @@ mod tests {
 
     #[test]
     fn test_number_literals() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
 
         // Integer
         let expr = json!(42);
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, 42),
             ExpressionResult::Suspended(_) => panic!("Number literal should not suspend"),
         }
 
         // Float
         let expr = json!(3.14);
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, 3.14),
             ExpressionResult::Suspended(_) => panic!("Number literal should not suspend"),
         }
 
         // Negative
         let expr = json!(-100);
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, -100),
             ExpressionResult::Suspended(_) => panic!("Number literal should not suspend"),
         }
 
         // Zero
         let expr = json!(0);
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, 0),
             ExpressionResult::Suspended(_) => panic!("Number literal should not suspend"),
         }
@@ -118,32 +122,33 @@ mod tests {
 
     #[test]
     fn test_string_literals() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
 
         // Simple string
         let expr = json!("hello");
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, "hello"),
             ExpressionResult::Suspended(_) => panic!("String literal should not suspend"),
         }
 
         // Empty string
         let expr = json!("");
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, ""),
             ExpressionResult::Suspended(_) => panic!("String literal should not suspend"),
         }
 
         // String with special characters
         let expr = json!("hello\nworld\t!");
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, "hello\nworld\t!"),
             ExpressionResult::Suspended(_) => panic!("String literal should not suspend"),
         }
 
         // Unicode
         let expr = json!("你好世界");
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, "你好世界"),
             ExpressionResult::Suspended(_) => panic!("String literal should not suspend"),
         }
@@ -155,10 +160,11 @@ mod tests {
 
     #[test]
     fn test_empty_array() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
         let expr = json!([]);
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 assert!(v.is_array());
                 assert_eq!(v.as_array().unwrap().len(), 0);
@@ -169,10 +175,11 @@ mod tests {
 
     #[test]
     fn test_array_with_literals() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
         let expr = json!([1, "two", true, null]);
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 assert_eq!(v[0], 1);
                 assert_eq!(v[1], "two");
@@ -185,10 +192,11 @@ mod tests {
 
     #[test]
     fn test_nested_arrays() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
         let expr = json!([[1, 2], [3, 4], []]);
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 assert_eq!(v[0][0], 1);
                 assert_eq!(v[0][1], 2);
@@ -202,6 +210,7 @@ mod tests {
 
     #[test]
     fn test_array_with_variable_references() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_vars(json!({
             "x": 10,
             "y": 20
@@ -213,7 +222,7 @@ mod tests {
             100
         ]);
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 assert_eq!(v[0], 10);
                 assert_eq!(v[1], 20);
@@ -229,10 +238,11 @@ mod tests {
 
     #[test]
     fn test_empty_object() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
         let expr = json!({});
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 assert!(v.is_object());
                 assert_eq!(v.as_object().unwrap().len(), 0);
@@ -243,6 +253,7 @@ mod tests {
 
     #[test]
     fn test_object_with_literals() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
         let expr = json!({
             "name": "Alice",
@@ -251,7 +262,7 @@ mod tests {
             "data": null
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 assert_eq!(v["name"], "Alice");
                 assert_eq!(v["age"], 30);
@@ -264,6 +275,7 @@ mod tests {
 
     #[test]
     fn test_nested_objects() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
         let expr = json!({
             "user": {
@@ -274,7 +286,7 @@ mod tests {
             }
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 assert_eq!(v["user"]["name"], "Bob");
                 assert_eq!(v["user"]["settings"]["theme"], "dark");
@@ -285,6 +297,7 @@ mod tests {
 
     #[test]
     fn test_object_with_variable_references() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_vars(json!({
             "username": "alice",
             "score": 100
@@ -296,7 +309,7 @@ mod tests {
             "level": 5
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 assert_eq!(v["user"], "alice");
                 assert_eq!(v["points"], 100);
@@ -308,6 +321,7 @@ mod tests {
 
     #[test]
     fn test_mixed_nested_structures() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_vars(json!({
             "items": ["a", "b", "c"]
         }));
@@ -319,7 +333,7 @@ mod tests {
             }
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 assert_eq!(v["data"]["values"][0], 1);
                 assert_eq!(v["data"]["values"][2]["nested"], true);
@@ -337,6 +351,7 @@ mod tests {
 
     #[test]
     fn test_simple_variable_reference() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_vars(json!({
             "x": 42
         }));
@@ -347,7 +362,7 @@ mod tests {
             "depth": 0
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, 42),
             ExpressionResult::Suspended(_) => panic!("Variable reference should not suspend"),
         }
@@ -355,6 +370,7 @@ mod tests {
 
     #[test]
     fn test_undefined_variable_returns_null() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
 
         let expr = json!({
@@ -363,7 +379,7 @@ mod tests {
             "depth": 0
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert!(v.is_null()),
             ExpressionResult::Suspended(_) => panic!("Undefined variable should return null, not suspend"),
         }
@@ -371,6 +387,7 @@ mod tests {
 
     #[test]
     fn test_variable_with_object_value() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_vars(json!({
             "user": {"name": "Alice", "age": 30}
         }));
@@ -381,7 +398,7 @@ mod tests {
             "depth": 0
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 assert_eq!(v["name"], "Alice");
                 assert_eq!(v["age"], 30);
@@ -392,6 +409,7 @@ mod tests {
 
     #[test]
     fn test_variable_with_array_value() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_vars(json!({
             "items": [1, 2, 3, 4, 5]
         }));
@@ -402,7 +420,7 @@ mod tests {
             "depth": 0
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 assert_eq!(v.as_array().unwrap().len(), 5);
                 assert_eq!(v[2], 3);
@@ -413,6 +431,7 @@ mod tests {
 
     #[test]
     fn test_scoped_variable_reference() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_scopes(vec![
             json!({"x": 10}),  // depth 0 (global)
             json!({"x": 20, "y": 30})   // depth 1 (local)
@@ -424,7 +443,7 @@ mod tests {
             "name": "x",
             "depth": 0
         });
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, 10),
             ExpressionResult::Suspended(_) => panic!("Scoped variable should not suspend"),
         }
@@ -435,7 +454,7 @@ mod tests {
             "name": "x",
             "depth": 1
         });
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, 20),
             ExpressionResult::Suspended(_) => panic!("Scoped variable should not suspend"),
         }
@@ -446,7 +465,7 @@ mod tests {
             "name": "y",
             "depth": 1
         });
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, 30),
             ExpressionResult::Suspended(_) => panic!("Scoped variable should not suspend"),
         }
@@ -454,6 +473,7 @@ mod tests {
 
     #[test]
     fn test_deeply_nested_scopes() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_scopes(vec![
             json!({"a": 1}),      // depth 0
             json!({"b": 2}),      // depth 1
@@ -467,7 +487,7 @@ mod tests {
                 "name": var_name,
                 "depth": depth
             });
-            match evaluate_expression(&expr, &locals) {
+            match evaluate_expression(&expr, &locals, &mut pending_tasks) {
                 ExpressionResult::Value(v) => assert_eq!(v, *expected_value),
                 ExpressionResult::Suspended(_) => panic!("Deep scoped variable should not suspend"),
             }
@@ -482,6 +502,7 @@ mod tests {
 
     #[test]
     fn test_simple_member_access() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_vars(json!({
             "user": {"name": "Alice", "age": 30}
         }));
@@ -492,7 +513,7 @@ mod tests {
             "property": "name"
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, "Alice"),
             ExpressionResult::Suspended(_) => panic!("Member access should not suspend"),
         }
@@ -500,6 +521,7 @@ mod tests {
 
     #[test]
     fn test_nested_member_access() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_vars(json!({
             "data": {
                 "user": {
@@ -524,7 +546,7 @@ mod tests {
             "property": "name"
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, "Bob"),
             ExpressionResult::Suspended(_) => panic!("Nested member access should not suspend"),
         }
@@ -532,6 +554,7 @@ mod tests {
 
     #[test]
     fn test_member_access_on_undefined_returns_null() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_vars(json!({
             "user": {"name": "Alice"}
         }));
@@ -542,7 +565,7 @@ mod tests {
             "property": "undefined_property"
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert!(v.is_null()),
             ExpressionResult::Suspended(_) => panic!("Member access should not suspend"),
         }
@@ -550,6 +573,7 @@ mod tests {
 
     #[test]
     fn test_array_index_access() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_vars(json!({
             "items": ["a", "b", "c"]
         }));
@@ -560,7 +584,7 @@ mod tests {
             "property": "1"
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, "b"),
             ExpressionResult::Suspended(_) => panic!("Array index access should not suspend"),
         }
@@ -572,6 +596,7 @@ mod tests {
 
     #[test]
     fn test_deeply_nested_structures() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
 
         // Create a deeply nested structure
@@ -589,7 +614,7 @@ mod tests {
             }
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 assert_eq!(v["level1"]["level2"]["level3"]["level4"]["level5"]["value"], "deep");
             },
@@ -599,11 +624,12 @@ mod tests {
 
     #[test]
     fn test_large_array() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
         let large_array: Vec<i32> = (0..1000).collect();
         let expr = json!(large_array);
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 let arr = v.as_array().unwrap();
                 assert_eq!(arr.len(), 1000);
@@ -616,6 +642,7 @@ mod tests {
 
     #[test]
     fn test_special_characters_in_keys() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_vars(json!({
             "user-name": "alice",
             "user.email": "alice@example.com",
@@ -627,7 +654,7 @@ mod tests {
             "name": "user-name",
             "depth": 0
         });
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, "alice"),
             ExpressionResult::Suspended(_) => panic!("Variable with special chars should not suspend"),
         }
@@ -635,6 +662,7 @@ mod tests {
 
     #[test]
     fn test_expression_with_null_values() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_vars(json!({
             "a": null,
             "b": {"nested": null}
@@ -645,7 +673,7 @@ mod tests {
             "y": {"type": "variable", "name": "b", "depth": 0}
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 assert!(v["x"].is_null());
                 assert!(v["y"]["nested"].is_null());
@@ -656,6 +684,7 @@ mod tests {
 
     #[test]
     fn test_mixed_types_in_array() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals_with_vars(json!({
             "var1": "string",
             "var2": 42
@@ -672,7 +701,7 @@ mod tests {
             {"key": "value"}
         ]);
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
                 assert!(v[0].is_null());
                 assert_eq!(v[1], true);
@@ -695,6 +724,7 @@ mod tests {
     /*
     #[test]
     fn test_arithmetic_addition() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
         let expr = json!({
             "type": "binary_op",
@@ -703,7 +733,7 @@ mod tests {
             "right": 3
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, 8),
             ExpressionResult::Suspended(_) => panic!("Arithmetic should not suspend"),
         }
@@ -711,25 +741,26 @@ mod tests {
 
     #[test]
     fn test_comparison_operators() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
 
         // Greater than
         let expr = json!({"type": "binary_op", "operator": ">", "left": 5, "right": 3});
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, true),
             _ => panic!(),
         }
 
         // Less than
         let expr = json!({"type": "binary_op", "operator": "<", "left": 5, "right": 3});
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, false),
             _ => panic!(),
         }
 
         // Equality
         let expr = json!({"type": "binary_op", "operator": "==", "left": 5, "right": 5});
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, true),
             _ => panic!(),
         }
@@ -737,6 +768,7 @@ mod tests {
 
     #[test]
     fn test_logical_and() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
         let expr = json!({
             "type": "logical_op",
@@ -745,7 +777,7 @@ mod tests {
             "right": false
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, false),
             ExpressionResult::Suspended(_) => panic!("Logical op should not suspend"),
         }
@@ -753,6 +785,7 @@ mod tests {
 
     #[test]
     fn test_logical_or() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
         let expr = json!({
             "type": "logical_op",
@@ -761,7 +794,7 @@ mod tests {
             "right": false
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, true),
             ExpressionResult::Suspended(_) => panic!("Logical op should not suspend"),
         }
@@ -769,6 +802,7 @@ mod tests {
 
     #[test]
     fn test_logical_not() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let locals = create_locals();
         let expr = json!({
             "type": "unary_op",
@@ -776,7 +810,7 @@ mod tests {
             "operand": true
         });
 
-        match evaluate_expression(&expr, &locals) {
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => assert_eq!(v, false),
             ExpressionResult::Suspended(_) => panic!("Logical not should not suspend"),
         }
@@ -790,6 +824,7 @@ mod tests {
     /*
     #[test]
     fn test_function_call_expression() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         // This will need async support and DB access
         // Placeholder for future implementation
     }
@@ -798,47 +833,192 @@ mod tests {
     // ========================================================================
     // Future: Task Expression Tests (without await)
     // ========================================================================
+    // Task Expression Tests
+    // ========================================================================
+    // Task expressions build Task structures without executing them
 
-    /*
     #[test]
     fn test_task_run_expression() {
-        let locals = create_locals();
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
         let expr = json!({
-            "type": "task_call",
+            "type": "task",
             "method": "run",
-            "args": ["task_name", {"input": "value"}]
+            "args": ["taskName", {"input": "value"}]
         });
 
-        // Should return a Task structure, not suspend
-        // Suspension only happens with await
-        match evaluate_expression(&expr, &locals) {
+        let locals = create_locals();
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
-                assert_eq!(v["type"], "task");
-                assert_eq!(v["method"], "run");
+                // Should return a task_id (UUID)
+                let task_id = v["task_id"].as_str().expect("task_id should be a string");
+                assert!(!task_id.is_empty());
+
+                // Verify task was added to pending_tasks
+                assert_eq!(pending_tasks.len(), 1);
+                assert_eq!(pending_tasks[0].task_id, task_id);
+                assert_eq!(pending_tasks[0].task_type, "run");
+                assert_eq!(pending_tasks[0].args[0], "taskName");
+                assert_eq!(pending_tasks[0].args[1]["input"], "value");
             },
-            ExpressionResult::Suspended(_) => panic!("Task expression (without await) should not suspend"),
+            ExpressionResult::Suspended(_) => panic!("Task.run (without await) should not suspend"),
+        }
+    }
+
+    #[test]
+    fn test_task_run_with_variable_args() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
+        let expr = json!({
+            "type": "task",
+            "method": "run",
+            "args": [
+                "processOrder",
+                {
+                    "orderId": {"type": "variable", "name": "orderId", "depth": 0}
+                }
+            ]
+        });
+
+        let locals = create_locals_with_vars(json!({
+            "orderId": "order-123"
+        }));
+
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
+            ExpressionResult::Value(v) => {
+                let task_id = v["task_id"].as_str().expect("task_id should be a string");
+                assert!(!task_id.is_empty());
+
+                assert_eq!(pending_tasks.len(), 1);
+                assert_eq!(pending_tasks[0].task_id, task_id);
+                assert_eq!(pending_tasks[0].task_type, "run");
+                assert_eq!(pending_tasks[0].args[0], "processOrder");
+                assert_eq!(pending_tasks[0].args[1]["orderId"], "order-123");
+            },
+            ExpressionResult::Suspended(_) => panic!("Task expression should not suspend"),
+        }
+    }
+
+    #[test]
+    fn test_task_delay_expression() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
+        let expr = json!({
+            "type": "task",
+            "method": "delay",
+            "args": [1000]
+        });
+
+        let locals = create_locals();
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
+            ExpressionResult::Value(v) => {
+                let task_id = v["task_id"].as_str().expect("task_id should be a string");
+                assert!(!task_id.is_empty());
+
+                assert_eq!(pending_tasks.len(), 1);
+                assert_eq!(pending_tasks[0].task_id, task_id);
+                assert_eq!(pending_tasks[0].task_type, "delay");
+                assert_eq!(pending_tasks[0].args[0], 1000);
+            },
+            ExpressionResult::Suspended(_) => panic!("Task.delay (without await) should not suspend"),
         }
     }
 
     #[test]
     fn test_task_all_expression() {
-        let locals = create_locals();
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
+        // Task.all([task1, task2])
         let expr = json!({
-            "type": "task_call",
+            "type": "task",
             "method": "all",
-            "args": [[
-                {"type": "task_call", "method": "run", "args": ["task1", {}]},
-                {"type": "task_call", "method": "run", "args": ["task2", {}]}
-            ]]
+            "args": [
+                [
+                    {"type": "task", "method": "run", "args": ["task1", {}]},
+                    {"type": "task", "method": "run", "args": ["task2", {}]}
+                ]
+            ]
         });
 
-        match evaluate_expression(&expr, &locals) {
+        let locals = create_locals();
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
             ExpressionResult::Value(v) => {
+                // Task.all is a coordination primitive, not a task_id
+                // It returns the coordination structure with nested task_ids
                 assert_eq!(v["type"], "task");
                 assert_eq!(v["method"], "all");
+
+                let task1_id = v["args"][0][0]["task_id"].as_str().expect("task1_id should be a string");
+                let task2_id = v["args"][0][1]["task_id"].as_str().expect("task2_id should be a string");
+                assert!(!task1_id.is_empty());
+                assert!(!task2_id.is_empty());
+
+                // Only the 2 Task.run calls should be in pending_tasks
+                assert_eq!(pending_tasks.len(), 2);
+                assert_eq!(pending_tasks[0].task_id, task1_id);
+                assert_eq!(pending_tasks[0].task_type, "run");
+                assert_eq!(pending_tasks[0].args[0], "task1");
+                assert_eq!(pending_tasks[1].task_id, task2_id);
+                assert_eq!(pending_tasks[1].task_type, "run");
+                assert_eq!(pending_tasks[1].args[0], "task2");
             },
             ExpressionResult::Suspended(_) => panic!("Task.all (without await) should not suspend"),
         }
     }
-    */
+
+    #[test]
+    fn test_nested_task_composition() {
+        let mut pending_tasks: Vec<PendingTask> = Vec::new();
+        // Task.all([Task.run("a"), Task.any([Task.run("b"), Task.run("c")])])
+        let expr = json!({
+            "type": "task",
+            "method": "all",
+            "args": [
+                [
+                    {"type": "task", "method": "run", "args": ["taskA", {}]},
+                    {
+                        "type": "task",
+                        "method": "any",
+                        "args": [
+                            [
+                                {"type": "task", "method": "run", "args": ["taskB", {}]},
+                                {"type": "task", "method": "run", "args": ["taskC", {}]}
+                            ]
+                        ]
+                    }
+                ]
+            ]
+        });
+
+        let locals = create_locals();
+        match evaluate_expression(&expr, &locals, &mut pending_tasks) {
+            ExpressionResult::Value(v) => {
+                // Task.all is a coordination primitive, returns structure not task_id
+                assert_eq!(v["type"], "task");
+                assert_eq!(v["method"], "all");
+
+                // Only the 3 Task.run calls should be in pending_tasks
+                assert_eq!(pending_tasks.len(), 3);
+                assert_eq!(pending_tasks[0].task_type, "run");
+                assert_eq!(pending_tasks[0].args[0], "taskA");
+                assert_eq!(pending_tasks[1].task_type, "run");
+                assert_eq!(pending_tasks[1].args[0], "taskB");
+                assert_eq!(pending_tasks[2].task_type, "run");
+                assert_eq!(pending_tasks[2].args[0], "taskC");
+
+                // Verify the coordination structure
+                let task_all_args = &v["args"][0];
+                let taskA_id = task_all_args[0]["task_id"].as_str().expect("taskA_id should be a string");
+                assert_eq!(pending_tasks[0].task_id, taskA_id);
+
+                // Task.any is also a coordination primitive
+                assert_eq!(task_all_args[1]["type"], "task");
+                assert_eq!(task_all_args[1]["method"], "any");
+
+                let task_any_args = &task_all_args[1]["args"][0];
+                let taskB_id = task_any_args[0]["task_id"].as_str().expect("taskB_id should be a string");
+                let taskC_id = task_any_args[1]["task_id"].as_str().expect("taskC_id should be a string");
+                assert_eq!(pending_tasks[1].task_id, taskB_id);
+                assert_eq!(pending_tasks[2].task_id, taskC_id);
+            },
+            ExpressionResult::Suspended(_) => panic!("Nested task composition should not suspend"),
+        }
+    }
+
 }

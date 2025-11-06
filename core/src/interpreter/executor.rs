@@ -26,6 +26,19 @@ pub enum ExpressionResult {
     Suspended(String), // task_id
 }
 
+/// A task that needs to be created during expression evaluation
+#[derive(Debug, Clone)]
+pub struct PendingTask {
+    /// Unique ID for this task (generated upfront)
+    pub task_id: String,
+    /// Type of task: "run", "delay"
+    pub task_type: String,
+    /// Evaluated arguments for the task
+    pub args: Vec<JsonValue>,
+    /// Optional metadata (timeout, retries, etc.)
+    pub options: JsonValue,
+}
+
 /// Navigate to a node in the AST using a dot-separated path
 /// Path format: "1.then_statements.0" means statements[1].then_statements[0]
 fn get_node_at_path<'a>(statements: &'a JsonValue, path: &str) -> Option<&'a JsonValue> {
@@ -276,30 +289,391 @@ fn lookup_scoped_variable(var_name: &str, depth: usize, locals: &JsonValue) -> J
 
 /// Evaluate an expression to a value or suspension point
 ///
-/// This is a pure function that:
-/// - Takes an expression AST node and current locals
+/// This function:
+/// - Takes an expression AST node, current locals, and pending_tasks accumulator
 /// - Returns ExpressionResult (Value or Suspended)
+/// - Accumulates tasks in pending_tasks Vec (for bulk creation later)
 /// - Does NOT modify ast_path
 /// - Does NOT write to database
 ///
-/// For now, this handles only non-suspending expressions.
+/// Task expressions add PendingTask to the Vec and return a __task_ref.
 /// Await expression handling will be added in Phase 3.
-pub fn evaluate_expression(expr: &JsonValue, locals: &JsonValue) -> ExpressionResult {
-    // For Phase 2, we'll use resolve_variables for most expression evaluation
-    // This is a placeholder that will be expanded with proper expression handling
-
+pub fn evaluate_expression(
+    expr: &JsonValue,
+    locals: &JsonValue,
+    pending_tasks: &mut Vec<PendingTask>
+) -> ExpressionResult {
     // Literals and simple values - already resolved
     if expr.is_null() || expr.is_boolean() || expr.is_number() || expr.is_string() {
         return ExpressionResult::Value(expr.clone());
     }
 
-    // Arrays and objects - resolve recursively
-    if expr.is_array() || expr.is_object() {
+    // Check if this is an expression with a "type" field
+    if let Some(expr_type) = expr.get("type").and_then(|v| v.as_str()) {
+        match expr_type {
+            // Variable reference: {"type": "variable", "name": "x", "depth": 0}
+            "variable" => {
+                if let Some(name) = expr.get("name").and_then(|v| v.as_str()) {
+                    let depth = expr.get("depth").and_then(|v| v.as_u64()).map(|d| d as usize);
+
+                    let value = if let Some(d) = depth {
+                        lookup_scoped_variable(name, d, locals)
+                    } else {
+                        resolve_variable(name, locals)
+                    };
+
+                    return ExpressionResult::Value(value);
+                }
+            }
+
+            // Member access: {"type": "member_access", "object": expr, "property": "name"}
+            "member_access" => {
+                // Recursively evaluate the object expression
+                let object_result = evaluate_expression(
+                    expr.get("object").unwrap_or(&JsonValue::Null),
+                    locals,
+                    pending_tasks
+                );
+
+                let object_value = match object_result {
+                    ExpressionResult::Value(v) => v,
+                    ExpressionResult::Suspended(task_id) => {
+                        // If the object expression suspended, propagate it
+                        return ExpressionResult::Suspended(task_id);
+                    }
+                };
+
+                // Get the property name
+                if let Some(property) = expr.get("property").and_then(|v| v.as_str()) {
+                    // Try to access the property
+                    let result = if object_value.is_object() {
+                        object_value.get(property).cloned().unwrap_or(JsonValue::Null)
+                    } else if object_value.is_array() {
+                        // Try to parse property as array index
+                        if let Ok(index) = property.parse::<usize>() {
+                            object_value.get(index).cloned().unwrap_or(JsonValue::Null)
+                        } else {
+                            JsonValue::Null
+                        }
+                    } else {
+                        JsonValue::Null
+                    };
+
+                    return ExpressionResult::Value(result);
+                }
+            }
+
+            // Binary operations: {"type": "binary_op", "operator": "+", "left": expr, "right": expr}
+            "binary_op" => {
+                if let Some(operator) = expr.get("operator").and_then(|v| v.as_str()) {
+                    // Evaluate left and right operands
+                    let left_result = evaluate_expression(
+                        expr.get("left").unwrap_or(&JsonValue::Null),
+                        locals,
+                        pending_tasks
+                    );
+                    let left = match left_result {
+                        ExpressionResult::Value(v) => v,
+                        ExpressionResult::Suspended(task_id) => {
+                            return ExpressionResult::Suspended(task_id);
+                        }
+                    };
+
+                    let right_result = evaluate_expression(
+                        expr.get("right").unwrap_or(&JsonValue::Null),
+                        locals,
+                        pending_tasks
+                    );
+                    let right = match right_result {
+                        ExpressionResult::Value(v) => v,
+                        ExpressionResult::Suspended(task_id) => {
+                            return ExpressionResult::Suspended(task_id);
+                        }
+                    };
+
+                    // Perform the operation
+                    let result = match operator {
+                        // Arithmetic operations
+                        "+" => {
+                            if let (Some(l), Some(r)) = (left.as_f64(), right.as_f64()) {
+                                JsonValue::from(l + r)
+                            } else {
+                                JsonValue::Null
+                            }
+                        }
+                        "-" => {
+                            if let (Some(l), Some(r)) = (left.as_f64(), right.as_f64()) {
+                                JsonValue::from(l - r)
+                            } else {
+                                JsonValue::Null
+                            }
+                        }
+                        "*" => {
+                            if let (Some(l), Some(r)) = (left.as_f64(), right.as_f64()) {
+                                JsonValue::from(l * r)
+                            } else {
+                                JsonValue::Null
+                            }
+                        }
+                        "/" => {
+                            if let (Some(l), Some(r)) = (left.as_f64(), right.as_f64()) {
+                                if r != 0.0 {
+                                    JsonValue::from(l / r)
+                                } else {
+                                    JsonValue::Null // Division by zero
+                                }
+                            } else {
+                                JsonValue::Null
+                            }
+                        }
+                        "%" => {
+                            if let (Some(l), Some(r)) = (left.as_f64(), right.as_f64()) {
+                                if r != 0.0 {
+                                    JsonValue::from(l % r)
+                                } else {
+                                    JsonValue::Null
+                                }
+                            } else {
+                                JsonValue::Null
+                            }
+                        }
+
+                        // Comparison operations
+                        "==" => JsonValue::Bool(left == right),
+                        "!=" => JsonValue::Bool(left != right),
+                        "<" => {
+                            if let (Some(l), Some(r)) = (left.as_f64(), right.as_f64()) {
+                                JsonValue::Bool(l < r)
+                            } else {
+                                JsonValue::Bool(false)
+                            }
+                        }
+                        ">" => {
+                            if let (Some(l), Some(r)) = (left.as_f64(), right.as_f64()) {
+                                JsonValue::Bool(l > r)
+                            } else {
+                                JsonValue::Bool(false)
+                            }
+                        }
+                        "<=" => {
+                            if let (Some(l), Some(r)) = (left.as_f64(), right.as_f64()) {
+                                JsonValue::Bool(l <= r)
+                            } else {
+                                JsonValue::Bool(false)
+                            }
+                        }
+                        ">=" => {
+                            if let (Some(l), Some(r)) = (left.as_f64(), right.as_f64()) {
+                                JsonValue::Bool(l >= r)
+                            } else {
+                                JsonValue::Bool(false)
+                            }
+                        }
+
+                        _ => JsonValue::Null
+                    };
+
+                    return ExpressionResult::Value(result);
+                }
+            }
+
+            // Logical operations: {"type": "logical_op", "operator": "&&", "left": expr, "right": expr}
+            "logical_op" => {
+                if let Some(operator) = expr.get("operator").and_then(|v| v.as_str()) {
+                    match operator {
+                        "&&" => {
+                            // Short-circuit: evaluate left first
+                            let left_result = evaluate_expression(
+                                expr.get("left").unwrap_or(&JsonValue::Null),
+                                locals,
+                                pending_tasks
+                            );
+                            let left = match left_result {
+                                ExpressionResult::Value(v) => v,
+                                ExpressionResult::Suspended(task_id) => {
+                                    return ExpressionResult::Suspended(task_id);
+                                }
+                            };
+
+                            // If left is false, short-circuit
+                            if !left.as_bool().unwrap_or(false) {
+                                return ExpressionResult::Value(JsonValue::Bool(false));
+                            }
+
+                            // Evaluate right
+                            let right_result = evaluate_expression(
+                                expr.get("right").unwrap_or(&JsonValue::Null),
+                                locals,
+                                pending_tasks
+                            );
+                            let right = match right_result {
+                                ExpressionResult::Value(v) => v,
+                                ExpressionResult::Suspended(task_id) => {
+                                    return ExpressionResult::Suspended(task_id);
+                                }
+                            };
+
+                            return ExpressionResult::Value(JsonValue::Bool(
+                                right.as_bool().unwrap_or(false)
+                            ));
+                        }
+                        "||" => {
+                            // Short-circuit: evaluate left first
+                            let left_result = evaluate_expression(
+                                expr.get("left").unwrap_or(&JsonValue::Null),
+                                locals,
+                                pending_tasks
+                            );
+                            let left = match left_result {
+                                ExpressionResult::Value(v) => v,
+                                ExpressionResult::Suspended(task_id) => {
+                                    return ExpressionResult::Suspended(task_id);
+                                }
+                            };
+
+                            // If left is true, short-circuit
+                            if left.as_bool().unwrap_or(false) {
+                                return ExpressionResult::Value(JsonValue::Bool(true));
+                            }
+
+                            // Evaluate right
+                            let right_result = evaluate_expression(
+                                expr.get("right").unwrap_or(&JsonValue::Null),
+                                locals,
+                                pending_tasks
+                            );
+                            let right = match right_result {
+                                ExpressionResult::Value(v) => v,
+                                ExpressionResult::Suspended(task_id) => {
+                                    return ExpressionResult::Suspended(task_id);
+                                }
+                            };
+
+                            return ExpressionResult::Value(JsonValue::Bool(
+                                right.as_bool().unwrap_or(false)
+                            ));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            // Unary operations: {"type": "unary_op", "operator": "!", "operand": expr}
+            "unary_op" => {
+                if let Some(operator) = expr.get("operator").and_then(|v| v.as_str()) {
+                    let operand_result = evaluate_expression(
+                        expr.get("operand").unwrap_or(&JsonValue::Null),
+                        locals,
+                        pending_tasks
+                    );
+                    let operand = match operand_result {
+                        ExpressionResult::Value(v) => v,
+                        ExpressionResult::Suspended(task_id) => {
+                            return ExpressionResult::Suspended(task_id);
+                        }
+                    };
+
+                    let result = match operator {
+                        "!" => JsonValue::Bool(!operand.as_bool().unwrap_or(false)),
+                        "-" => {
+                            if let Some(num) = operand.as_f64() {
+                                JsonValue::from(-num)
+                            } else {
+                                JsonValue::Null
+                            }
+                        }
+                        _ => JsonValue::Null
+                    };
+
+                    return ExpressionResult::Value(result);
+                }
+            }
+
+            // Task expressions: {"type": "task", "method": "run"|"all"|"any"|"race"|"delay", "args": [...]}
+            // For Task.run and Task.delay: Add to pending_tasks and return __task_ref
+            // For Task.all/any/race: Just evaluate args and return coordination structure
+            // Actual task creation happens at suspension/completion (bulk operation)
+            "task" => {
+                if let Some(method) = expr.get("method").and_then(|v| v.as_str()) {
+                    // Get and evaluate arguments
+                    let args_array = expr.get("args")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.clone())
+                        .unwrap_or_else(Vec::new);
+
+                    // Evaluate each argument
+                    let mut evaluated_args = Vec::new();
+                    for arg in args_array {
+                        let arg_result = evaluate_expression(&arg, locals, pending_tasks);
+                        match arg_result {
+                            ExpressionResult::Value(v) => evaluated_args.push(v),
+                            ExpressionResult::Suspended(task_id) => {
+                                // If any argument suspends, propagate it
+                                return ExpressionResult::Suspended(task_id);
+                            }
+                        }
+                    }
+
+                    // Only add Task.run and Task.delay to pending_tasks
+                    // Task.all/any/race are coordination primitives, not scheduled work
+                    if method == "run" || method == "delay" {
+                        // Generate UUID upfront
+                        let task_id = uuid::Uuid::new_v4().to_string();
+
+                        pending_tasks.push(PendingTask {
+                            task_id: task_id.clone(),
+                            task_type: method.to_string(),
+                            args: evaluated_args.clone(),
+                            options: json!({}),
+                        });
+
+                        // Return the task_id directly
+                        return ExpressionResult::Value(json!({
+                            "task_id": task_id
+                        }));
+                    } else {
+                        // For Task.all/any/race, return the coordination structure
+                        return ExpressionResult::Value(json!({
+                            "type": "task",
+                            "method": method,
+                            "args": evaluated_args
+                        }));
+                    }
+                }
+            }
+
+            _ => {
+                // For other types (like "array", "object"), fall through to resolve_variables
+            }
+        }
+    }
+
+    // Arrays - recursively evaluate each element
+    if expr.is_array() {
+        let arr = expr.as_array().unwrap();
+        let mut result_array = Vec::new();
+
+        for item in arr {
+            let item_result = evaluate_expression(item, locals, pending_tasks);
+            match item_result {
+                ExpressionResult::Value(v) => result_array.push(v),
+                ExpressionResult::Suspended(task_id) => {
+                    // If any element suspends, propagate it
+                    return ExpressionResult::Suspended(task_id);
+                }
+            }
+        }
+
+        return ExpressionResult::Value(JsonValue::Array(result_array));
+    }
+
+    // Objects and other complex structures - use resolve_variables
+    if expr.is_object() {
         let resolved = resolve_variables(expr, locals);
         return ExpressionResult::Value(resolved);
     }
 
-    // Default: resolve variables
+    // Default: resolve variables (handles complex nested structures)
     ExpressionResult::Value(resolve_variables(expr, locals))
 }
 

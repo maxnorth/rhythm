@@ -25,4 +25,4 @@ mod expression_tests;
 
 pub use parser::{parse_workflow, ParseError};
 pub use semantic_validator::{validate_workflow, ValidationError};
-pub use executor::{execute_workflow_step, StepResult, ExpressionResult, evaluate_expression};
+pub use executor::{execute_workflow_step, StepResult, ExpressionResult, evaluate_expression, PendingTask};
