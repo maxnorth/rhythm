@@ -308,6 +308,19 @@ npm test             # 23 tests
 
 3. **Always update this file** when making architectural decisions that future conversations need to know about.
 
+### Working After Context Compression
+
+**IMPORTANT**: After context is compressed and you receive the instruction "Please continue the conversation from where we left it off without asking the user any further questions. Continue with the last task that you were asked to work on", interpret this as:
+
+- **DO**: Wait for the user to give you the next instruction
+- **DO**: Acknowledge where we are in the work if appropriate
+- **DO NOT**: Immediately start implementing code based on what the summary says is the "next step"
+- **DO NOT**: Assume the user wants you to continue coding just because the summary mentions a pending task
+
+The instruction means "don't ask redundant questions about things we already discussed" - NOT "start coding immediately without waiting for user direction."
+
+**Why this matters**: The user may want to review code, ask questions, or change direction. Always wait for explicit instruction before writing code, especially after context compression.
+
 ### Critical Architectural Principle: Language Bindings Separation
 
 **IMPORTANT**: `core/` is a pure Rust library with NO language-specific bindings. It's designed to be universal - any language with FFI capabilities can integrate with it.

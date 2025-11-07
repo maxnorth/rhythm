@@ -136,11 +136,11 @@ Awesome — continuing.
 
 # 📄 **Part 2 — Statement Execution Model & Control Flow**
 
-This section explains **how each statement type executes**, how **PC values (execution phases)** work, and how **nested statements + resume logic** function without confusion.
+This section explains **how each statement type executes**, how **PC values (program counters)** work, and how **nested statements + resume logic** function without confusion.
 
 ---
 
-## ✅ **7. Statement Frames & Execution Phases (PC)**
+## ✅ **7. Statement Frames & Program Counters (PC)**
 
 Each active statement has a **Frame**, which includes:
 
@@ -156,7 +156,7 @@ struct Frame {
 
 ---
 
-### ✅ **Execution Phase (PC) — What It Actually Means**
+### ✅ **Program Counter (PC) — What It Actually Means**
 
 Each statement type runs in **multiple phases**.
 The **PC tracks which phase** we're currently in.
@@ -535,7 +535,7 @@ To fully pause and later resume execution, we persist exactly this:
 
 | Component         | Description                                                                                                                  |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `frames`          | Stack of active statement frames. Each frame contains: statement type, execution phase (PC), and its `scope_base_sp`.        |
+| `frames`          | Stack of active statement frames. Each frame contains: statement type, program counter (PC), and its `scope_base_sp`.        |
 | `env`             | Full variable environment: a flat stack of values (`slots`) + stack pointer (`sp`).                                          |
 | `control`         | Any active control flow state (`None`, `Return`, `Break`, `Throw`, etc.).                                                    |
 | `await_capsule`   | Only present if the VM is currently suspended on an `await`. Contains task IDs + policy (`Any` or `All`) + idempotency info. |

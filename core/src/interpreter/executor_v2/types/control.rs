@@ -1,7 +1,7 @@
 //! Control flow and execution frame types
 
 use super::ast::Stmt;
-use super::pc::ReturnPc;
+use super::phase::{BlockPhase, ReturnPhase};
 use super::values::Val;
 use serde::{Deserialize, Serialize};
 
@@ -27,14 +27,14 @@ pub enum Control {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum FrameKind {
-    Return { pc: ReturnPc },
+    Return { phase: ReturnPhase },
+    Block { phase: BlockPhase, idx: usize },
     // Future frame kinds will be added here as we implement more statement types:
-    // Block { pc: BlockPc, idx: usize },
-    // Let { pc: LetPc, name: String, has_init: bool },
-    // Assign { pc: AssignPc, name: String },
-    // If { pc: IfPc, branch_then: bool },
-    // While { pc: WhilePc },
-    // For { pc: ForPc, ... },
+    // Let { phase: LetPhase, name: String, has_init: bool },
+    // Assign { phase: AssignPhase, name: String },
+    // If { phase: IfPhase, branch_then: bool },
+    // While { phase: WhilePhase },
+    // For { phase: ForPhase, ... },
 }
 
 /// Execution frame - one per active statement

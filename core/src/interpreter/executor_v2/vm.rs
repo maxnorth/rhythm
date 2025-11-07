@@ -4,7 +4,7 @@
 //! - frames: Stack of active statements
 //! - control: Current control flow state (return, break, etc.)
 
-use super::types::{Control, Frame, FrameKind, ReturnPc, Stmt};
+use super::types::{BlockPhase, Control, Frame, FrameKind, ReturnPhase, Stmt};
 use serde::{Deserialize, Serialize};
 
 /* ===================== VM ===================== */
@@ -47,7 +47,14 @@ pub fn push_stmt(vm: &mut VM, stmt: &Stmt) {
     let base = 0; // For Milestone 1, no variables so base is always 0
 
     let kind = match stmt {
-        Stmt::Return { .. } => FrameKind::Return { pc: ReturnPc::Eval },
+        Stmt::Return { .. } => FrameKind::Return {
+            phase: ReturnPhase::Eval,
+        },
+
+        Stmt::Block { .. } => FrameKind::Block {
+            phase: BlockPhase::Execute,
+            idx: 0,
+        },
 
         // Other statement types not yet implemented
         _ => panic!("Statement type not yet supported: {:?}", stmt),

@@ -1,41 +1,47 @@
 //! Core execution loop
 //!
 //! This module contains the step() function - the heart of the interpreter.
-//! It processes one frame at a time, advancing PCs and managing the frame stack.
+//! It processes one frame at a time, advancing execution phases and managing the frame stack.
+//!
+//! ## Function Organization
+//! Functions are ordered by importance/call hierarchy:
+//! 1. run_until_done() - Top-level driver (calls step repeatedly)
+//! 2. step() - Main execution loop (dispatches to statement handlers)
 
-use super::types::{Control, Expr, FrameKind, ReturnPc, Stmt, Val};
+use super::statements::{execute_block, execute_return};
+use super::types::{Control, FrameKind, Stmt};
 use super::vm::{Step, VM};
 
-/* ===================== Expression Evaluation ===================== */
+/* ===================== Public API ===================== */
 
-/// Evaluate an expression to a value
+/// Run the VM until it completes
 ///
-/// Milestone 1: Only supports literals
-fn eval_expr(expr: &Expr) -> Result<Val, String> {
-    match expr {
-        Expr::LitBool { v } => Ok(Val::Bool(*v)),
-        Expr::LitNum { v } => Ok(Val::Num(*v)),
-        Expr::LitStr { v } => Ok(Val::Str(v.clone())),
-
-        // Not yet implemented
-        Expr::Ident { .. } => Err("Identifiers not yet supported".to_string()),
-        Expr::Member { .. } => Err("Member expressions not yet supported".to_string()),
-        Expr::Call { .. } => Err("Call expressions not yet supported".to_string()),
-        Expr::Await { .. } => Err("Await expressions not yet supported".to_string()),
+/// This is the top-level driver that repeatedly calls step() until execution finishes.
+/// After completion, inspect `vm.control` for the final state.
+pub fn run_until_done(vm: &mut VM) {
+    loop {
+        match step(vm) {
+            Step::Continue => continue,
+            Step::Done => break,
+        }
     }
 }
-
-/* ===================== Core Loop ===================== */
 
 /// Execute one step of the VM
 ///
 /// This is the core interpreter loop. It:
-/// 1. Checks for active control flow (not needed in Milestone 1)
+/// 1. Checks for active control flow and unwinds if needed
 /// 2. Gets the top frame
-/// 3. Matches on frame kind and PC
+/// 3. Matches on frame kind and execution phase
 /// 4. Executes the appropriate logic
 /// 5. Either continues or signals done
 pub fn step(vm: &mut VM) -> Step {
+    // Check if we have active control flow (return/break/continue/throw)
+    if vm.control != Control::None {
+        // Unwind: pop frames until we find a handler or run out of frames
+        return unwind(vm);
+    }
+
     // Get top frame (if any)
     let Some(frame_idx) = vm.frames.len().checked_sub(1) else {
         // No frames left - execution complete
@@ -48,115 +54,47 @@ pub fn step(vm: &mut VM) -> Step {
         (f.kind.clone(), f.node.clone())
     };
 
-    // Match on frame kind and execute
+    // Dispatch to statement handler
     match (kind, node) {
-        // Return statement
-        (FrameKind::Return { pc }, Stmt::Return { value }) => match pc {
-            ReturnPc::Eval => {
-                // Evaluate the return value (if any)
-                let val = if let Some(expr) = value {
-                    match eval_expr(&expr) {
-                        Ok(v) => Some(v),
-                        Err(e) => {
-                            // For now, panic on eval errors
-                            // Later we'll convert to Control::Throw
-                            panic!("Expression evaluation failed: {}", e);
-                        }
-                    }
-                } else {
-                    None
-                };
+        (FrameKind::Return { phase }, Stmt::Return { value }) => {
+            execute_return(vm, phase, value)
+        }
 
-                // Set control to Return
-                vm.control = Control::Return(val);
-
-                // Pop this frame
-                vm.frames.pop();
-
-                Step::Continue
-            }
-
-            ReturnPc::Done => {
-                // Should never reach here
-                vm.frames.pop();
-                Step::Continue
-            }
-        },
+        (FrameKind::Block { phase, idx }, Stmt::Block { body }) => {
+            execute_block(vm, phase, idx, body)
+        }
 
         // Shouldn't happen - frame kind doesn't match node
         _ => panic!("Frame kind does not match statement node"),
     }
 }
 
-/// Run the VM until it completes
+/* ===================== Control Flow ===================== */
+
+/// Unwind the stack when control flow is active
 ///
-/// This is a helper that calls step() in a loop until done.
-/// Returns the final control state (which should be Return for normal completion).
-pub fn run_until_done(vm: &mut VM) -> Control {
-    loop {
-        match step(vm) {
-            Step::Continue => continue,
-            Step::Done => break,
+/// Pops frames until we find an appropriate handler or run out of frames.
+/// For now, we just pop all frames since we only support Return.
+fn unwind(vm: &mut VM) -> Step {
+    // For Return control flow, we just pop all remaining frames
+    // (In the future, Break/Continue will stop at loop frames,
+    //  and Throw will stop at Try frames)
+    match &vm.control {
+        Control::Return(_) => {
+            // Pop all frames - return exits the entire program
+            vm.frames.clear();
+            // No frames left means execution is complete
+            Step::Done
         }
-    }
 
-    vm.control.clone()
-}
+        Control::None => {
+            // Should never happen - unwind is only called when control != None
+            Step::Continue
+        }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::interpreter::executor_v2::types::Stmt;
-    use crate::interpreter::executor_v2::vm::VM;
-
-    #[test]
-    fn test_return_literal_num() {
-        let program = Stmt::Return {
-            value: Some(Expr::LitNum { v: 42.0 }),
-        };
-
-        let mut vm = VM::new(program);
-        let result = run_until_done(&mut vm);
-
-        assert_eq!(result, Control::Return(Some(Val::Num(42.0))));
-    }
-
-    #[test]
-    fn test_return_literal_bool() {
-        let program = Stmt::Return {
-            value: Some(Expr::LitBool { v: true }),
-        };
-
-        let mut vm = VM::new(program);
-        let result = run_until_done(&mut vm);
-
-        assert_eq!(result, Control::Return(Some(Val::Bool(true))));
-    }
-
-    #[test]
-    fn test_return_literal_str() {
-        let program = Stmt::Return {
-            value: Some(Expr::LitStr {
-                v: "hello".to_string(),
-            }),
-        };
-
-        let mut vm = VM::new(program);
-        let result = run_until_done(&mut vm);
-
-        assert_eq!(
-            result,
-            Control::Return(Some(Val::Str("hello".to_string())))
-        );
-    }
-
-    #[test]
-    fn test_return_unit() {
-        let program = Stmt::Return { value: None };
-
-        let mut vm = VM::new(program);
-        let result = run_until_done(&mut vm);
-
-        assert_eq!(result, Control::Return(None));
+        Control::Break | Control::Continue | Control::Throw(_) => {
+            // Not yet implemented - will be added in later milestones
+            panic!("Break/Continue/Throw not yet implemented");
+        }
     }
 }

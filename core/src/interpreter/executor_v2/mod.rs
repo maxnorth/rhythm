@@ -21,8 +21,13 @@
 //! - [ ] **Milestone 8**: Task outbox and stdlib integration
 
 pub mod exec_loop;
+pub mod expressions;
+pub mod statements;
 pub mod types;
 pub mod vm;
+
+#[cfg(test)]
+mod tests;
 
 // Re-export commonly used items
 pub use exec_loop::{run_until_done, step};

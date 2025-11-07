@@ -1,0 +1,9 @@
+[profile.default]
+# Global timeout for all tests - fail fast on infinite loops
+slow-timeout = { period = "5s", terminate-after = 2 }
+
+# Per-test timeout
+max-test-time = "5s"
+
+# Retry flaky tests once
+retries = 1
