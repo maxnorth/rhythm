@@ -20,9 +20,6 @@ pub mod semantic_validator;
 pub mod executor;
 pub mod stdlib;
 
-#[cfg(test)]
-mod expression_tests;
-
 pub use parser::{parse_workflow, ParseError};
 pub use semantic_validator::{validate_workflow, ValidationError};
-pub use executor::{execute_workflow_step, StepResult, ExpressionResult, evaluate_expression, PendingTask};
+pub use executor::{execute_workflow_step, StepResult, ExpressionResult, PendingTask, evaluate_expression};

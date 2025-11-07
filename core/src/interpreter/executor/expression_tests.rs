@@ -6,7 +6,8 @@
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use crate::interpreter::executor::{evaluate_expression, ExpressionResult, PendingTask};
+    use super::super::expressions::evaluate_expression;
+    use super::super::{ExpressionResult, PendingTask};
 
     /// Helper to create a basic locals context with scope_stack
     fn create_locals() -> serde_json::Value {

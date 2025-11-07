@@ -158,7 +158,7 @@ pub async fn start_workflow(
     )
     .bind(&execution_id)
     .bind(workflow_def_id)
-    .bind("0") // Start at path "0"
+    .bind(serde_json::json!([0])) // Start at path [0]
     .bind(serde_json::json!({})) // Empty locals initially
     .bind(None::<String>) // Not awaiting any task
     .execute(pool.as_ref())
