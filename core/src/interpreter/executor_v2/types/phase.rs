@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 #[repr(u8)]
 pub enum ReturnPhase {
     Eval = 0,
-    Done = 1,
 }
 
 /// Execution phase for Block statements
@@ -18,7 +17,6 @@ pub enum ReturnPhase {
 #[repr(u8)]
 pub enum BlockPhase {
     Execute = 0,
-    Done = 1,
 }
 
 // Future Phase enums will be added here as we implement more statement types:

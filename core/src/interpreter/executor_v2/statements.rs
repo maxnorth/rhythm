@@ -35,12 +35,6 @@ pub fn execute_block(vm: &mut VM, phase: BlockPhase, idx: usize, body: Vec<Stmt>
 
             Step::Continue
         }
-
-        BlockPhase::Done => {
-            // Should never reach here
-            vm.frames.pop();
-            Step::Continue
-        }
     }
 }
 
@@ -68,12 +62,6 @@ pub fn execute_return(vm: &mut VM, phase: ReturnPhase, value: Option<Expr>) -> S
             // Pop this frame
             vm.frames.pop();
 
-            Step::Continue
-        }
-
-        ReturnPhase::Done => {
-            // Should never reach here
-            vm.frames.pop();
             Step::Continue
         }
     }

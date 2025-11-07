@@ -89,7 +89,7 @@ fn unwind(vm: &mut VM) -> Step {
 
         Control::None => {
             // Should never happen - unwind is only called when control != None
-            Step::Continue
+            panic!("Internal error: unwind() called with Control::None");
         }
 
         Control::Break | Control::Continue | Control::Throw(_) => {

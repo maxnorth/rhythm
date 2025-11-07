@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 /// This represents active control flow (return, break, continue, throw).
 /// When control != None, the VM unwinds the stack to find the appropriate handler.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "k", content = "v")]
+#[serde(tag = "t", content = "v")]
 pub enum Control {
     None,
     Break,
@@ -25,7 +25,7 @@ pub enum Control {
 
 /// Frame kind - the type and state of a statement being executed
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "kind")]
+#[serde(tag = "t", content = "v")]
 pub enum FrameKind {
     Return { phase: ReturnPhase },
     Block { phase: BlockPhase, idx: usize },

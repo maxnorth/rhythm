@@ -62,3 +62,21 @@ fn test_return_unit() {
 
     assert_eq!(vm.control, Control::Return(None));
 }
+
+#[test]
+fn test_nested_blocks() {
+    let program = Stmt::Block {
+        body: vec![Stmt::Block {
+            body: vec![Stmt::Block {
+                body: vec![Stmt::Return {
+                    value: Some(Expr::LitNum { v: 42.0 }),
+                }],
+            }],
+        }],
+    };
+
+    let mut vm = VM::new(program);
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Some(Val::Num(42.0))));
+}
