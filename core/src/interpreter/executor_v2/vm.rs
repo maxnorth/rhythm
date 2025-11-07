@@ -4,8 +4,9 @@
 //! - frames: Stack of active statements
 //! - control: Current control flow state (return, break, etc.)
 
-use super::types::{BlockPhase, Control, Frame, FrameKind, ReturnPhase, Stmt};
+use super::types::{BlockPhase, Control, Frame, FrameKind, ReturnPhase, Stmt, Val};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /* ===================== VM ===================== */
 
@@ -19,16 +20,21 @@ pub struct VM {
 
     /// Current control flow state
     pub control: Control,
+
+    /// Variable environment (name -> value mapping)
+    pub env: HashMap<String, Val>,
 }
 
 impl VM {
-    /// Create a new VM with a program
+    /// Create a new VM with a program and initial environment state
     ///
     /// The program is wrapped in a root frame and execution begins immediately.
-    pub fn new(program: Stmt) -> Self {
+    /// The environment is initialized with the provided state (all local variables).
+    pub fn new(program: Stmt, env: HashMap<String, Val>) -> Self {
         let mut vm = VM {
             frames: vec![],
             control: Control::None,
+            env,
         };
 
         // Push initial frame for the program
@@ -42,9 +48,9 @@ impl VM {
 
 /// Push a new frame for a statement onto the stack
 ///
-/// This determines the initial PC based on the statement type.
+/// This determines the initial Phase based on the statement type.
 pub fn push_stmt(vm: &mut VM, stmt: &Stmt) {
-    let base = 0; // For Milestone 1, no variables so base is always 0
+    let base = 0; // For now, no block-scoped variables, so base is always 0
 
     let kind = match stmt {
         Stmt::Return { .. } => FrameKind::Return {

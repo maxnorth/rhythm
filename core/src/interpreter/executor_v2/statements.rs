@@ -44,7 +44,7 @@ pub fn execute_return(vm: &mut VM, phase: ReturnPhase, value: Option<Expr>) -> S
         ReturnPhase::Eval => {
             // Evaluate the return value (if any)
             let val = if let Some(expr) = value {
-                match eval_expr(&expr) {
+                match eval_expr(&expr, &vm.env) {
                     Ok(v) => Some(v),
                     Err(e) => {
                         // For now, panic on eval errors
