@@ -1,5 +1,6 @@
 //! Runtime value types
 
+use super::super::errors::ErrorInfo;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -14,6 +15,8 @@ pub enum Val {
     List(Vec<Val>),
     Obj(HashMap<String, Val>),
     Task(String),
+    /// Error value with code and message
+    Error(ErrorInfo),
 }
 
 impl Val {

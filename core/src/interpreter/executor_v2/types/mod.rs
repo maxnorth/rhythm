@@ -12,6 +12,7 @@ pub mod phase;
 pub mod values;
 
 // Re-export all types for convenient access
+pub use super::errors::ErrorInfo;
 pub use ast::{Expr, Stmt};
 pub use control::{Control, Frame, FrameKind};
 pub use phase::*;

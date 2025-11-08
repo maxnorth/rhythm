@@ -4,3 +4,4 @@
 
 mod await_tests;
 mod basic;
+mod error_tests;

@@ -45,21 +45,22 @@ pub fn execute_return(vm: &mut VM, phase: ReturnPhase, value: Option<Expr>) -> S
             // Evaluate the return value (if any)
             let val = if let Some(expr) = value {
                 match eval_expr(&expr, &vm.env, &mut vm.resume_value) {
-                    Ok(EvalResult::Value { v }) => {
+                    EvalResult::Value { v } => {
                         // Expression evaluated to a value
                         Some(v)
                     }
-                    Ok(EvalResult::Suspend { task_id }) => {
+                    EvalResult::Suspend { task_id } => {
                         // Expression suspended (await encountered)
                         // Set control to Suspend and stop execution
                         // DO NOT pop the frame - we need to preserve state for resumption
                         vm.control = Control::Suspend(task_id);
                         return Step::Done;
                     }
-                    Err(e) => {
-                        // For now, panic on eval errors
-                        // Later we'll convert to Control::Throw
-                        panic!("Expression evaluation failed: {}", e);
+                    EvalResult::Throw { error } => {
+                        // Expression threw an error
+                        // Set control to Throw and DO NOT pop frame (unwinding will handle it)
+                        vm.control = Control::Throw(error);
+                        return Step::Continue;
                     }
                 }
             } else {

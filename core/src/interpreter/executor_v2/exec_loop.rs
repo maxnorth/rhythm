@@ -96,9 +96,17 @@ fn unwind(vm: &mut VM) -> Step {
             panic!("Internal error: unwind() called with Control::None");
         }
 
-        Control::Break | Control::Continue | Control::Throw(_) => {
+        Control::Throw(_) => {
+            // Throw: Pop all frames (for now - later we'll stop at try/catch handlers)
+            // This behaves like Return but preserves the error value
+            vm.frames.clear();
+            // No frames left means execution is complete with an error
+            Step::Done
+        }
+
+        Control::Break | Control::Continue => {
             // Not yet implemented - will be added in later milestones
-            panic!("Break/Continue/Throw not yet implemented");
+            panic!("Break/Continue not yet implemented");
         }
     }
 }

@@ -20,6 +20,7 @@
 //! - [ ] **Milestone 7**: Await/suspend/resume
 //! - [ ] **Milestone 8**: Task outbox and stdlib integration
 
+pub mod errors;
 pub mod exec_loop;
 pub mod expressions;
 pub mod statements;
@@ -32,5 +33,5 @@ mod tests;
 // Re-export commonly used items
 pub use exec_loop::{run_until_done, step};
 pub use expressions::EvalResult;
-pub use types::{Control, Expr, Stmt, Val};
+pub use types::{Control, ErrorInfo, Expr, Stmt, Val};
 pub use vm::{Step, VM};
