@@ -37,9 +37,16 @@ pub enum ExprPhase {
     Eval = 0,
 }
 
+/// Execution phase for Assign statements
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum AssignPhase {
+    /// Evaluate the expression
+    Eval = 0,
+}
+
 // Future Phase enums will be added here as we implement more statement types:
 // - LetPhase
-// - AssignPhase
 // - IfPhase
 // - WhilePhase
 // - ForPhase

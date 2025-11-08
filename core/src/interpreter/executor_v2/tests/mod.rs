@@ -2,6 +2,7 @@
 //!
 //! Organized by milestone/feature area
 
+mod assign_tests;
 mod await_tests;
 mod basic_tests;
 mod error_tests;

@@ -6,7 +6,8 @@
 
 use super::outbox::Outbox;
 use super::types::{
-    BlockPhase, Control, ExprPhase, Frame, FrameKind, ReturnPhase, Stmt, TryPhase, Val,
+    AssignPhase, BlockPhase, Control, ExprPhase, Frame, FrameKind, ReturnPhase, Stmt, TryPhase,
+    Val,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -114,6 +115,11 @@ pub fn push_stmt(vm: &mut VM, stmt: &Stmt) {
 
         Stmt::Expr { .. } => FrameKind::Expr {
             phase: ExprPhase::Eval,
+        },
+
+        Stmt::Assign { name, .. } => FrameKind::Assign {
+            phase: AssignPhase::Eval,
+            name: name.clone(),
         },
 
         // Other statement types not yet implemented
