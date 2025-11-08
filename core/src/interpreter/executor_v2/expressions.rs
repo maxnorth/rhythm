@@ -117,11 +117,65 @@ pub fn eval_expr(
             }
         }
 
-        Expr::Call { .. } => EvalResult::Throw {
-            error: Val::Error(ErrorInfo::new(
-                errors::INTERNAL_ERROR,
-                "Call expressions not yet supported",
-            )),
+        Expr::Call { callee, args } => {
+            // Step 1: Evaluate the callee expression to get the function
+            let callee_result = eval_expr(callee, env, resume_value);
+
+            match callee_result {
+                EvalResult::Suspend { .. } => {
+                    // This should never happen - the semantic validator ensures
+                    // await is only used in simple contexts where suspension cannot
+                    // occur during call evaluation
+                    EvalResult::Throw {
+                        error: Val::Error(ErrorInfo::new(
+                            errors::INTERNAL_ERROR,
+                            "Suspension during call callee evaluation (should be prevented by semantic validator)",
+                        )),
+                    }
+                }
+                EvalResult::Throw { error } => {
+                    // Propagate the error from callee evaluation
+                    EvalResult::Throw { error }
+                }
+                EvalResult::Value { v: callee_val } => {
+                    // Step 2: Verify callee is a function
+                    let func = match callee_val {
+                        Val::NativeFunc(f) => f,
+                        _ => {
+                            return EvalResult::Throw {
+                                error: Val::Error(ErrorInfo::new(
+                                    errors::NOT_A_FUNCTION,
+                                    "Value is not callable",
+                                )),
+                            };
+                        }
+                    };
+
+                    // Step 3: Evaluate all arguments (left to right)
+                    let mut arg_vals = Vec::new();
+                    for arg_expr in args {
+                        match eval_expr(arg_expr, env, resume_value) {
+                            EvalResult::Value { v } => arg_vals.push(v),
+                            EvalResult::Suspend { .. } => {
+                                // This should never happen - validator ensures no await in call args
+                                return EvalResult::Throw {
+                                    error: Val::Error(ErrorInfo::new(
+                                        errors::INTERNAL_ERROR,
+                                        "Suspension during call argument evaluation (should be prevented by semantic validator)",
+                                    )),
+                                };
+                            }
+                            EvalResult::Throw { error } => {
+                                // Propagate error from argument evaluation
+                                return EvalResult::Throw { error };
+                            }
+                        }
+                    }
+
+                    // Step 4: Call the stdlib function
+                    super::stdlib::call_stdlib_func(&func, &arg_vals)
+                }
+            }
         },
 
         Expr::Await { inner } => {

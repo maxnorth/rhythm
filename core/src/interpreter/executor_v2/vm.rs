@@ -4,7 +4,9 @@
 //! - frames: Stack of active statements
 //! - control: Current control flow state (return, break, etc.)
 
-use super::types::{BlockPhase, Control, ExprPhase, Frame, FrameKind, ReturnPhase, Stmt, TryPhase, Val};
+use super::types::{
+    BlockPhase, Control, ExprPhase, Frame, FrameKind, ReturnPhase, Stmt, StdlibFunc, TryPhase, Val,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -35,8 +37,11 @@ impl VM {
     /// Create a new VM with a program and initial environment state
     ///
     /// The program is wrapped in a root frame and execution begins immediately.
-    /// The environment is initialized with the provided state (all local variables).
-    pub fn new(program: Stmt, env: HashMap<String, Val>) -> Self {
+    /// The environment is initialized with the provided state plus stdlib objects.
+    pub fn new(program: Stmt, mut env: HashMap<String, Val>) -> Self {
+        // Inject stdlib objects into environment
+        super::stdlib::inject_stdlib(&mut env);
+
         let mut vm = VM {
             frames: vec![],
             control: Control::None,

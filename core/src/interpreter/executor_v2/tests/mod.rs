@@ -3,5 +3,6 @@
 //! Organized by milestone/feature area
 
 mod await_tests;
-mod basic;
+mod basic_tests;
 mod error_tests;
+mod stdlib_tests;

@@ -24,6 +24,7 @@ pub mod errors;
 pub mod exec_loop;
 pub mod expressions;
 pub mod statements;
+pub mod stdlib;
 pub mod types;
 pub mod vm;
 

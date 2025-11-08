@@ -34,3 +34,12 @@ pub const UNDEFINED_VARIABLE: &str = "UNDEFINED_VARIABLE";
 
 /// Error code: Internal error (should not happen - validator bug)
 pub const INTERNAL_ERROR: &str = "INTERNAL_ERROR";
+
+/// Error code: Value is not callable
+pub const NOT_A_FUNCTION: &str = "NOT_A_FUNCTION";
+
+/// Error code: Wrong number of arguments
+pub const WRONG_ARG_COUNT: &str = "WRONG_ARG_COUNT";
+
+/// Error code: Wrong argument type
+pub const WRONG_ARG_TYPE: &str = "WRONG_ARG_TYPE";

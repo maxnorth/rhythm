@@ -1,6 +1,7 @@
 //! Runtime value types
 
 use super::super::errors::ErrorInfo;
+use super::super::stdlib::StdlibFunc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -17,6 +18,8 @@ pub enum Val {
     Task(String),
     /// Error value with code and message
     Error(ErrorInfo),
+    /// Native function (standard library)
+    NativeFunc(StdlibFunc),
 }
 
 impl Val {
