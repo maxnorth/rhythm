@@ -29,6 +29,14 @@ pub enum TryPhase {
     ExecuteCatch = 1,
 }
 
+/// Execution phase for Expr statements
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum ExprPhase {
+    /// Evaluate the expression
+    Eval = 0,
+}
+
 // Future Phase enums will be added here as we implement more statement types:
 // - LetPhase
 // - AssignPhase

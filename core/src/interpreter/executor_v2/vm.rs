@@ -4,7 +4,7 @@
 //! - frames: Stack of active statements
 //! - control: Current control flow state (return, break, etc.)
 
-use super::types::{BlockPhase, Control, Frame, FrameKind, ReturnPhase, Stmt, TryPhase, Val};
+use super::types::{BlockPhase, Control, ExprPhase, Frame, FrameKind, ReturnPhase, Stmt, TryPhase, Val};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -93,6 +93,10 @@ pub fn push_stmt(vm: &mut VM, stmt: &Stmt) {
         Stmt::Try { catch_var, .. } => FrameKind::Try {
             phase: TryPhase::ExecuteTry,
             catch_var: catch_var.clone(),
+        },
+
+        Stmt::Expr { .. } => FrameKind::Expr {
+            phase: ExprPhase::Eval,
         },
 
         // Other statement types not yet implemented

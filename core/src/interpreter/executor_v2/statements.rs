@@ -4,7 +4,7 @@
 //! the statement based on its current execution phase.
 
 use super::expressions::{eval_expr, EvalResult};
-use super::types::{BlockPhase, Control, Expr, ReturnPhase, Stmt, TryPhase, Val};
+use super::types::{BlockPhase, Control, Expr, ExprPhase, ReturnPhase, Stmt, TryPhase, Val};
 use super::vm::{push_stmt, Step, VM};
 
 /* ===================== Statement Handlers ===================== */
@@ -98,6 +98,37 @@ pub fn execute_try(
             push_stmt(vm, &catch_body);
 
             Step::Continue
+        }
+    }
+}
+
+/// Execute Expr statement
+pub fn execute_expr(vm: &mut VM, phase: ExprPhase, expr: Expr) -> Step {
+    match phase {
+        ExprPhase::Eval => {
+            // Evaluate the expression
+            match eval_expr(&expr, &vm.env, &mut vm.resume_value) {
+                EvalResult::Value { .. } => {
+                    // Expression evaluated successfully
+                    // Discard the result (expression statements don't produce values)
+                    // Pop this frame and continue
+                    vm.frames.pop();
+                    Step::Continue
+                }
+                EvalResult::Suspend { task_id } => {
+                    // Expression suspended (await encountered)
+                    // Set control to Suspend and stop execution
+                    // DO NOT pop the frame - we need to preserve state for resumption
+                    vm.control = Control::Suspend(task_id);
+                    Step::Done
+                }
+                EvalResult::Throw { error } => {
+                    // Expression threw an error
+                    // Set control to Throw and DO NOT pop frame (unwinding will handle it)
+                    vm.control = Control::Throw(error);
+                    Step::Continue
+                }
+            }
         }
     }
 }

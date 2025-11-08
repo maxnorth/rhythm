@@ -39,6 +39,9 @@ pub enum Stmt {
         catch_var: String,
         catch_body: Box<Stmt>,
     },
+    Expr {
+        expr: Expr,
+    },
     Break,
     Continue,
 }
