@@ -61,6 +61,58 @@ pub fn eval_expr(
             v: Val::Str(v.clone()),
         },
 
+        Expr::LitList { elements } => {
+            // Evaluate all elements (left to right)
+            let mut vals = Vec::new();
+            for elem_expr in elements {
+                match eval_expr(elem_expr, env, resume_value, outbox) {
+                    EvalResult::Value { v } => vals.push(v),
+                    EvalResult::Suspend { .. } => {
+                        // This should never happen - validator ensures no await in literals
+                        return EvalResult::Throw {
+                            error: Val::Error(ErrorInfo::new(
+                                errors::INTERNAL_ERROR,
+                                "Suspension during list literal evaluation (should be prevented by semantic validator)",
+                            )),
+                        };
+                    }
+                    EvalResult::Throw { error } => {
+                        // Propagate error from element evaluation
+                        return EvalResult::Throw { error };
+                    }
+                }
+            }
+            EvalResult::Value {
+                v: Val::List(vals),
+            }
+        }
+
+        Expr::LitObj { properties } => {
+            // Evaluate all property values (in order)
+            let mut map = HashMap::new();
+            for (key, val_expr) in properties {
+                match eval_expr(val_expr, env, resume_value, outbox) {
+                    EvalResult::Value { v } => {
+                        map.insert(key.clone(), v);
+                    }
+                    EvalResult::Suspend { .. } => {
+                        // This should never happen - validator ensures no await in literals
+                        return EvalResult::Throw {
+                            error: Val::Error(ErrorInfo::new(
+                                errors::INTERNAL_ERROR,
+                                "Suspension during object literal evaluation (should be prevented by semantic validator)",
+                            )),
+                        };
+                    }
+                    EvalResult::Throw { error } => {
+                        // Propagate error from property evaluation
+                        return EvalResult::Throw { error };
+                    }
+                }
+            }
+            EvalResult::Value { v: Val::Obj(map) }
+        }
+
         Expr::Ident { name } => match env.get(name).cloned() {
             Some(val) => EvalResult::Value { v: val },
             None => EvalResult::Throw {

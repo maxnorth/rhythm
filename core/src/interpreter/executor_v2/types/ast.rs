@@ -53,6 +53,8 @@ pub enum Expr {
     LitBool { v: bool },
     LitNum { v: f64 },
     LitStr { v: String },
+    LitList { elements: Vec<Expr> },
+    LitObj { properties: Vec<(String, Expr)> },
     Ident { name: String },
     Member { object: Box<Expr>, property: String },
     Call { callee: Box<Expr>, args: Vec<Expr> },
