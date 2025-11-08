@@ -2,17 +2,23 @@
 //!
 //! Tests for Milestone 1: Return statement with literal expressions
 
-use crate::interpreter::executor_v2::{run_until_done, Control, Expr, Stmt, Val, VM};
+use crate::interpreter::executor_v2::{run_until_done, Control, Stmt, Val, VM};
 use std::collections::HashMap;
 
 #[test]
 fn test_return_literal_num() {
-    let program = Stmt::Block {
-        body: vec![Stmt::Return {
-            value: Some(Expr::LitNum { v: 42.0 }),
-        }],
-    };
+    let program_json = r#"{
+        "t": "Block",
+        "body": [{
+            "t": "Return",
+            "value": {
+                "t": "LitNum",
+                "v": 42.0
+            }
+        }]
+    }"#;
 
+    let program: Stmt = serde_json::from_str(program_json).unwrap();
     let mut vm = VM::new(program, HashMap::new());
     run_until_done(&mut vm);
 
@@ -21,12 +27,18 @@ fn test_return_literal_num() {
 
 #[test]
 fn test_return_literal_bool() {
-    let program = Stmt::Block {
-        body: vec![Stmt::Return {
-            value: Some(Expr::LitBool { v: true }),
-        }],
-    };
+    let program_json = r#"{
+        "t": "Block",
+        "body": [{
+            "t": "Return",
+            "value": {
+                "t": "LitBool",
+                "v": true
+            }
+        }]
+    }"#;
 
+    let program: Stmt = serde_json::from_str(program_json).unwrap();
     let mut vm = VM::new(program, HashMap::new());
     run_until_done(&mut vm);
 
@@ -35,14 +47,18 @@ fn test_return_literal_bool() {
 
 #[test]
 fn test_return_literal_str() {
-    let program = Stmt::Block {
-        body: vec![Stmt::Return {
-            value: Some(Expr::LitStr {
-                v: "hello".to_string(),
-            }),
-        }],
-    };
+    let program_json = r#"{
+        "t": "Block",
+        "body": [{
+            "t": "Return",
+            "value": {
+                "t": "LitStr",
+                "v": "hello"
+            }
+        }]
+    }"#;
 
+    let program: Stmt = serde_json::from_str(program_json).unwrap();
     let mut vm = VM::new(program, HashMap::new());
     run_until_done(&mut vm);
 
@@ -54,10 +70,15 @@ fn test_return_literal_str() {
 
 #[test]
 fn test_return_unit() {
-    let program = Stmt::Block {
-        body: vec![Stmt::Return { value: None }],
-    };
+    let program_json = r#"{
+        "t": "Block",
+        "body": [{
+            "t": "Return",
+            "value": null
+        }]
+    }"#;
 
+    let program: Stmt = serde_json::from_str(program_json).unwrap();
     let mut vm = VM::new(program, HashMap::new());
     run_until_done(&mut vm);
 
@@ -66,16 +87,24 @@ fn test_return_unit() {
 
 #[test]
 fn test_nested_blocks() {
-    let program = Stmt::Block {
-        body: vec![Stmt::Block {
-            body: vec![Stmt::Block {
-                body: vec![Stmt::Return {
-                    value: Some(Expr::LitNum { v: 42.0 }),
-                }],
-            }],
-        }],
-    };
+    let program_json = r#"{
+        "t": "Block",
+        "body": [{
+            "t": "Block",
+            "body": [{
+                "t": "Block",
+                "body": [{
+                    "t": "Return",
+                    "value": {
+                        "t": "LitNum",
+                        "v": 42.0
+                    }
+                }]
+            }]
+        }]
+    }"#;
 
+    let program: Stmt = serde_json::from_str(program_json).unwrap();
     let mut vm = VM::new(program, HashMap::new());
     run_until_done(&mut vm);
 
@@ -84,13 +113,18 @@ fn test_nested_blocks() {
 
 #[test]
 fn test_return_ctx() {
-    let program = Stmt::Block {
-        body: vec![Stmt::Return {
-            value: Some(Expr::Ident {
-                name: "ctx".to_string(),
-            }),
-        }],
-    };
+    let program_json = r#"{
+        "t": "Block",
+        "body": [{
+            "t": "Return",
+            "value": {
+                "t": "Ident",
+                "name": "ctx"
+            }
+        }]
+    }"#;
+
+    let program: Stmt = serde_json::from_str(program_json).unwrap();
 
     // Set up initial environment with ctx
     let mut env = HashMap::new();
@@ -105,13 +139,18 @@ fn test_return_ctx() {
 
 #[test]
 fn test_return_inputs() {
-    let program = Stmt::Block {
-        body: vec![Stmt::Return {
-            value: Some(Expr::Ident {
-                name: "inputs".to_string(),
-            }),
-        }],
-    };
+    let program_json = r#"{
+        "t": "Block",
+        "body": [{
+            "t": "Return",
+            "value": {
+                "t": "Ident",
+                "name": "inputs"
+            }
+        }]
+    }"#;
+
+    let program: Stmt = serde_json::from_str(program_json).unwrap();
 
     // Set up initial environment with inputs
     let mut env = HashMap::new();
@@ -129,13 +168,18 @@ fn test_return_inputs() {
 
 #[test]
 fn test_initial_env() {
-    let program = Stmt::Block {
-        body: vec![Stmt::Return {
-            value: Some(Expr::Ident {
-                name: "inputs".to_string(),
-            }),
-        }],
-    };
+    let program_json = r#"{
+        "t": "Block",
+        "body": [{
+            "t": "Return",
+            "value": {
+                "t": "Ident",
+                "name": "inputs"
+            }
+        }]
+    }"#;
+
+    let program: Stmt = serde_json::from_str(program_json).unwrap();
 
     // Set up initial environment with whatever variables we want
     let mut inputs_obj = HashMap::new();
@@ -155,16 +199,22 @@ fn test_initial_env() {
 
 #[test]
 fn test_member_access() {
-    let program = Stmt::Block {
-        body: vec![Stmt::Return {
-            value: Some(Expr::Member {
-                object: Box::new(Expr::Ident {
-                    name: "inputs".to_string(),
-                }),
-                property: "name".to_string(),
-            }),
-        }],
-    };
+    let program_json = r#"{
+        "t": "Block",
+        "body": [{
+            "t": "Return",
+            "value": {
+                "t": "Member",
+                "object": {
+                    "t": "Ident",
+                    "name": "inputs"
+                },
+                "property": "name"
+            }
+        }]
+    }"#;
+
+    let program: Stmt = serde_json::from_str(program_json).unwrap();
 
     // Set up initial environment with inputs containing properties
     let mut inputs_obj = HashMap::new();
@@ -186,19 +236,26 @@ fn test_member_access() {
 
 #[test]
 fn test_nested_member_access() {
-    let program = Stmt::Block {
-        body: vec![Stmt::Return {
-            value: Some(Expr::Member {
-                object: Box::new(Expr::Member {
-                    object: Box::new(Expr::Ident {
-                        name: "ctx".to_string(),
-                    }),
-                    property: "user".to_string(),
-                }),
-                property: "id".to_string(),
-            }),
-        }],
-    };
+    let program_json = r#"{
+        "t": "Block",
+        "body": [{
+            "t": "Return",
+            "value": {
+                "t": "Member",
+                "object": {
+                    "t": "Member",
+                    "object": {
+                        "t": "Ident",
+                        "name": "ctx"
+                    },
+                    "property": "user"
+                },
+                "property": "id"
+            }
+        }]
+    }"#;
+
+    let program: Stmt = serde_json::from_str(program_json).unwrap();
 
     // Set up nested object: ctx.user.id
     let mut user_obj = HashMap::new();

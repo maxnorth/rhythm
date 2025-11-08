@@ -25,7 +25,7 @@ pub enum Control {
 
 /// Frame kind - the type and state of a statement being executed
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "t", content = "v")]
+#[serde(tag = "t")]
 pub enum FrameKind {
     Return { phase: ReturnPhase },
     Block { phase: BlockPhase, idx: usize },

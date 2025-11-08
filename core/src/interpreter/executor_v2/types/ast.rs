@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// Statement AST node
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "t", content = "v")]
+#[serde(tag = "t")]
 pub enum Stmt {
     Block {
         body: Vec<Stmt>,
@@ -40,7 +40,7 @@ pub enum Stmt {
 
 /// Expression AST node
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "t", content = "v")]
+#[serde(tag = "t")]
 pub enum Expr {
     LitBool { v: bool },
     LitNum { v: f64 },
