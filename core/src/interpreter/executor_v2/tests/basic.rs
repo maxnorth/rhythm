@@ -152,3 +152,68 @@ fn test_initial_env() {
     // Should return the inputs object we provided
     assert_eq!(vm.control, Control::Return(Some(Val::Obj(inputs_obj))));
 }
+
+#[test]
+fn test_member_access() {
+    let program = Stmt::Block {
+        body: vec![Stmt::Return {
+            value: Some(Expr::Member {
+                object: Box::new(Expr::Ident {
+                    name: "inputs".to_string(),
+                }),
+                property: "name".to_string(),
+            }),
+        }],
+    };
+
+    // Set up initial environment with inputs containing properties
+    let mut inputs_obj = HashMap::new();
+    inputs_obj.insert("name".to_string(), Val::Str("Alice".to_string()));
+    inputs_obj.insert("age".to_string(), Val::Num(30.0));
+
+    let mut env = HashMap::new();
+    env.insert("inputs".to_string(), Val::Obj(inputs_obj));
+
+    let mut vm = VM::new(program, env);
+    run_until_done(&mut vm);
+
+    // Should return inputs.name
+    assert_eq!(
+        vm.control,
+        Control::Return(Some(Val::Str("Alice".to_string())))
+    );
+}
+
+#[test]
+fn test_nested_member_access() {
+    let program = Stmt::Block {
+        body: vec![Stmt::Return {
+            value: Some(Expr::Member {
+                object: Box::new(Expr::Member {
+                    object: Box::new(Expr::Ident {
+                        name: "ctx".to_string(),
+                    }),
+                    property: "user".to_string(),
+                }),
+                property: "id".to_string(),
+            }),
+        }],
+    };
+
+    // Set up nested object: ctx.user.id
+    let mut user_obj = HashMap::new();
+    user_obj.insert("id".to_string(), Val::Num(123.0));
+    user_obj.insert("name".to_string(), Val::Str("Bob".to_string()));
+
+    let mut ctx_obj = HashMap::new();
+    ctx_obj.insert("user".to_string(), Val::Obj(user_obj));
+
+    let mut env = HashMap::new();
+    env.insert("ctx".to_string(), Val::Obj(ctx_obj));
+
+    let mut vm = VM::new(program, env);
+    run_until_done(&mut vm);
+
+    // Should return ctx.user.id
+    assert_eq!(vm.control, Control::Return(Some(Val::Num(123.0))));
+}
