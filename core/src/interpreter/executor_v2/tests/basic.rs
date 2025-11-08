@@ -22,7 +22,7 @@ fn test_return_literal_num() {
     let mut vm = VM::new(program, HashMap::new());
     run_until_done(&mut vm);
 
-    assert_eq!(vm.control, Control::Return(Some(Val::Num(42.0))));
+    assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
 }
 
 #[test]
@@ -42,7 +42,7 @@ fn test_return_literal_bool() {
     let mut vm = VM::new(program, HashMap::new());
     run_until_done(&mut vm);
 
-    assert_eq!(vm.control, Control::Return(Some(Val::Bool(true))));
+    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
 }
 
 #[test]
@@ -64,12 +64,12 @@ fn test_return_literal_str() {
 
     assert_eq!(
         vm.control,
-        Control::Return(Some(Val::Str("hello".to_string())))
+        Control::Return(Val::Str("hello".to_string()))
     );
 }
 
 #[test]
-fn test_return_unit() {
+fn test_return_null() {
     let program_json = r#"{
         "t": "Block",
         "body": [{
@@ -82,7 +82,7 @@ fn test_return_unit() {
     let mut vm = VM::new(program, HashMap::new());
     run_until_done(&mut vm);
 
-    assert_eq!(vm.control, Control::Return(None));
+    assert_eq!(vm.control, Control::Return(Val::Null));
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn test_nested_blocks() {
     let mut vm = VM::new(program, HashMap::new());
     run_until_done(&mut vm);
 
-    assert_eq!(vm.control, Control::Return(Some(Val::Num(42.0))));
+    assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn test_return_ctx() {
     run_until_done(&mut vm);
 
     // ctx should be an empty object
-    assert_eq!(vm.control, Control::Return(Some(Val::Obj(HashMap::new()))));
+    assert_eq!(vm.control, Control::Return(Val::Obj(HashMap::new())));
 }
 
 #[test]
@@ -162,7 +162,7 @@ fn test_return_inputs() {
     // inputs should be an empty object
     assert_eq!(
         vm.control,
-        Control::Return(Some(Val::Obj(HashMap::new())))
+        Control::Return(Val::Obj(HashMap::new()))
     );
 }
 
@@ -194,7 +194,7 @@ fn test_initial_env() {
     run_until_done(&mut vm);
 
     // Should return the inputs object we provided
-    assert_eq!(vm.control, Control::Return(Some(Val::Obj(inputs_obj))));
+    assert_eq!(vm.control, Control::Return(Val::Obj(inputs_obj)));
 }
 
 #[test]
@@ -230,7 +230,7 @@ fn test_member_access() {
     // Should return inputs.name
     assert_eq!(
         vm.control,
-        Control::Return(Some(Val::Str("Alice".to_string())))
+        Control::Return(Val::Str("Alice".to_string()))
     );
 }
 
@@ -272,5 +272,5 @@ fn test_nested_member_access() {
     run_until_done(&mut vm);
 
     // Should return ctx.user.id
-    assert_eq!(vm.control, Control::Return(Some(Val::Num(123.0))));
+    assert_eq!(vm.control, Control::Return(Val::Num(123.0)));
 }

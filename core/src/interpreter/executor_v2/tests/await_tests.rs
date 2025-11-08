@@ -87,7 +87,7 @@ fn test_await_resume() {
     run_until_done(&mut vm2);
 
     // Should return the resumed value
-    assert_eq!(vm2.control, Control::Return(Some(result)));
+    assert_eq!(vm2.control, Control::Return(result));
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn test_await_resume_with_num() {
     assert!(vm2.resume(Val::Num(42.0)));
     run_until_done(&mut vm2);
 
-    assert_eq!(vm2.control, Control::Return(Some(Val::Num(42.0))));
+    assert_eq!(vm2.control, Control::Return(Val::Num(42.0)));
 }
 
 #[test]
@@ -150,7 +150,7 @@ fn test_await_non_task_idempotent() {
     run_until_done(&mut vm);
 
     // Should NOT suspend - should just return the number
-    assert_eq!(vm.control, Control::Return(Some(Val::Num(42.0))));
+    assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
 }
 
 #[test]
@@ -177,7 +177,7 @@ fn test_await_non_task_string() {
     // Should NOT suspend
     assert_eq!(
         vm.control,
-        Control::Return(Some(Val::Str("hello".to_string())))
+        Control::Return(Val::Str("hello".to_string()))
     );
 }
 
@@ -203,7 +203,7 @@ fn test_resume_when_not_suspended_fails() {
     assert!(!vm.resume(Val::Num(100.0)));
 
     // Control should still be Return (unchanged)
-    assert_eq!(vm.control, Control::Return(Some(Val::Num(42.0))));
+    assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
 }
 
 #[test]
@@ -252,7 +252,7 @@ fn test_await_preserves_frames() {
     run_until_done(&mut vm2);
 
     // Should return the resumed value
-    assert_eq!(vm2.control, Control::Return(Some(Val::Bool(true))));
+    assert_eq!(vm2.control, Control::Return(Val::Bool(true)));
 
     // Frames should be cleared after completion
     assert_eq!(vm2.frames.len(), 0);
@@ -300,7 +300,7 @@ fn test_serialization_with_suspend() {
     run_until_done(&mut vm2);
 
     // Should return the resumed value
-    assert_eq!(vm2.control, Control::Return(Some(Val::Num(99.0))));
+    assert_eq!(vm2.control, Control::Return(Val::Num(99.0)));
 }
 
 #[test]
@@ -359,6 +359,6 @@ fn test_step_by_step_suspension() {
 
     assert_eq!(
         vm2.control,
-        Control::Return(Some(Val::Str("stepped".to_string())))
+        Control::Return(Val::Str("stepped".to_string()))
     );
 }

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "t", content = "v")]
 pub enum Val {
-    Unit,
+    Null,
     Bool(bool),
     Num(f64),
     Str(String),
@@ -24,7 +24,7 @@ impl Val {
     pub fn is_truthy(&self) -> bool {
         match self {
             Val::Bool(b) => *b,
-            Val::Unit => false,
+            Val::Null => false,
             _ => true,
         }
     }

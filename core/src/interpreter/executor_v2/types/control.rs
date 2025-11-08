@@ -18,7 +18,7 @@ pub enum Control {
     None,
     Break,
     Continue,
-    Return(Option<Val>),
+    Return(Val),
     Throw(Val),
     Suspend(String), // Task ID to suspend on
 }
