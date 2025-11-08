@@ -74,16 +74,20 @@ pub fn step(vm: &mut VM) -> Step {
 /// Unwind the stack when control flow is active
 ///
 /// Pops frames until we find an appropriate handler or run out of frames.
-/// For now, we just pop all frames since we only support Return.
+/// For Suspend, we DO NOT unwind - we preserve the stack for resumption.
 fn unwind(vm: &mut VM) -> Step {
-    // For Return control flow, we just pop all remaining frames
-    // (In the future, Break/Continue will stop at loop frames,
-    //  and Throw will stop at Try frames)
     match &vm.control {
         Control::Return(_) => {
             // Pop all frames - return exits the entire program
             vm.frames.clear();
             // No frames left means execution is complete
+            Step::Done
+        }
+
+        Control::Suspend(_) => {
+            // Suspend: DO NOT unwind the stack
+            // The VM is now in a suspended state with all frames preserved
+            // Execution stops here and can be resumed later
             Step::Done
         }
 

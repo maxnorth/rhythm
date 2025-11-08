@@ -3,7 +3,7 @@
 //! Each statement type has its own handler function that processes
 //! the statement based on its current execution phase.
 
-use super::expressions::eval_expr;
+use super::expressions::{eval_expr, EvalResult};
 use super::types::{BlockPhase, Control, Expr, ReturnPhase, Stmt};
 use super::vm::{push_stmt, Step, VM};
 
@@ -44,8 +44,18 @@ pub fn execute_return(vm: &mut VM, phase: ReturnPhase, value: Option<Expr>) -> S
         ReturnPhase::Eval => {
             // Evaluate the return value (if any)
             let val = if let Some(expr) = value {
-                match eval_expr(&expr, &vm.env) {
-                    Ok(v) => Some(v),
+                match eval_expr(&expr, &vm.env, &mut vm.resume_value) {
+                    Ok(EvalResult::Value { v }) => {
+                        // Expression evaluated to a value
+                        Some(v)
+                    }
+                    Ok(EvalResult::Suspend { task_id }) => {
+                        // Expression suspended (await encountered)
+                        // Set control to Suspend and stop execution
+                        // DO NOT pop the frame - we need to preserve state for resumption
+                        vm.control = Control::Suspend(task_id);
+                        return Step::Done;
+                    }
                     Err(e) => {
                         // For now, panic on eval errors
                         // Later we'll convert to Control::Throw

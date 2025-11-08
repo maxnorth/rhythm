@@ -13,6 +13,7 @@ pub enum Val {
     Str(String),
     List(Vec<Val>),
     Obj(HashMap<String, Val>),
+    Task(String),
 }
 
 impl Val {

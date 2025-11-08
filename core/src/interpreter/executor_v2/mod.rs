@@ -31,5 +31,6 @@ mod tests;
 
 // Re-export commonly used items
 pub use exec_loop::{run_until_done, step};
+pub use expressions::EvalResult;
 pub use types::{Control, Expr, Stmt, Val};
 pub use vm::{Step, VM};

@@ -2,4 +2,5 @@
 //!
 //! Organized by milestone/feature area
 
+mod await_tests;
 mod basic;

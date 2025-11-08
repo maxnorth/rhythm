@@ -23,6 +23,12 @@ pub struct VM {
 
     /// Variable environment (name -> value mapping)
     pub env: HashMap<String, Val>,
+
+    /// Resume value for await expressions
+    ///
+    /// When resuming from suspension, this holds the task result.
+    /// The await expression will consume this value and clear it.
+    pub resume_value: Option<Val>,
 }
 
 impl VM {
@@ -35,12 +41,34 @@ impl VM {
             frames: vec![],
             control: Control::None,
             env,
+            resume_value: None,
         };
 
         // Push initial frame for the program
         push_stmt(&mut vm, &program);
 
         vm
+    }
+
+    /// Resume execution after suspension with a task result
+    ///
+    /// This is called after the VM has suspended on an await expression.
+    /// The task_result is the value that the task completed with.
+    ///
+    /// Returns true if resume was successful, false if VM was not in suspended state.
+    pub fn resume(&mut self, task_result: Val) -> bool {
+        // Check that we're actually suspended
+        if !matches!(self.control, Control::Suspend(_)) {
+            return false;
+        }
+
+        // Set the resume value for the await expression to consume
+        self.resume_value = Some(task_result);
+
+        // Clear the suspend control flow
+        self.control = Control::None;
+
+        true
     }
 }
 

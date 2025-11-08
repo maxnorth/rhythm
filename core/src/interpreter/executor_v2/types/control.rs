@@ -9,8 +9,9 @@ use serde::{Deserialize, Serialize};
 
 /// Control flow state
 ///
-/// This represents active control flow (return, break, continue, throw).
+/// This represents active control flow (return, break, continue, throw, suspend).
 /// When control != None, the VM unwinds the stack to find the appropriate handler.
+/// For Suspend, the VM stops execution and becomes serializable.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "t", content = "v")]
 pub enum Control {
@@ -19,6 +20,7 @@ pub enum Control {
     Continue,
     Return(Option<Val>),
     Throw(Val),
+    Suspend(String), // Task ID to suspend on
 }
 
 /* ===================== Frames ===================== */
