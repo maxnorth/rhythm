@@ -23,6 +23,7 @@
 pub mod errors;
 pub mod exec_loop;
 pub mod expressions;
+pub mod outbox;
 pub mod statements;
 pub mod stdlib;
 pub mod types;
@@ -34,5 +35,6 @@ mod tests;
 // Re-export commonly used items
 pub use exec_loop::{run_until_done, step};
 pub use expressions::EvalResult;
+pub use outbox::{Outbox, TaskCreation};
 pub use types::{Control, ErrorInfo, Expr, Stmt, Val};
 pub use vm::{Step, VM};

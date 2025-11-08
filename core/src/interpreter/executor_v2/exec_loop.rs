@@ -17,7 +17,7 @@ use super::vm::{Step, VM};
 /// Run the VM until it completes
 ///
 /// This is the top-level driver that repeatedly calls step() until execution finishes.
-/// After completion, inspect `vm.control` for the final state.
+/// After completion, inspect `vm.control` for the final state and `vm.outbox` for side effects.
 pub fn run_until_done(vm: &mut VM) {
     loop {
         match step(vm) {

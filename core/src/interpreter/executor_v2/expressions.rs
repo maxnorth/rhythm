@@ -4,6 +4,7 @@
 //! Future milestones will add: calls, await.
 
 use super::errors;
+use super::outbox::Outbox;
 use super::types::{ErrorInfo, Expr, Val};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -37,6 +38,7 @@ pub enum EvalResult {
 /// - expr: The expression to evaluate
 /// - env: The variable environment for identifier lookups
 /// - resume_value: Value to return if this is resuming from await (consumed if Some)
+/// - outbox: Collection of side effects (task creation, etc.)
 ///
 /// Returns:
 /// - EvalResult::Value when expression produces a value
@@ -46,6 +48,7 @@ pub fn eval_expr(
     expr: &Expr,
     env: &HashMap<String, Val>,
     resume_value: &mut Option<Val>,
+    outbox: &mut Outbox,
 ) -> EvalResult {
     match expr {
         Expr::LitBool { v } => EvalResult::Value {
@@ -73,7 +76,7 @@ pub fn eval_expr(
 
         Expr::Member { object, property } => {
             // First, evaluate the object expression
-            let obj_result = eval_expr(object, env, resume_value);
+            let obj_result = eval_expr(object, env, resume_value, outbox);
 
             match obj_result {
                 EvalResult::Suspend { .. } => {
@@ -119,7 +122,7 @@ pub fn eval_expr(
 
         Expr::Call { callee, args } => {
             // Step 1: Evaluate the callee expression to get the function
-            let callee_result = eval_expr(callee, env, resume_value);
+            let callee_result = eval_expr(callee, env, resume_value, outbox);
 
             match callee_result {
                 EvalResult::Suspend { .. } => {
@@ -154,7 +157,7 @@ pub fn eval_expr(
                     // Step 3: Evaluate all arguments (left to right)
                     let mut arg_vals = Vec::new();
                     for arg_expr in args {
-                        match eval_expr(arg_expr, env, resume_value) {
+                        match eval_expr(arg_expr, env, resume_value, outbox) {
                             EvalResult::Value { v } => arg_vals.push(v),
                             EvalResult::Suspend { .. } => {
                                 // This should never happen - validator ensures no await in call args
@@ -173,7 +176,7 @@ pub fn eval_expr(
                     }
 
                     // Step 4: Call the stdlib function
-                    super::stdlib::call_stdlib_func(&func, &arg_vals)
+                    super::stdlib::call_stdlib_func(&func, &arg_vals, outbox)
                 }
             }
         },
@@ -186,7 +189,7 @@ pub fn eval_expr(
             }
 
             // Not resuming - evaluate the inner expression normally
-            let inner_result = eval_expr(inner, env, resume_value);
+            let inner_result = eval_expr(inner, env, resume_value, outbox);
 
             match inner_result {
                 EvalResult::Suspend { .. } => {

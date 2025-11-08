@@ -3,8 +3,10 @@
 //! This module contains all stdlib function implementations organized by category.
 
 pub mod math;
+pub mod task;
 
 use super::expressions::EvalResult;
+use super::outbox::Outbox;
 use super::types::Val;
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +22,7 @@ pub enum StdlibFunc {
     MathCeil,
     MathAbs,
     MathRound,
+    TaskRun,
 }
 
 /* ===================== Stdlib Dispatcher ===================== */
@@ -28,12 +31,15 @@ pub enum StdlibFunc {
 ///
 /// This dispatcher routes to the appropriate function implementation
 /// based on the StdlibFunc variant.
-pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val]) -> EvalResult {
+pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val], outbox: &mut Outbox) -> EvalResult {
     match func {
+        // Math functions are pure - no outbox needed
         StdlibFunc::MathFloor => math::floor(args),
         StdlibFunc::MathCeil => math::ceil(args),
         StdlibFunc::MathAbs => math::abs(args),
         StdlibFunc::MathRound => math::round(args),
+        // Task functions have side effects - outbox required
+        StdlibFunc::TaskRun => task::run(args, outbox),
     }
 }
 
@@ -41,7 +47,7 @@ pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val]) -> EvalResult {
 
 /// Inject standard library objects into the environment
 ///
-/// This adds stdlib objects like Math to the environment.
+/// This adds stdlib objects like Math and Task to the environment.
 /// Called automatically by VM::new().
 pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     // Create Math object with methods
@@ -57,6 +63,11 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
         Val::NativeFunc(StdlibFunc::MathRound),
     );
 
-    // Add Math to environment
+    // Create Task object with methods
+    let mut task_obj = std::collections::HashMap::new();
+    task_obj.insert("run".to_string(), Val::NativeFunc(StdlibFunc::TaskRun));
+
+    // Add stdlib objects to environment
     env.insert("Math".to_string(), Val::Obj(math_obj));
+    env.insert("Task".to_string(), Val::Obj(task_obj));
 }

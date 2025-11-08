@@ -4,8 +4,9 @@
 //! - frames: Stack of active statements
 //! - control: Current control flow state (return, break, etc.)
 
+use super::outbox::Outbox;
 use super::types::{
-    BlockPhase, Control, ExprPhase, Frame, FrameKind, ReturnPhase, Stmt, StdlibFunc, TryPhase, Val,
+    BlockPhase, Control, ExprPhase, Frame, FrameKind, ReturnPhase, Stmt, TryPhase, Val,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -30,7 +31,17 @@ pub struct VM {
     ///
     /// When resuming from suspension, this holds the task result.
     /// The await expression will consume this value and clear it.
+    /// This is NOT serialized - runtime-only state.
+    #[serde(skip)]
     pub resume_value: Option<Val>,
+
+    /// Task outbox - side effects accumulated during execution
+    ///
+    /// This is NOT serialized. It's runtime-only state that records
+    /// side effects like task creation. The external orchestrator
+    /// should extract and process these after execution.
+    #[serde(skip)]
+    pub outbox: Outbox,
 }
 
 impl VM {
@@ -47,6 +58,7 @@ impl VM {
             control: Control::None,
             env,
             resume_value: None,
+            outbox: Outbox::new(),
         };
 
         // Push initial frame for the program

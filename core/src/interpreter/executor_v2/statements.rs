@@ -44,7 +44,7 @@ pub fn execute_return(vm: &mut VM, phase: ReturnPhase, value: Option<Expr>) -> S
         ReturnPhase::Eval => {
             // Evaluate the return value (if any)
             let val = if let Some(expr) = value {
-                match eval_expr(&expr, &vm.env, &mut vm.resume_value) {
+                match eval_expr(&expr, &vm.env, &mut vm.resume_value, &mut vm.outbox) {
                     EvalResult::Value { v } => v,
                     EvalResult::Suspend { task_id } => {
                         // Expression suspended (await encountered)
@@ -107,7 +107,7 @@ pub fn execute_expr(vm: &mut VM, phase: ExprPhase, expr: Expr) -> Step {
     match phase {
         ExprPhase::Eval => {
             // Evaluate the expression
-            match eval_expr(&expr, &vm.env, &mut vm.resume_value) {
+            match eval_expr(&expr, &vm.env, &mut vm.resume_value, &mut vm.outbox) {
                 EvalResult::Value { .. } => {
                     // Expression evaluated successfully
                     // Discard the result (expression statements don't produce values)
