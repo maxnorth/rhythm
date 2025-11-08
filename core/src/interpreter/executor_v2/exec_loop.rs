@@ -8,7 +8,7 @@
 //! 1. run_until_done() - Top-level driver (calls step repeatedly)
 //! 2. step() - Main execution loop (dispatches to statement handlers)
 
-use super::statements::{execute_block, execute_return};
+use super::statements::{execute_block, execute_return, execute_try};
 use super::types::{Control, FrameKind, Stmt};
 use super::vm::{Step, VM};
 
@@ -64,6 +64,15 @@ pub fn step(vm: &mut VM) -> Step {
             execute_block(vm, phase, idx, body)
         }
 
+        (
+            FrameKind::Try { phase, catch_var },
+            Stmt::Try {
+                body,
+                catch_var: _,
+                catch_body,
+            },
+        ) => execute_try(vm, phase, catch_var, body, catch_body),
+
         // Shouldn't happen - frame kind doesn't match node
         _ => panic!("Frame kind does not match statement node"),
     }
@@ -96,11 +105,42 @@ fn unwind(vm: &mut VM) -> Step {
             panic!("Internal error: unwind() called with Control::None");
         }
 
-        Control::Throw(_) => {
-            // Throw: Pop all frames (for now - later we'll stop at try/catch handlers)
-            // This behaves like Return but preserves the error value
-            vm.frames.clear();
-            // No frames left means execution is complete with an error
+        Control::Throw(error) => {
+            // Throw: Pop frames until we find a try/catch handler
+            // Walk the frame stack from top to bottom looking for Try frames
+            while let Some(frame) = vm.frames.last() {
+                match &frame.kind {
+                    super::types::FrameKind::Try {
+                        phase,
+                        catch_var,
+                    } => {
+                        // Found a try/catch handler!
+                        // Bind the error to the catch variable
+                        vm.env.insert(catch_var.clone(), error.clone());
+
+                        // Transition this frame to ExecuteCatch phase
+                        let frame_idx = vm.frames.len() - 1;
+                        vm.frames[frame_idx].kind = super::types::FrameKind::Try {
+                            phase: super::types::TryPhase::ExecuteCatch,
+                            catch_var: catch_var.clone(),
+                        };
+
+                        // Clear the error control flow
+                        vm.control = super::types::Control::None;
+
+                        // Continue execution (will run the catch block)
+                        return Step::Continue;
+                    }
+                    _ => {
+                        // Not a try/catch handler, pop this frame and continue
+                        vm.frames.pop();
+                    }
+                }
+            }
+
+            // No try/catch handler found - error propagates to top level
+            // Restore the error control (we cleared it in the loop check)
+            vm.control = super::types::Control::Throw(error.clone());
             Step::Done
         }
 

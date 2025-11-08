@@ -1,7 +1,7 @@
 //! Control flow and execution frame types
 
 use super::ast::Stmt;
-use super::phase::{BlockPhase, ReturnPhase};
+use super::phase::{BlockPhase, ReturnPhase, TryPhase};
 use super::values::Val;
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +31,7 @@ pub enum Control {
 pub enum FrameKind {
     Return { phase: ReturnPhase },
     Block { phase: BlockPhase, idx: usize },
+    Try { phase: TryPhase, catch_var: String },
     // Future frame kinds will be added here as we implement more statement types:
     // Let { phase: LetPhase, name: String, has_init: bool },
     // Assign { phase: AssignPhase, name: String },

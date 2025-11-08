@@ -4,7 +4,7 @@
 //! the statement based on its current execution phase.
 
 use super::expressions::{eval_expr, EvalResult};
-use super::types::{BlockPhase, Control, Expr, ReturnPhase, Stmt, Val};
+use super::types::{BlockPhase, Control, Expr, ReturnPhase, Stmt, TryPhase, Val};
 use super::vm::{push_stmt, Step, VM};
 
 /* ===================== Statement Handlers ===================== */
@@ -69,6 +69,33 @@ pub fn execute_return(vm: &mut VM, phase: ReturnPhase, value: Option<Expr>) -> S
 
             // Pop this frame
             vm.frames.pop();
+
+            Step::Continue
+        }
+    }
+}
+
+/// Execute Try statement
+pub fn execute_try(
+    vm: &mut VM,
+    phase: TryPhase,
+    catch_var: String,
+    body: Box<Stmt>,
+    catch_body: Box<Stmt>,
+) -> Step {
+    match phase {
+        TryPhase::ExecuteTry => {
+            // Push the try body onto the stack
+            push_stmt(vm, &body);
+            Step::Continue
+        }
+        TryPhase::ExecuteCatch => {
+            // We're now executing the catch block
+            // Pop this Try frame BEFORE pushing the catch body
+            vm.frames.pop();
+
+            // Push the catch body onto the stack
+            push_stmt(vm, &catch_body);
 
             Step::Continue
         }

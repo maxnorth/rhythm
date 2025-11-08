@@ -19,10 +19,19 @@ pub enum BlockPhase {
     Execute = 0,
 }
 
+/// Execution phase for Try statements
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum TryPhase {
+    /// Executing the try block
+    ExecuteTry = 0,
+    /// Executing the catch block (error was caught)
+    ExecuteCatch = 1,
+}
+
 // Future Phase enums will be added here as we implement more statement types:
 // - LetPhase
 // - AssignPhase
 // - IfPhase
 // - WhilePhase
 // - ForPhase
-// - TryPhase

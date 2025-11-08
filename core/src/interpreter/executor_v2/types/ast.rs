@@ -34,6 +34,11 @@ pub enum Stmt {
     Return {
         value: Option<Expr>,
     },
+    Try {
+        body: Box<Stmt>,
+        catch_var: String,
+        catch_body: Box<Stmt>,
+    },
     Break,
     Continue,
 }
