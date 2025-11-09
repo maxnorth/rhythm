@@ -2,6 +2,14 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Member access segment for assignment paths
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "t")]
+pub enum MemberAccess {
+    Prop { property: String },
+    Index { expr: Expr },
+}
+
 /// Statement AST node
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "t")]
@@ -14,8 +22,9 @@ pub enum Stmt {
         init: Option<Expr>,
     },
     Assign {
-        name: String,
-        expr: Expr,
+        var: String,
+        path: Vec<MemberAccess>,
+        value: Expr,
     },
     If {
         test: Expr,

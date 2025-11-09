@@ -43,6 +43,47 @@ pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val], outbox: &mut Outbox) ->
     }
 }
 
+/* ===================== Utilities ===================== */
+
+/// Convert value to string representation
+///
+/// This implements JavaScript's ToString abstract operation.
+/// Used for property key conversion, string concatenation, etc.
+pub fn to_string(val: &Val) -> String {
+    match val {
+        Val::Null => "null".to_string(),
+        Val::Bool(true) => "true".to_string(),
+        Val::Bool(false) => "false".to_string(),
+        Val::Num(n) => {
+            // Handle special numeric cases
+            if n.is_nan() {
+                "NaN".to_string()
+            } else if n.is_infinite() {
+                if *n > 0.0 {
+                    "Infinity".to_string()
+                } else {
+                    "-Infinity".to_string()
+                }
+            } else if *n == 0.0 {
+                // Handle both +0 and -0
+                "0".to_string()
+            } else if n.fract() == 0.0 {
+                // Integer value - format without decimal point
+                format!("{}", *n as i64)
+            } else {
+                // Regular number formatting with decimal
+                n.to_string()
+            }
+        }
+        Val::Str(s) => s.clone(),
+        Val::List(_) => "[object Array]".to_string(),
+        Val::Obj(_) => "[object Object]".to_string(),
+        Val::Task(id) => format!("[Task {}]", id),
+        Val::Error(err) => format!("[Error: {}]", err.message),
+        Val::NativeFunc(_) => "[Function]".to_string(),
+    }
+}
+
 /* ===================== Environment Injection ===================== */
 
 /// Inject standard library objects into the environment

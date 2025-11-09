@@ -117,9 +117,8 @@ pub fn push_stmt(vm: &mut VM, stmt: &Stmt) {
             phase: ExprPhase::Eval,
         },
 
-        Stmt::Assign { name, .. } => FrameKind::Assign {
+        Stmt::Assign { .. } => FrameKind::Assign {
             phase: AssignPhase::Eval,
-            name: name.clone(),
         },
 
         // Other statement types not yet implemented

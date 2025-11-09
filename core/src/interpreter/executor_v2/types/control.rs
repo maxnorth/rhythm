@@ -33,7 +33,7 @@ pub enum FrameKind {
     Block { phase: BlockPhase, idx: usize },
     Try { phase: TryPhase, catch_var: String },
     Expr { phase: ExprPhase },
-    Assign { phase: AssignPhase, name: String },
+    Assign { phase: AssignPhase },
     // Future frame kinds will be added here as we implement more statement types:
     // Let { phase: LetPhase, name: String, has_init: bool },
     // If { phase: IfPhase, branch_then: bool },

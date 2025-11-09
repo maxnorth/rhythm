@@ -3,9 +3,12 @@
 //! Each statement type has its own handler function that processes
 //! the statement based on its current execution phase.
 
+use super::errors::ErrorInfo;
 use super::expressions::{eval_expr, EvalResult};
+use super::stdlib::to_string;
 use super::types::{
-    AssignPhase, BlockPhase, Control, Expr, ExprPhase, ReturnPhase, Stmt, TryPhase, Val,
+    AssignPhase, BlockPhase, Control, Expr, ExprPhase, MemberAccess, ReturnPhase, Stmt, TryPhase,
+    Val,
 };
 use super::vm::{push_stmt, Step, VM};
 
@@ -136,33 +139,192 @@ pub fn execute_expr(vm: &mut VM, phase: ExprPhase, expr: Expr) -> Step {
 }
 
 /// Execute Assign statement
-pub fn execute_assign(vm: &mut VM, phase: AssignPhase, name: String, expr: Expr) -> Step {
+pub fn execute_assign(
+    vm: &mut VM,
+    phase: AssignPhase,
+    var: String,
+    path: Vec<MemberAccess>,
+    value: Expr,
+) -> Step {
     match phase {
         AssignPhase::Eval => {
-            // Evaluate the expression to assign
-            match eval_expr(&expr, &vm.env, &mut vm.resume_value, &mut vm.outbox) {
-                EvalResult::Value { v } => {
-                    // Store the value in the environment
-                    vm.env.insert(name, v);
-
-                    // Pop this frame and continue
-                    vm.frames.pop();
-                    Step::Continue
-                }
-                EvalResult::Suspend { task_id } => {
-                    // Expression suspended (await encountered)
-                    // Set control to Suspend and stop execution
-                    // DO NOT pop the frame - we need to preserve state for resumption
-                    vm.control = Control::Suspend(task_id);
-                    Step::Done
-                }
-                EvalResult::Throw { error } => {
-                    // Expression threw an error
-                    // Set control to Throw and DO NOT pop frame (unwinding will handle it)
-                    vm.control = Control::Throw(error);
-                    Step::Continue
+            // Step 1: Evaluate all path segment expressions and build the access path
+            // We need to track both the keys and the segment types for runtime validation
+            let mut path_segments: Vec<(String, bool)> = Vec::new(); // (key, is_prop)
+            for segment in &path {
+                match segment {
+                    MemberAccess::Prop { property } => {
+                        // Static property - use as-is
+                        path_segments.push((property.clone(), true));
+                    }
+                    MemberAccess::Index { expr } => {
+                        // Evaluate the index expression and convert to string key
+                        match eval_expr(expr, &vm.env, &mut vm.resume_value, &mut vm.outbox) {
+                            EvalResult::Value { v } => {
+                                path_segments.push((to_string(&v), false));
+                            }
+                            EvalResult::Suspend { .. } => {
+                                // Should never happen - semantic validator ensures no await in paths
+                                panic!("Internal error: await in assignment path");
+                            }
+                            EvalResult::Throw { error } => {
+                                // Index expression threw an error
+                                vm.control = Control::Throw(error);
+                                return Step::Continue;
+                            }
+                        }
+                    }
                 }
             }
+
+            // Step 2: Evaluate the value expression
+            let value_result = match eval_expr(&value, &vm.env, &mut vm.resume_value, &mut vm.outbox)
+            {
+                EvalResult::Value { v } => v,
+                EvalResult::Suspend { task_id } => {
+                    // Expression suspended (await encountered)
+                    // For simple assignment (empty path), this is allowed
+                    // For attribute assignment (non-empty path), semantic validator should prevent this
+                    if !path_segments.is_empty() {
+                        panic!("Internal error: await in attribute assignment value");
+                    }
+                    vm.control = Control::Suspend(task_id);
+                    return Step::Done;
+                }
+                EvalResult::Throw { error } => {
+                    // Value expression threw an error
+                    vm.control = Control::Throw(error);
+                    return Step::Continue;
+                }
+            };
+
+            // Step 3: Perform the assignment
+            if path_segments.is_empty() {
+                // Simple assignment: x = value
+                vm.env.insert(var, value_result);
+            } else {
+                // Attribute assignment: obj.prop = value or arr[i] = value
+                // Get the base object from the environment
+                let base = match vm.env.get_mut(&var) {
+                    Some(v) => v,
+                    None => {
+                        // Variable doesn't exist
+                        vm.control = Control::Throw(Val::Error(ErrorInfo {
+                            code: "ReferenceError".to_string(),
+                            message: format!("Variable '{}' is not defined", var),
+                        }));
+                        return Step::Continue;
+                    }
+                };
+
+                // Walk the path, navigating to the container that holds the final property
+                let mut current = base;
+                for (key, is_prop) in &path_segments[..path_segments.len() - 1] {
+                    // Validate access type matches value type
+                    if *is_prop {
+                        // Prop access - only valid on objects
+                        if !matches!(current, Val::Obj(_)) {
+                            vm.control = Control::Throw(Val::Error(ErrorInfo {
+                                code: "TypeError".to_string(),
+                                message: format!("Cannot access property '{}' on non-object value", key),
+                            }));
+                            return Step::Continue;
+                        }
+                    } else {
+                        // Index access - valid on objects and arrays
+                        if !matches!(current, Val::Obj(_) | Val::List(_)) {
+                            vm.control = Control::Throw(Val::Error(ErrorInfo {
+                                code: "TypeError".to_string(),
+                                message: format!("Cannot use index access on non-object/non-array value"),
+                            }));
+                            return Step::Continue;
+                        }
+                    }
+
+                    current = match current {
+                        Val::Obj(map) => match map.get_mut(key) {
+                            Some(v) => v,
+                            None => {
+                                vm.control = Control::Throw(Val::Error(ErrorInfo {
+                                    code: "TypeError".to_string(),
+                                    message: format!("Cannot read property '{}' of undefined", key),
+                                }));
+                                return Step::Continue;
+                            }
+                        },
+                        Val::List(arr) => {
+                            // Try to parse key as number
+                            match key.parse::<usize>() {
+                                Ok(idx) if idx < arr.len() => &mut arr[idx],
+                                _ => {
+                                    vm.control = Control::Throw(Val::Error(ErrorInfo {
+                                        code: "TypeError".to_string(),
+                                        message: format!("Invalid array index: {}", key),
+                                    }));
+                                    return Step::Continue;
+                                }
+                            }
+                        }
+                        _ => {
+                            // This should never happen due to validation above
+                            unreachable!();
+                        }
+                    };
+                }
+
+                // Set the final property with type validation
+                let (final_key, is_prop) = &path_segments[path_segments.len() - 1];
+
+                // Validate access type matches value type
+                if *is_prop {
+                    // Prop access - only valid on objects
+                    if !matches!(current, Val::Obj(_)) {
+                        vm.control = Control::Throw(Val::Error(ErrorInfo {
+                            code: "TypeError".to_string(),
+                            message: format!("Cannot set property '{}' on non-object value", final_key),
+                        }));
+                        return Step::Continue;
+                    }
+                } else {
+                    // Index access - valid on objects and arrays
+                    if !matches!(current, Val::Obj(_) | Val::List(_)) {
+                        vm.control = Control::Throw(Val::Error(ErrorInfo {
+                            code: "TypeError".to_string(),
+                            message: format!("Cannot use index access on non-object/non-array value"),
+                        }));
+                        return Step::Continue;
+                    }
+                }
+
+                match current {
+                    Val::Obj(map) => {
+                        map.insert(final_key.clone(), value_result);
+                    }
+                    Val::List(arr) => {
+                        // Try to parse key as number
+                        match final_key.parse::<usize>() {
+                            Ok(idx) if idx < arr.len() => {
+                                arr[idx] = value_result;
+                            }
+                            _ => {
+                                vm.control = Control::Throw(Val::Error(ErrorInfo {
+                                    code: "TypeError".to_string(),
+                                    message: format!("Invalid array index: {}", final_key),
+                                }));
+                                return Step::Continue;
+                            }
+                        }
+                    }
+                    _ => {
+                        // This should never happen due to validation above
+                        unreachable!();
+                    }
+                }
+            }
+
+            // Pop this frame and continue
+            vm.frames.pop();
+            Step::Continue
         }
     }
 }

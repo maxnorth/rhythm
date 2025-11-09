@@ -75,9 +75,10 @@ pub fn step(vm: &mut VM) -> Step {
 
         (FrameKind::Expr { phase }, Stmt::Expr { expr }) => execute_expr(vm, phase, expr),
 
-        (FrameKind::Assign { phase, name }, Stmt::Assign { name: _, expr }) => {
-            execute_assign(vm, phase, name, expr)
-        }
+        (
+            FrameKind::Assign { phase },
+            Stmt::Assign { var, path, value },
+        ) => execute_assign(vm, phase, var, path, value),
 
         // Shouldn't happen - frame kind doesn't match node
         _ => panic!("Frame kind does not match statement node"),
