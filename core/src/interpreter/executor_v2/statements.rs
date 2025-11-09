@@ -7,8 +7,8 @@ use super::errors::ErrorInfo;
 use super::expressions::{eval_expr, EvalResult};
 use super::stdlib::to_string;
 use super::types::{
-    AssignPhase, BlockPhase, Control, Expr, ExprPhase, IfPhase, MemberAccess, ReturnPhase, Stmt,
-    TryPhase, Val,
+    AssignPhase, BlockPhase, BreakPhase, ContinuePhase, Control, Expr, ExprPhase, IfPhase,
+    MemberAccess, ReturnPhase, Stmt, TryPhase, Val, WhilePhase,
 };
 use super::vm::{push_stmt, Step, VM};
 
@@ -372,4 +372,56 @@ pub fn execute_if(
             Step::Continue
         }
     }
+}
+
+/// Execute While statement
+pub fn execute_while(vm: &mut VM, phase: WhilePhase, test: Expr, body: Box<Stmt>) -> Step {
+    match phase {
+        WhilePhase::Eval => {
+            // Evaluate the test expression
+            let test_val = match eval_expr(&test, &vm.env, &mut vm.resume_value, &mut vm.outbox) {
+                EvalResult::Value { v } => v,
+                EvalResult::Suspend { .. } => {
+                    // Should never happen - semantic validator ensures no await in test
+                    panic!("Internal error: await in while test expression");
+                }
+                EvalResult::Throw { error } => {
+                    // Test expression threw an error
+                    vm.control = Control::Throw(error);
+                    return Step::Continue;
+                }
+            };
+
+            // Check truthiness to decide whether to continue the loop
+            let is_truthy = test_val.is_truthy();
+
+            if is_truthy {
+                // Continue looping - keep the While frame on the stack and push the body
+                push_stmt(vm, &body);
+                Step::Continue
+            } else {
+                // Loop finished - pop this While frame
+                vm.frames.pop();
+                Step::Continue
+            }
+        }
+    }
+}
+
+/// Execute Break statement
+pub fn execute_break(vm: &mut VM, _phase: BreakPhase) -> Step {
+    // Set control flow to Break (no label support yet)
+    vm.control = Control::Break(None);
+    // Pop this Break frame
+    vm.frames.pop();
+    Step::Continue
+}
+
+/// Execute Continue statement
+pub fn execute_continue(vm: &mut VM, _phase: ContinuePhase) -> Step {
+    // Set control flow to Continue (no label support yet)
+    vm.control = Control::Continue(None);
+    // Pop this Continue frame
+    vm.frames.pop();
+    Step::Continue
 }

@@ -18,11 +18,24 @@ use serde::{Deserialize, Serialize};
 /// These are serializable and can be stored in the environment.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StdlibFunc {
+    // Math functions
     MathFloor,
     MathCeil,
     MathAbs,
     MathRound,
+    // Task functions
     TaskRun,
+    // Arithmetic operators
+    Add,
+    Sub,
+    Mul,
+    Div,
+    // Comparison operators
+    Eq,
+    Lt,
+    Lte,
+    Gt,
+    Gte,
 }
 
 /* ===================== Stdlib Dispatcher ===================== */
@@ -40,6 +53,150 @@ pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val], outbox: &mut Outbox) ->
         StdlibFunc::MathRound => math::round(args),
         // Task functions have side effects - outbox required
         StdlibFunc::TaskRun => task::run(args, outbox),
+        // Arithmetic operators
+        StdlibFunc::Add => add(args),
+        StdlibFunc::Sub => sub(args),
+        StdlibFunc::Mul => mul(args),
+        StdlibFunc::Div => div(args),
+        // Comparison operators
+        StdlibFunc::Eq => eq(args),
+        StdlibFunc::Lt => lt(args),
+        StdlibFunc::Lte => lte(args),
+        StdlibFunc::Gt => gt(args),
+        StdlibFunc::Gte => gte(args),
+    }
+}
+
+/* ===================== Arithmetic Operators ===================== */
+
+use super::errors::ErrorInfo;
+
+fn add(args: &[Val]) -> EvalResult {
+    if args.len() != 2 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "add expects 2 arguments")),
+        };
+    }
+    match (&args[0], &args[1]) {
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Num(a + b) },
+        _ => EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "add expects two numbers")),
+        },
+    }
+}
+
+fn sub(args: &[Val]) -> EvalResult {
+    if args.len() != 2 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "sub expects 2 arguments")),
+        };
+    }
+    match (&args[0], &args[1]) {
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Num(a - b) },
+        _ => EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "sub expects two numbers")),
+        },
+    }
+}
+
+fn mul(args: &[Val]) -> EvalResult {
+    if args.len() != 2 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "mul expects 2 arguments")),
+        };
+    }
+    match (&args[0], &args[1]) {
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Num(a * b) },
+        _ => EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "mul expects two numbers")),
+        },
+    }
+}
+
+fn div(args: &[Val]) -> EvalResult {
+    if args.len() != 2 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "div expects 2 arguments")),
+        };
+    }
+    match (&args[0], &args[1]) {
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Num(a / b) },
+        _ => EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "div expects two numbers")),
+        },
+    }
+}
+
+/* ===================== Comparison Operators ===================== */
+
+fn eq(args: &[Val]) -> EvalResult {
+    if args.len() != 2 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "eq expects 2 arguments")),
+        };
+    }
+    match (&args[0], &args[1]) {
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Bool(a == b) },
+        (Val::Bool(a), Val::Bool(b)) => EvalResult::Value { v: Val::Bool(a == b) },
+        (Val::Str(a), Val::Str(b)) => EvalResult::Value { v: Val::Bool(a == b) },
+        (Val::Null, Val::Null) => EvalResult::Value { v: Val::Bool(true) },
+        _ => EvalResult::Value { v: Val::Bool(false) },
+    }
+}
+
+fn lt(args: &[Val]) -> EvalResult {
+    if args.len() != 2 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "lt expects 2 arguments")),
+        };
+    }
+    match (&args[0], &args[1]) {
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Bool(a < b) },
+        _ => EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "lt expects two numbers")),
+        },
+    }
+}
+
+fn lte(args: &[Val]) -> EvalResult {
+    if args.len() != 2 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "lte expects 2 arguments")),
+        };
+    }
+    match (&args[0], &args[1]) {
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Bool(a <= b) },
+        _ => EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "lte expects two numbers")),
+        },
+    }
+}
+
+fn gt(args: &[Val]) -> EvalResult {
+    if args.len() != 2 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "gt expects 2 arguments")),
+        };
+    }
+    match (&args[0], &args[1]) {
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Bool(a > b) },
+        _ => EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "gt expects two numbers")),
+        },
+    }
+}
+
+fn gte(args: &[Val]) -> EvalResult {
+    if args.len() != 2 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "gte expects 2 arguments")),
+        };
+    }
+    match (&args[0], &args[1]) {
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Bool(a >= b) },
+        _ => EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "gte expects two numbers")),
+        },
     }
 }
 
@@ -111,4 +268,15 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     // Add stdlib objects to environment
     env.insert("Math".to_string(), Val::Obj(math_obj));
     env.insert("Task".to_string(), Val::Obj(task_obj));
+
+    // Add global operator functions
+    env.insert("add".to_string(), Val::NativeFunc(StdlibFunc::Add));
+    env.insert("sub".to_string(), Val::NativeFunc(StdlibFunc::Sub));
+    env.insert("mul".to_string(), Val::NativeFunc(StdlibFunc::Mul));
+    env.insert("div".to_string(), Val::NativeFunc(StdlibFunc::Div));
+    env.insert("eq".to_string(), Val::NativeFunc(StdlibFunc::Eq));
+    env.insert("lt".to_string(), Val::NativeFunc(StdlibFunc::Lt));
+    env.insert("lte".to_string(), Val::NativeFunc(StdlibFunc::Lte));
+    env.insert("gt".to_string(), Val::NativeFunc(StdlibFunc::Gt));
+    env.insert("gte".to_string(), Val::NativeFunc(StdlibFunc::Gte));
 }

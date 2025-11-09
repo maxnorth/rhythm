@@ -9,7 +9,8 @@
 //! 2. step() - Main execution loop (dispatches to statement handlers)
 
 use super::statements::{
-    execute_assign, execute_block, execute_expr, execute_if, execute_return, execute_try,
+    execute_assign, execute_block, execute_break, execute_continue, execute_expr, execute_if,
+    execute_return, execute_try, execute_while,
 };
 use super::types::{Control, FrameKind, Stmt};
 use super::vm::{Step, VM};
@@ -91,6 +92,14 @@ pub fn step(vm: &mut VM) -> Step {
             },
         ) => execute_if(vm, phase, test, then_s, else_s),
 
+        (FrameKind::While { phase, label: _ }, Stmt::While { test, body }) => {
+            execute_while(vm, phase, test, body)
+        }
+
+        (FrameKind::Break { phase }, Stmt::Break) => execute_break(vm, phase),
+
+        (FrameKind::Continue { phase }, Stmt::Continue) => execute_continue(vm, phase),
+
         // Shouldn't happen - frame kind doesn't match node
         _ => panic!("Frame kind does not match statement node"),
     }
@@ -162,9 +171,86 @@ fn unwind(vm: &mut VM) -> Step {
             Step::Done
         }
 
-        Control::Break | Control::Continue => {
-            // Not yet implemented - will be added in later milestones
-            panic!("Break/Continue not yet implemented");
+        Control::Break(label) => {
+            // Break: Pop frames until we find a matching loop (While/For)
+            while let Some(frame) = vm.frames.last() {
+                match &frame.kind {
+                    super::types::FrameKind::While {
+                        phase: _,
+                        label: loop_label,
+                    } => {
+                        // Check if this is the target loop
+                        if label.is_none() || label == loop_label {
+                            // Found the target loop - pop it and clear control flow
+                            vm.frames.pop();
+                            vm.control = Control::None;
+                            return Step::Continue;
+                        } else {
+                            // Not the target loop - pop and continue searching
+                            vm.frames.pop();
+                        }
+                    }
+                    _ => {
+                        // Not a loop frame - pop it and continue
+                        vm.frames.pop();
+                    }
+                }
+            }
+
+            // No matching loop found - this is an error
+            // Restore the break control and signal done (error at top level)
+            vm.control = Control::Break(label.clone());
+            Step::Done
+        }
+
+        Control::Continue(label) => {
+            // Continue: Pop frames until we find a matching loop, then reset it to re-evaluate test
+            // First, collect frames to pop (everything above the target loop)
+            let mut frames_to_pop = 0;
+            let mut found_loop = false;
+
+            for i in (0..vm.frames.len()).rev() {
+                match &vm.frames[i].kind {
+                    super::types::FrameKind::While {
+                        phase: _,
+                        label: loop_label,
+                    } => {
+                        // Check if this is the target loop
+                        if label.is_none() || label == loop_label {
+                            // Found target loop!
+                            found_loop = true;
+                            // Don't include this frame in frames_to_pop
+                            break;
+                        } else {
+                            // Not the target loop - count it for popping
+                            frames_to_pop += 1;
+                        }
+                    }
+                    _ => {
+                        // Not a loop frame - count it for popping
+                        frames_to_pop += 1;
+                    }
+                }
+            }
+
+            if found_loop {
+                // Pop all frames above the target loop
+                for _ in 0..frames_to_pop {
+                    vm.frames.pop();
+                }
+
+                // The target loop is now at the top
+                // We don't need to reset its phase - it's already in Eval phase
+                // (WhilePhase only has one phase: Eval)
+
+                // Clear control flow and continue
+                vm.control = Control::None;
+                Step::Continue
+            } else {
+                // No matching loop found - this is an error
+                vm.control = Control::Continue(label.clone());
+                Step::Done
+            }
         }
     }
 }

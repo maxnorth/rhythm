@@ -14,8 +14,8 @@
 //! - [x] **Milestone 1**: Core execution loop with Return statement only
 //! - [x] **Milestone 2**: Assign statements (variables and attribute assignment)
 //! - [x] **Milestone 3**: Block statement with proper scoping
-//! - [x] **Milestone 4**: If control flow (partial - If done, While pending)
-//! - [ ] **Milestone 5**: While loops
+//! - [x] **Milestone 4**: If control flow
+//! - [x] **Milestone 5**: While loops with Break/Continue
 //! - [ ] **Milestone 6**: For loops
 //! - [x] **Milestone 7**: Try/Catch with unwinding
 //! - [x] **Milestone 8**: Await/suspend/resume
@@ -25,12 +25,12 @@
 //! ## Completed Features
 //!
 //! - Core execution loop with frame-based stack
-//! - Return, Block, Try/Catch, Expr, Assign, If statements
+//! - Return, Block, Try/Catch, Expr, Assign, If, While, Break, Continue statements
 //! - Expression evaluation (literals, identifiers, member access, function calls, await)
 //! - Attribute assignment with runtime type checking (obj.prop = value, arr[i] = value)
-//! - Control flow: Return, Throw (Break/Continue pending)
+//! - Control flow: Return, Throw, Break, Continue
 //! - Suspend/Resume for async task execution
-//! - Standard library (Math, Task modules)
+//! - Standard library (Math, Task modules, arithmetic and comparison operators)
 
 pub mod errors;
 pub mod exec_loop;

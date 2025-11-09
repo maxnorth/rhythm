@@ -53,7 +53,30 @@ pub enum IfPhase {
     Eval = 0,
 }
 
+/// Execution phase for While statements
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum WhilePhase {
+    /// Evaluate the test expression and decide whether to execute body
+    Eval = 0,
+}
+
+/// Execution phase for Break statements
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum BreakPhase {
+    /// Set control flow to Break
+    Execute = 0,
+}
+
+/// Execution phase for Continue statements
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum ContinuePhase {
+    /// Set control flow to Continue
+    Execute = 0,
+}
+
 // Future Phase enums will be added here as we implement more statement types:
 // - LetPhase
-// - WhilePhase
 // - ForPhase

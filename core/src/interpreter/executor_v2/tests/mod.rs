@@ -10,3 +10,4 @@ mod if_tests;
 mod literal_tests;
 mod stdlib_tests;
 mod task_tests;
+mod while_tests;

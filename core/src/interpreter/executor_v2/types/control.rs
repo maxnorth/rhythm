@@ -1,7 +1,10 @@
 //! Control flow and execution frame types
 
 use super::ast::Stmt;
-use super::phase::{AssignPhase, BlockPhase, ExprPhase, IfPhase, ReturnPhase, TryPhase};
+use super::phase::{
+    AssignPhase, BlockPhase, BreakPhase, ContinuePhase, ExprPhase, IfPhase, ReturnPhase, TryPhase,
+    WhilePhase,
+};
 use super::values::Val;
 use serde::{Deserialize, Serialize};
 
@@ -16,8 +19,8 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "t", content = "v")]
 pub enum Control {
     None,
-    Break,
-    Continue,
+    Break(Option<String>),  // Optional loop label
+    Continue(Option<String>), // Optional loop label
     Return(Val),
     Throw(Val),
     Suspend(String), // Task ID to suspend on
@@ -35,10 +38,12 @@ pub enum FrameKind {
     Expr { phase: ExprPhase },
     Assign { phase: AssignPhase },
     If { phase: IfPhase },
+    While { phase: WhilePhase, label: Option<String> },
+    Break { phase: BreakPhase },
+    Continue { phase: ContinuePhase },
     // Future frame kinds will be added here as we implement more statement types:
     // Let { phase: LetPhase, name: String, has_init: bool },
-    // While { phase: WhilePhase },
-    // For { phase: ForPhase, ... },
+    // For { phase: ForPhase, label: Option<String>, ... },
 }
 
 /// Execution frame - one per active statement
