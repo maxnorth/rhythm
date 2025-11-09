@@ -18,7 +18,15 @@ return_stmt = { "return" ~ expression }
 // Identifiers
 identifier = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
-expression = { literal }
+expression = { member_expr }
+
+// Member access: foo, foo.bar, foo.bar.baz
+member_expr = { primary ~ ("." ~ identifier)* }
+
+primary = {
+    literal
+    | identifier
+}
 
 literal = {
     boolean

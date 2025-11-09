@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use super::executor_v2::types::ast::{Expr, Stmt};
 
+pub mod semantic_validator;
+
 #[cfg(test)]
 mod tests;
 
@@ -57,9 +59,9 @@ pub type ParseResult<T> = Result<T, ParseError>;
 
 /// Parse a Flow source string into a workflow definition
 ///
-/// Supports two modes:
-/// 1. Full workflow: `async function workflow(params) { body }`
-/// 2. Legacy single statement: `return 42` (converted to workflow with no params)
+/// ONLY accepts workflow function syntax: `async function workflow(params) { body }`
+///
+/// This is the production API. Use `parse()` for testing individual statements.
 pub fn parse_workflow(source: &str) -> ParseResult<WorkflowDef> {
     let mut pairs = FlowParser::parse(Rule::program, source)?;
 
@@ -71,12 +73,10 @@ pub fn parse_workflow(source: &str) -> ParseResult<WorkflowDef> {
     match content.as_rule() {
         Rule::workflow_function => build_workflow_function(content),
         Rule::statement => {
-            // Legacy mode: convert single statement to workflow with no params
-            let stmt = build_statement(content)?;
-            Ok(WorkflowDef {
-                params: vec![],
-                body: stmt,
-            })
+            // Reject bare statements - must use workflow wrapper
+            Err(ParseError::BuildError(
+                "Workflow must be wrapped in 'async function workflow(...) { ... }'".to_string()
+            ))
         }
         _ => Err(ParseError::BuildError(format!(
             "Unexpected program content: {:?}",
@@ -85,13 +85,32 @@ pub fn parse_workflow(source: &str) -> ParseResult<WorkflowDef> {
     }
 }
 
-/// Parse a Flow source string into an AST statement (legacy API)
+/// Parse a Flow source string into an AST statement (testing API)
 ///
-/// This function exists for backward compatibility with existing tests.
-/// New code should use `parse_workflow` instead.
+/// This function allows parsing bare statements for testing parser internals.
+/// It bypasses the workflow wrapper requirement.
+///
+/// Production code should use `parse_workflow` which enforces the wrapper.
 pub fn parse(source: &str) -> ParseResult<Stmt> {
-    let workflow = parse_workflow(source)?;
-    Ok(workflow.body)
+    let mut pairs = FlowParser::parse(Rule::program, source)?;
+    let program = pairs.next().unwrap();
+    let content = program.into_inner().next().unwrap();
+
+    match content.as_rule() {
+        Rule::workflow_function => {
+            // If it's a workflow function, extract the body
+            let workflow = build_workflow_function(content)?;
+            Ok(workflow.body)
+        }
+        Rule::statement => {
+            // Allow bare statements for testing
+            build_statement(content)
+        }
+        _ => Err(ParseError::BuildError(format!(
+            "Unexpected program content: {:?}",
+            content.as_rule()
+        ))),
+    }
 }
 
 /* ===================== AST Builder ===================== */
@@ -167,9 +186,37 @@ fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
 fn build_expression(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
     match pair.as_rule() {
         Rule::expression => {
-            // expression = { literal }
+            // expression = { member_expr }
             let inner = pair.into_inner().next().unwrap();
             build_expression(inner)
+        }
+        Rule::member_expr => {
+            // member_expr = { primary ~ ("." ~ identifier)* }
+            let mut inner = pair.into_inner();
+
+            // Start with the primary expression
+            let primary = inner.next().unwrap();
+            let mut expr = build_expression(primary)?;
+
+            // Chain member accesses left-to-right
+            for property_pair in inner {
+                let property = property_pair.as_str().to_string();
+                expr = Expr::Member {
+                    object: Box::new(expr),
+                    property,
+                };
+            }
+
+            Ok(expr)
+        }
+        Rule::primary => {
+            // primary = { literal | identifier }
+            let inner = pair.into_inner().next().unwrap();
+            build_expression(inner)
+        }
+        Rule::identifier => {
+            let name = pair.as_str().to_string();
+            Ok(Expr::Ident { name })
         }
         Rule::literal => {
             // literal = { boolean | number | string | null_lit }
