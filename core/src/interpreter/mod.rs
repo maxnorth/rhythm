@@ -16,6 +16,7 @@
 //! This module only provides the core parsing and execution primitives.
 
 pub mod parser;
+pub mod parser_v2;
 pub mod semantic_validator;
 pub mod executor;
 pub mod executor_v2;

@@ -1,0 +1,30 @@
+// Flow v2 Grammar - Minimal Phase 1
+// Supports: return statement with literals only
+
+program = { SOI ~ statement ~ EOI }
+
+statement = { return_stmt }
+
+return_stmt = { "return" ~ expression }
+
+expression = { literal }
+
+literal = {
+    boolean
+    | number
+    | string
+    | null_lit
+}
+
+// Literals
+number = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+boolean = { "true" | "false" }
+string = { "\"" ~ string_content ~ "\"" }
+string_content = @{ (!("\"") ~ ANY)* }
+null_lit = { "null" }
+
+// Whitespace and comments
+WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
+COMMENT = _{ line_comment | block_comment }
+line_comment = { "//" ~ (!"\n" ~ ANY)* }
+block_comment = { "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
