@@ -29,9 +29,10 @@ pub enum EvalResult {
 /// Evaluate an expression to a value, suspension signal, or error
 ///
 /// Supports:
-/// - Literals (Bool, Num, Str)
+/// - Literals (Bool, Num, Str, Null, List, Obj)
 /// - Identifiers (variable lookup)
 /// - Member access (object.property)
+/// - Function calls
 /// - Await (suspension)
 ///
 /// Parameters:
@@ -60,6 +61,8 @@ pub fn eval_expr(
         Expr::LitStr { v } => EvalResult::Value {
             v: Val::Str(v.clone()),
         },
+
+        Expr::LitNull => EvalResult::Value { v: Val::Null },
 
         Expr::LitList { elements } => {
             // Evaluate all elements (left to right)

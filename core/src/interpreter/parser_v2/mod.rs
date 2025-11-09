@@ -241,7 +241,7 @@ fn build_expression(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
             let value = content.as_str().to_string();
             Ok(Expr::LitStr { v: value })
         }
-        Rule::null_lit => Ok(Expr::LitBool { v: false }), // Temporary: map null to false
+        Rule::null_lit => Ok(Expr::LitNull),
         _ => Err(ParseError::BuildError(format!(
             "Unexpected expression rule: {:?}",
             pair.as_rule()

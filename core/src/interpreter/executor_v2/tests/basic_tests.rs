@@ -117,17 +117,13 @@ fn test_return_literal_str() {
 
 #[test]
 fn test_return_null() {
-    // Note: Parser currently maps null to false, so using JSON to test null support
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": null
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx) {
+            return null
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
     assert_eq!(vm.control, Control::Return(Val::Null));
