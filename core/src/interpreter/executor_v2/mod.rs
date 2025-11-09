@@ -12,13 +12,25 @@
 //! ## Implementation Milestones
 //!
 //! - [x] **Milestone 1**: Core execution loop with Return statement only
-//! - [ ] **Milestone 2**: Let and Assign statements (variables)
-//! - [ ] **Milestone 3**: Block statement with proper scoping
-//! - [ ] **Milestone 4**: If/While control flow
-//! - [ ] **Milestone 5**: For loops
-//! - [ ] **Milestone 6**: Try/Catch/Finally with unwinding
-//! - [ ] **Milestone 7**: Await/suspend/resume
-//! - [ ] **Milestone 8**: Task outbox and stdlib integration
+//! - [x] **Milestone 2**: Assign statements (variables and attribute assignment)
+//! - [x] **Milestone 3**: Block statement with proper scoping
+//! - [x] **Milestone 4**: If control flow (partial - If done, While pending)
+//! - [ ] **Milestone 5**: While loops
+//! - [ ] **Milestone 6**: For loops
+//! - [x] **Milestone 7**: Try/Catch with unwinding
+//! - [x] **Milestone 8**: Await/suspend/resume
+//! - [x] **Milestone 9**: Task outbox and stdlib integration
+//! - [x] **Milestone 10**: Expression evaluation with literals, member access, calls
+//!
+//! ## Completed Features
+//!
+//! - Core execution loop with frame-based stack
+//! - Return, Block, Try/Catch, Expr, Assign, If statements
+//! - Expression evaluation (literals, identifiers, member access, function calls, await)
+//! - Attribute assignment with runtime type checking (obj.prop = value, arr[i] = value)
+//! - Control flow: Return, Throw (Break/Continue pending)
+//! - Suspend/Resume for async task execution
+//! - Standard library (Math, Task modules)
 
 pub mod errors;
 pub mod exec_loop;

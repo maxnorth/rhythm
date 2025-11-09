@@ -8,7 +8,9 @@
 //! 1. run_until_done() - Top-level driver (calls step repeatedly)
 //! 2. step() - Main execution loop (dispatches to statement handlers)
 
-use super::statements::{execute_assign, execute_block, execute_expr, execute_return, execute_try};
+use super::statements::{
+    execute_assign, execute_block, execute_expr, execute_if, execute_return, execute_try,
+};
 use super::types::{Control, FrameKind, Stmt};
 use super::vm::{Step, VM};
 
@@ -79,6 +81,15 @@ pub fn step(vm: &mut VM) -> Step {
             FrameKind::Assign { phase },
             Stmt::Assign { var, path, value },
         ) => execute_assign(vm, phase, var, path, value),
+
+        (
+            FrameKind::If { phase },
+            Stmt::If {
+                test,
+                then_s,
+                else_s,
+            },
+        ) => execute_if(vm, phase, test, then_s, else_s),
 
         // Shouldn't happen - frame kind doesn't match node
         _ => panic!("Frame kind does not match statement node"),

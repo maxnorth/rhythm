@@ -1,7 +1,7 @@
 //! Control flow and execution frame types
 
 use super::ast::Stmt;
-use super::phase::{AssignPhase, BlockPhase, ExprPhase, ReturnPhase, TryPhase};
+use super::phase::{AssignPhase, BlockPhase, ExprPhase, IfPhase, ReturnPhase, TryPhase};
 use super::values::Val;
 use serde::{Deserialize, Serialize};
 
@@ -34,9 +34,9 @@ pub enum FrameKind {
     Try { phase: TryPhase, catch_var: String },
     Expr { phase: ExprPhase },
     Assign { phase: AssignPhase },
+    If { phase: IfPhase },
     // Future frame kinds will be added here as we implement more statement types:
     // Let { phase: LetPhase, name: String, has_init: bool },
-    // If { phase: IfPhase, branch_then: bool },
     // While { phase: WhilePhase },
     // For { phase: ForPhase, ... },
 }

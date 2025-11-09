@@ -7,8 +7,8 @@ use super::errors::ErrorInfo;
 use super::expressions::{eval_expr, EvalResult};
 use super::stdlib::to_string;
 use super::types::{
-    AssignPhase, BlockPhase, Control, Expr, ExprPhase, MemberAccess, ReturnPhase, Stmt, TryPhase,
-    Val,
+    AssignPhase, BlockPhase, Control, Expr, ExprPhase, IfPhase, MemberAccess, ReturnPhase, Stmt,
+    TryPhase, Val,
 };
 use super::vm::{push_stmt, Step, VM};
 
@@ -324,6 +324,51 @@ pub fn execute_assign(
 
             // Pop this frame and continue
             vm.frames.pop();
+            Step::Continue
+        }
+    }
+}
+
+/// Execute If statement
+pub fn execute_if(
+    vm: &mut VM,
+    phase: IfPhase,
+    test: Expr,
+    then_s: Box<Stmt>,
+    else_s: Option<Box<Stmt>>,
+) -> Step {
+    match phase {
+        IfPhase::Eval => {
+            // Evaluate the test expression
+            let test_val = match eval_expr(&test, &vm.env, &mut vm.resume_value, &mut vm.outbox) {
+                EvalResult::Value { v } => v,
+                EvalResult::Suspend { .. } => {
+                    // Should never happen - semantic validator ensures no await in test
+                    panic!("Internal error: await in if test expression");
+                }
+                EvalResult::Throw { error } => {
+                    // Test expression threw an error
+                    vm.control = Control::Throw(error);
+                    return Step::Continue;
+                }
+            };
+
+            // Check truthiness to decide which branch to execute
+            let is_truthy = test_val.is_truthy();
+
+            // Pop this If frame
+            vm.frames.pop();
+
+            // Push the appropriate branch onto the stack
+            if is_truthy {
+                // Execute then branch
+                push_stmt(vm, &then_s);
+            } else if let Some(else_stmt) = &else_s {
+                // Execute else branch if it exists
+                push_stmt(vm, &else_stmt);
+            }
+            // If not truthy and no else branch, we just continue (nothing to execute)
+
             Step::Continue
         }
     }

@@ -45,8 +45,15 @@ pub enum AssignPhase {
     Eval = 0,
 }
 
+/// Execution phase for If statements
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum IfPhase {
+    /// Evaluate the test expression and decide which branch to execute
+    Eval = 0,
+}
+
 // Future Phase enums will be added here as we implement more statement types:
 // - LetPhase
-// - IfPhase
 // - WhilePhase
 // - ForPhase
