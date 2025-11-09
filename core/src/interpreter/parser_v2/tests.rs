@@ -3,7 +3,7 @@
 //! These tests verify the full pipeline from source string → AST → execution
 
 use crate::interpreter::executor_v2::{run_until_done, Control, Stmt, Val, VM};
-use crate::interpreter::parser_v2;
+use crate::interpreter::parser_v2::{self, WorkflowDef};
 use std::collections::HashMap;
 
 /* ===================== Test Helpers ===================== */
@@ -31,6 +31,29 @@ fn parse_and_build_vm(source: &str, env: HashMap<String, Val>) -> VM {
 
     // Create and return VM
     VM::new(program, env)
+}
+
+/// Test helper for workflow functions: Parse workflow, serialize/deserialize, create VM
+///
+/// This function:
+/// 1. Parses the source as a workflow definition
+/// 2. Serializes to JSON and deserializes back (verifies WorkflowDef round-tripping)
+/// 3. Creates a VM with the given environment
+/// 4. Returns both the WorkflowDef and VM
+///
+/// This allows tests to inspect the workflow params and execute the body.
+fn parse_workflow_and_build_vm(source: &str, env: HashMap<String, Val>) -> (WorkflowDef, VM) {
+    // Parse workflow
+    let workflow = parser_v2::parse_workflow(source).expect("Parse workflow failed");
+
+    // Round-trip through JSON to verify serialization works
+    let json = serde_json::to_string(&workflow).expect("Workflow serialization failed");
+    let workflow: WorkflowDef = serde_json::from_str(&json).expect("Workflow deserialization failed");
+
+    // Create VM from workflow body
+    let vm = VM::new(workflow.body.clone(), env);
+
+    (workflow, vm)
 }
 
 /* ===================== Parse + Execute Tests ===================== */
@@ -122,4 +145,78 @@ fn test_e2e_string_with_spaces() {
         vm.control,
         Control::Return(Val::Str("hello   world   with   spaces".to_string()))
     );
+}
+
+/* ===================== Workflow Function Tests ===================== */
+
+#[test]
+fn test_workflow_no_params() {
+    let source = r#"
+        async function workflow() {
+            return 42
+        }
+    "#;
+
+    let (workflow, mut vm) = parse_workflow_and_build_vm(source, HashMap::new());
+
+    // Verify workflow definition
+    assert_eq!(workflow.params.len(), 0);
+
+    // Execute
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
+}
+
+#[test]
+fn test_workflow_with_params() {
+    let source = r#"
+        async function workflow(input1, input2, input3) {
+            return 42
+        }
+    "#;
+
+    let (workflow, mut vm) = parse_workflow_and_build_vm(source, HashMap::new());
+
+    // Verify parameters were parsed
+    assert_eq!(workflow.params, vec!["input1", "input2", "input3"]);
+
+    // Execute (params are just names, not used yet)
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
+}
+
+#[test]
+fn test_workflow_serialization() {
+    let source = r#"
+        async function workflow(a, b) {
+            return 123
+        }
+    "#;
+
+    let (workflow, mut vm) = parse_workflow_and_build_vm(source, HashMap::new());
+
+    // Verify params survived round-trip (helper already does round-trip)
+    assert_eq!(workflow.params, vec!["a", "b"]);
+
+    // Execute
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(123.0)));
+}
+
+#[test]
+fn test_workflow_multiline_body() {
+    let source = r#"
+        async function workflow(x) {
+            return 1
+            return 2
+            return 3
+        }
+    "#;
+
+    let (workflow, mut vm) = parse_workflow_and_build_vm(source, HashMap::new());
+    assert_eq!(workflow.params, vec!["x"]);
+
+    // Execute - should return from first return statement
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(1.0)));
 }

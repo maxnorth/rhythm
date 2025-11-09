@@ -1,11 +1,22 @@
 // Flow v2 Grammar - Minimal Phase 1
-// Supports: return statement with literals only
+// Supports: async function workflow definition OR single statement (legacy)
 
-program = { SOI ~ statement ~ EOI }
+program = { SOI ~ (workflow_function | statement) ~ EOI }
 
+// Workflow function definition
+workflow_function = { "async" ~ "function" ~ identifier ~ "(" ~ param_list? ~ ")" ~ block }
+
+param_list = { identifier ~ ("," ~ identifier)* }
+
+block = { "{" ~ statement* ~ "}" }
+
+// Statements
 statement = { return_stmt }
 
 return_stmt = { "return" ~ expression }
+
+// Identifiers
+identifier = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
 expression = { literal }
 

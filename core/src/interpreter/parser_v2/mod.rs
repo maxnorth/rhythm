@@ -4,11 +4,32 @@
 
 use pest::Parser;
 use pest_derive::Parser;
+use serde::{Deserialize, Serialize};
 
 use super::executor_v2::types::ast::{Expr, Stmt};
 
 #[cfg(test)]
 mod tests;
+
+/* ===================== Workflow Definition ===================== */
+
+/// Workflow definition - represents a complete workflow file
+///
+/// A workflow file defines a single async function with parameters and a body.
+/// Example:
+/// ```js
+/// async function workflow(input1, input2) {
+///     let x = add(input1, input2)
+///     return x
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowDef {
+    /// Parameter names (inputs to the workflow)
+    pub params: Vec<String>,
+    /// Workflow body (statements to execute)
+    pub body: Stmt,
+}
 
 /* ===================== PEST Parser ===================== */
 
@@ -34,19 +55,93 @@ pub type ParseResult<T> = Result<T, ParseError>;
 
 /* ===================== Public API ===================== */
 
-/// Parse a Flow source string into an AST statement
-pub fn parse(source: &str) -> ParseResult<Stmt> {
+/// Parse a Flow source string into a workflow definition
+///
+/// Supports two modes:
+/// 1. Full workflow: `async function workflow(params) { body }`
+/// 2. Legacy single statement: `return 42` (converted to workflow with no params)
+pub fn parse_workflow(source: &str) -> ParseResult<WorkflowDef> {
     let mut pairs = FlowParser::parse(Rule::program, source)?;
 
     let program = pairs.next().unwrap();
 
-    // program = { SOI ~ statement ~ EOI }
-    let statement = program.into_inner().next().unwrap();
+    // program = { SOI ~ (workflow_function | statement) ~ EOI }
+    let content = program.into_inner().next().unwrap();
 
-    build_statement(statement)
+    match content.as_rule() {
+        Rule::workflow_function => build_workflow_function(content),
+        Rule::statement => {
+            // Legacy mode: convert single statement to workflow with no params
+            let stmt = build_statement(content)?;
+            Ok(WorkflowDef {
+                params: vec![],
+                body: stmt,
+            })
+        }
+        _ => Err(ParseError::BuildError(format!(
+            "Unexpected program content: {:?}",
+            content.as_rule()
+        ))),
+    }
+}
+
+/// Parse a Flow source string into an AST statement (legacy API)
+///
+/// This function exists for backward compatibility with existing tests.
+/// New code should use `parse_workflow` instead.
+pub fn parse(source: &str) -> ParseResult<Stmt> {
+    let workflow = parse_workflow(source)?;
+    Ok(workflow.body)
 }
 
 /* ===================== AST Builder ===================== */
+
+fn build_workflow_function(pair: pest::iterators::Pair<Rule>) -> ParseResult<WorkflowDef> {
+    // workflow_function = { "async" ~ "function" ~ identifier ~ "(" ~ param_list? ~ ")" ~ block }
+    let mut inner = pair.into_inner();
+
+    // Skip "async" and "function" keywords (they're literal matches, not captured)
+    // Get function name (we ignore it for now, but it's required by syntax)
+    let _name = inner.next().unwrap(); // identifier
+
+    // Get parameters
+    let next = inner.next().unwrap();
+    let (params, block_pair) = if next.as_rule() == Rule::param_list {
+        // Has parameters
+        let params = build_param_list(next)?;
+        let block = inner.next().unwrap();
+        (params, block)
+    } else {
+        // No parameters, next is the block
+        (vec![], next)
+    };
+
+    // Build body from block
+    let body = build_block(block_pair)?;
+
+    Ok(WorkflowDef { params, body })
+}
+
+fn build_param_list(pair: pest::iterators::Pair<Rule>) -> ParseResult<Vec<String>> {
+    // param_list = { identifier ~ ("," ~ identifier)* }
+    let params = pair
+        .into_inner()
+        .map(|id_pair| id_pair.as_str().to_string())
+        .collect();
+    Ok(params)
+}
+
+fn build_block(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
+    // block = { "{" ~ statement* ~ "}" }
+    let statements: Result<Vec<Stmt>, ParseError> = pair
+        .into_inner()
+        .map(|stmt_pair| build_statement(stmt_pair))
+        .collect();
+
+    Ok(Stmt::Block {
+        body: statements?,
+    })
+}
 
 fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     match pair.as_rule() {
