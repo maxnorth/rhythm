@@ -192,9 +192,37 @@ fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
 fn build_expression(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
     match pair.as_rule() {
         Rule::expression => {
-            // expression = { member_expr }
+            // expression = { call_expr }
             let inner = pair.into_inner().next().unwrap();
             build_expression(inner)
+        }
+        Rule::call_expr => {
+            // call_expr = { member_expr ~ call_suffix? }
+            let mut inner = pair.into_inner();
+
+            // Build the member expression (callee)
+            let member_pair = inner.next().unwrap();
+            let mut expr = build_expression(member_pair)?;
+
+            // Check if there's a call suffix
+            if let Some(call_suffix_pair) = inner.next() {
+                // This is a function call - extract args from call_suffix
+                let mut suffix_inner = call_suffix_pair.into_inner();
+
+                let args = if let Some(arg_list_pair) = suffix_inner.next() {
+                    build_arg_list(arg_list_pair)?
+                } else {
+                    // Empty argument list
+                    vec![]
+                };
+
+                expr = Expr::Call {
+                    callee: Box::new(expr),
+                    args,
+                };
+            }
+
+            Ok(expr)
         }
         Rule::member_expr => {
             // member_expr = { primary ~ ("." ~ identifier)* }
@@ -253,4 +281,13 @@ fn build_expression(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
             pair.as_rule()
         ))),
     }
+}
+
+fn build_arg_list(pair: pest::iterators::Pair<Rule>) -> ParseResult<Vec<Expr>> {
+    // arg_list = { expression ~ ("," ~ expression)* }
+    let args: Result<Vec<Expr>, ParseError> = pair
+        .into_inner()
+        .map(|expr_pair| build_expression(expr_pair))
+        .collect();
+    args
 }

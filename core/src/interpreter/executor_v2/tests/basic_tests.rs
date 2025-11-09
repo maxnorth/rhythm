@@ -442,6 +442,100 @@ fn test_workflow_multiline_body() {
     assert_eq!(vm.control, Control::Return(Val::Num(1.0)));
 }
 
+/* ===================== Function Call Syntax Tests ===================== */
+
+#[test]
+fn test_call_empty_args() {
+    // Test that empty parentheses parse correctly
+    let source = r#"
+        async function workflow(ctx) {
+            return Math.floor()
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    // Should error (wrong arg count), but the syntax should parse
+    assert!(matches!(vm.control, Control::Throw(_)));
+}
+
+#[test]
+fn test_call_single_arg() {
+    let source = r#"
+        async function workflow(ctx) {
+            return Math.floor(3.7)
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(3.0)));
+}
+
+#[test]
+fn test_call_multiple_args() {
+    let source = r#"
+        async function workflow(ctx) {
+            return add(10, 32)
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
+}
+
+#[test]
+fn test_call_nested() {
+    let source = r#"
+        async function workflow(ctx) {
+            return Math.floor(add(10.5, 5.7))
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    // add(10.5, 5.7) = 16.2, Math.floor(16.2) = 16.0
+    assert_eq!(vm.control, Control::Return(Val::Num(16.0)));
+}
+
+#[test]
+fn test_call_with_member_access_arg() {
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            return Math.floor(inputs.value)
+        }
+    "#;
+
+    let inputs = hashmap! {
+        "value".to_string() => Val::Num(9.8),
+    };
+
+    let mut vm = parse_workflow_and_build_vm(source, inputs);
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(9.0)));
+}
+
+#[test]
+fn test_call_method_style() {
+    // Test calling methods on objects (Math.floor style)
+    let source = r#"
+        async function workflow(ctx) {
+            return Math.ceil(4.2)
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(5.0)));
+}
+
 /* ===================== Bare Statement Execution Tests (Testing Only) ===================== */
 
 #[test]
