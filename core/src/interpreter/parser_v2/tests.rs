@@ -490,7 +490,9 @@ fn test_parse_for_testing_allows_bare_statements() {
 #[test]
 fn test_parse_invalid_syntax() {
     // Test that invalid syntax is rejected
-    let source = "return";
+    // Note: "return" alone is now valid as an expression statement (identifier)
+    // Test something that's genuinely invalid
+    let source = "return return return";
 
     let result = parser_v2::parse(source);
     assert!(result.is_err());

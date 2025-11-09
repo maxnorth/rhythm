@@ -11,9 +11,10 @@ param_list = { identifier ~ ("," ~ identifier)* }
 block = { "{" ~ statement* ~ "}" }
 
 // Statements
-statement = { return_stmt }
+statement = { return_stmt | expr_stmt }
 
 return_stmt = { "return" ~ expression }
+expr_stmt = { expression }
 
 // Identifiers
 identifier = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }

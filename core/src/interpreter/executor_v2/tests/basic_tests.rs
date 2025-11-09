@@ -258,30 +258,15 @@ fn test_nested_member_access() {
 
 #[test]
 fn test_expr_stmt_simple() {
-    // Note: Parser doesn't support expression statements yet, using JSON
     // Test a simple expression statement (value is discarded)
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Expr",
-                "expr": {
-                    "t": "LitNum",
-                    "v": 42.0
-                }
-            },
-            {
-                "t": "Return",
-                "value": {
-                    "t": "LitStr",
-                    "v": "done"
-                }
-            }
-        ]
-    }"#;
+    let source = r#"
+        async function workflow(ctx) {
+            42
+            return "done"
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
     // Should return "done" (the expr statement result is discarded)
@@ -293,41 +278,19 @@ fn test_expr_stmt_simple() {
 
 #[test]
 fn test_expr_stmt_with_member_access() {
-    // Note: Parser doesn't support expression statements yet, using JSON
     // Test expression statement with member access
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Expr",
-                "expr": {
-                    "t": "Member",
-                    "object": {
-                        "t": "Ident",
-                        "name": "obj"
-                    },
-                    "property": "value"
-                }
-            },
-            {
-                "t": "Return",
-                "value": {
-                    "t": "LitNum",
-                    "v": 999.0
-                }
-            }
-        ]
-    }"#;
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            inputs.value
+            return 999
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-
-    let env = hashmap! {
-        "obj".to_string() => Val::Obj(hashmap! {
-            "value".to_string() => Val::Str("ignored".to_string()),
-        }),
+    let inputs = hashmap! {
+        "value".to_string() => Val::Str("ignored".to_string()),
     };
 
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
 
     // Should return 999 (the expr statement result is discarded)
@@ -336,39 +299,17 @@ fn test_expr_stmt_with_member_access() {
 
 #[test]
 fn test_expr_stmt_error_propagates() {
-    // Note: Parser doesn't support expression statements yet, using JSON
     // Test that errors in expression statements propagate correctly
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Expr",
-                "expr": {
-                    "t": "Member",
-                    "object": {
-                        "t": "Ident",
-                        "name": "obj"
-                    },
-                    "property": "missing"
-                }
-            },
-            {
-                "t": "Return",
-                "value": {
-                    "t": "LitStr",
-                    "v": "should_not_reach"
-                }
-            }
-        ]
-    }"#;
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            inputs.missing
+            return "should_not_reach"
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
+    let inputs = hashmap! {};
 
-    let env = hashmap! {
-        "obj".to_string() => Val::Obj(hashmap! {}),
-    };
-
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
 
     // Should throw an error
