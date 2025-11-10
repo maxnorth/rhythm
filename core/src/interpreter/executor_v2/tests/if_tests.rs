@@ -99,21 +99,17 @@ fn test_if_false_with_else() {
 #[test]
 fn test_if_truthiness_number() {
     // if (42) { return "truthy"; } else { return "falsy"; }
-    let program_json = r#"{
-        "t": "If",
-        "test": {"t": "LitNum", "v": 42.0},
-        "then_s": {
-            "t": "Return",
-            "value": {"t": "LitStr", "v": "truthy"}
-        },
-        "else_s": {
-            "t": "Return",
-            "value": {"t": "LitStr", "v": "falsy"}
+    let source = r#"
+        async function workflow(ctx) {
+            if (42) {
+                return "truthy"
+            } else {
+                return "falsy"
+            }
         }
-    }"#;
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
     assert_eq!(
@@ -125,21 +121,17 @@ fn test_if_truthiness_number() {
 #[test]
 fn test_if_truthiness_false() {
     // if (false) { return "truthy"; } else { return "falsy"; }
-    let program_json = r#"{
-        "t": "If",
-        "test": {"t": "LitBool", "v": false},
-        "then_s": {
-            "t": "Return",
-            "value": {"t": "LitStr", "v": "truthy"}
-        },
-        "else_s": {
-            "t": "Return",
-            "value": {"t": "LitStr", "v": "falsy"}
+    let source = r#"
+        async function workflow(ctx) {
+            if (false) {
+                return "truthy"
+            } else {
+                return "falsy"
+            }
         }
-    }"#;
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
     assert_eq!(vm.control, Control::Return(Val::Str("falsy".to_string())));
@@ -148,32 +140,18 @@ fn test_if_truthiness_false() {
 #[test]
 fn test_if_with_variable_test() {
     // x = true; if (x) { return "yes"; } else { return "no"; }
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Assign",
-                "path": [],
-                "var": "x",
-                "value": {"t": "LitBool", "v": true}
-            },
-            {
-                "t": "If",
-                "test": {"t": "Ident", "name": "x"},
-                "then_s": {
-                    "t": "Return",
-                    "value": {"t": "LitStr", "v": "yes"}
-                },
-                "else_s": {
-                    "t": "Return",
-                    "value": {"t": "LitStr", "v": "no"}
-                }
+    let source = r#"
+        async function workflow(ctx) {
+            x = true
+            if (x) {
+                return "yes"
+            } else {
+                return "no"
             }
-        ]
-    }"#;
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
     assert_eq!(vm.control, Control::Return(Val::Str("yes".to_string())));
@@ -182,35 +160,17 @@ fn test_if_with_variable_test() {
 #[test]
 fn test_if_with_assignment_in_branch() {
     // x = 1; if (true) { x = 42; } return x;
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Assign",
-                "path": [],
-                "var": "x",
-                "value": {"t": "LitNum", "v": 1.0}
-            },
-            {
-                "t": "If",
-                "test": {"t": "LitBool", "v": true},
-                "then_s": {
-                    "t": "Assign",
-                    "path": [],
-                    "var": "x",
-                    "value": {"t": "LitNum", "v": 42.0}
-                },
-                "else_s": null
-            },
-            {
-                "t": "Return",
-                "value": {"t": "Ident", "name": "x"}
+    let source = r#"
+        async function workflow(ctx) {
+            x = 1
+            if (true) {
+                x = 42
             }
-        ]
-    }"#;
+            return x
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
     assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
@@ -220,29 +180,21 @@ fn test_if_with_assignment_in_branch() {
 #[test]
 fn test_if_nested() {
     // if (true) { if (false) { return 1; } else { return 2; } } else { return 3; }
-    let program_json = r#"{
-        "t": "If",
-        "test": {"t": "LitBool", "v": true},
-        "then_s": {
-            "t": "If",
-            "test": {"t": "LitBool", "v": false},
-            "then_s": {
-                "t": "Return",
-                "value": {"t": "LitNum", "v": 1.0}
-            },
-            "else_s": {
-                "t": "Return",
-                "value": {"t": "LitNum", "v": 2.0}
+    let source = r#"
+        async function workflow(ctx) {
+            if (true) {
+                if (false) {
+                    return 1
+                } else {
+                    return 2
+                }
+            } else {
+                return 3
             }
-        },
-        "else_s": {
-            "t": "Return",
-            "value": {"t": "LitNum", "v": 3.0}
         }
-    }"#;
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
     assert_eq!(vm.control, Control::Return(Val::Num(2.0)));
@@ -251,35 +203,17 @@ fn test_if_nested() {
 #[test]
 fn test_if_with_block_statement() {
     // if (true) { x = 1; x = 2; return x; }
-    let program_json = r#"{
-        "t": "If",
-        "test": {"t": "LitBool", "v": true},
-        "then_s": {
-            "t": "Block",
-            "body": [
-                {
-                    "t": "Assign",
-                    "path": [],
-                    "var": "x",
-                    "value": {"t": "LitNum", "v": 1.0}
-                },
-                {
-                    "t": "Assign",
-                    "path": [],
-                    "var": "x",
-                    "value": {"t": "LitNum", "v": 2.0}
-                },
-                {
-                    "t": "Return",
-                    "value": {"t": "Ident", "name": "x"}
-                }
-            ]
-        },
-        "else_s": null
-    }"#;
+    let source = r#"
+        async function workflow(ctx) {
+            if (true) {
+                x = 1
+                x = 2
+                return x
+            }
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
     assert_eq!(vm.control, Control::Return(Val::Num(2.0)));

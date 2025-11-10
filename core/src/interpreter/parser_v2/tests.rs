@@ -3,7 +3,7 @@
 //! These tests verify that the parser correctly converts source code into AST structures.
 //! They do NOT execute the code - that's tested in executor_v2 tests.
 
-use crate::interpreter::executor_v2::types::ast::{Expr, Stmt};
+use crate::interpreter::executor_v2::types::ast::{Expr, MemberAccess, Stmt};
 use crate::interpreter::parser_v2::{self, WorkflowDef};
 
 /* ===================== Basic Parsing Tests ===================== */
@@ -654,4 +654,141 @@ fn test_parse_continue_standalone() {
     // Test that continue can be parsed as a statement (using test API)
     let ast = parser_v2::parse("continue").expect("Should parse");
     assert!(matches!(ast, Stmt::Continue));
+}
+
+/* ===================== Assignment Tests ===================== */
+
+#[test]
+fn test_parse_simple_assignment() {
+    let source = r#"
+        async function workflow(ctx) {
+            x = 42
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    assert_eq!(workflow.params, vec!["ctx"]);
+
+    // Verify body is a block with one assignment
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Assign { var, path, value } => {
+                    assert_eq!(var, "x");
+                    assert_eq!(path.len(), 0); // No property path
+                    assert!(matches!(value, Expr::LitNum { v } if *v == 42.0));
+                }
+                _ => panic!("Expected Assign statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_property_assignment() {
+    let source = r#"
+        async function workflow(ctx) {
+            obj.prop = 99
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify property assignment
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Assign { var, path, value } => {
+                    assert_eq!(var, "obj");
+                    assert_eq!(path.len(), 1);
+                    match &path[0] {
+                        MemberAccess::Prop { property } => assert_eq!(property, "prop"),
+                        _ => panic!("Expected Prop member access"),
+                    }
+                    assert!(matches!(value, Expr::LitNum { v } if *v == 99.0));
+                }
+                _ => panic!("Expected Assign statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_nested_property_assignment() {
+    let source = r#"
+        async function workflow(ctx) {
+            obj.a.b = "test"
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify nested property assignment
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Assign { var, path, value } => {
+                    assert_eq!(var, "obj");
+                    assert_eq!(path.len(), 2);
+                    match &path[0] {
+                        MemberAccess::Prop { property } => assert_eq!(property, "a"),
+                        _ => panic!("Expected Prop member access"),
+                    }
+                    match &path[1] {
+                        MemberAccess::Prop { property } => assert_eq!(property, "b"),
+                        _ => panic!("Expected Prop member access"),
+                    }
+                    assert!(matches!(value, Expr::LitStr { v } if v == "test"));
+                }
+                _ => panic!("Expected Assign statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_assignment_with_expression() {
+    let source = r#"
+        async function workflow(ctx) {
+            x = Math.floor(3.7)
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify assignment with function call
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Assign { var, path, value } => {
+                    assert_eq!(var, "x");
+                    assert_eq!(path.len(), 0);
+                    assert!(matches!(value, Expr::Call { .. }));
+                }
+                _ => panic!("Expected Assign statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_assignment_standalone() {
+    // Test that assignment can be parsed as a statement (using test API)
+    let ast = parser_v2::parse("x = 42").expect("Should parse");
+    match ast {
+        Stmt::Assign { var, path, value } => {
+            assert_eq!(var, "x");
+            assert_eq!(path.len(), 0);
+            assert!(matches!(value, Expr::LitNum { v } if v == 42.0));
+        }
+        _ => panic!("Expected Assign statement"),
+    }
 }

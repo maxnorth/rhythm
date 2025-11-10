@@ -6,7 +6,7 @@ use pest::Parser;
 use pest_derive::Parser;
 use serde::{Deserialize, Serialize};
 
-use super::executor_v2::types::ast::{Expr, Stmt};
+use super::executor_v2::types::ast::{Expr, MemberAccess, Stmt};
 
 pub mod semantic_validator;
 
@@ -208,10 +208,44 @@ fn build_while_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     })
 }
 
+fn build_assign_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
+    // assign_stmt = { identifier ~ ("." ~ identifier)* ~ "=" ~ expression }
+    let mut inner = pair.into_inner();
+
+    // Get the first identifier (variable name)
+    let var = inner.next().unwrap().as_str().to_string();
+
+    // Collect property path - all identifiers before the expression
+    let mut path = Vec::new();
+    let mut expr_pair = None;
+
+    for pair in inner {
+        match pair.as_rule() {
+            Rule::identifier => {
+                // This is a property access
+                path.push(MemberAccess::Prop {
+                    property: pair.as_str().to_string(),
+                });
+            }
+            Rule::expression => {
+                // This is the value expression
+                expr_pair = Some(pair);
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    // Build the value expression
+    let value = build_expression(expr_pair.unwrap())?;
+
+    Ok(Stmt::Assign { var, path, value })
+}
+
 fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     match pair.as_rule() {
         Rule::statement => {
-            // statement = { return_stmt | if_stmt | while_stmt | break_stmt | continue_stmt | block | expr_stmt }
+            // statement = { return_stmt | if_stmt | while_stmt | break_stmt | continue_stmt | block | assign_stmt | expr_stmt }
             let inner = pair.into_inner().next().unwrap();
             build_statement(inner)
         }
@@ -241,6 +275,10 @@ fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
         Rule::block => {
             // block = { "{" ~ statement* ~ "}" }
             build_block(pair)
+        }
+        Rule::assign_stmt => {
+            // assign_stmt = { identifier ~ ("." ~ identifier)* ~ "=" ~ expression }
+            build_assign_stmt(pair)
         }
         Rule::expr_stmt => {
             // expr_stmt = { expression }
