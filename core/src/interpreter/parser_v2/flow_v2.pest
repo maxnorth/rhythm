@@ -28,7 +28,7 @@ continue_stmt = { "continue" }
 expr_stmt = { expression }
 
 // Identifiers
-identifier = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 expression = { await_expr | call_expr }
 
