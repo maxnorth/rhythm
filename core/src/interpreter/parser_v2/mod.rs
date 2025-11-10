@@ -162,10 +162,38 @@ fn build_block(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     })
 }
 
+fn build_if_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
+    // if_stmt = { "if" ~ "(" ~ expression ~ ")" ~ block ~ else_clause? }
+    let mut inner = pair.into_inner();
+
+    // Get the test expression
+    let test_pair = inner.next().unwrap();
+    let test = build_expression(test_pair)?;
+
+    // Get the then block
+    let then_pair = inner.next().unwrap();
+    let then_s = build_statement(then_pair)?;
+
+    // Get optional else clause
+    let else_s = if let Some(else_clause_pair) = inner.next() {
+        // else_clause = { "else" ~ (if_stmt | block) }
+        let else_inner = else_clause_pair.into_inner().next().unwrap();
+        Some(Box::new(build_statement(else_inner)?))
+    } else {
+        None
+    };
+
+    Ok(Stmt::If {
+        test,
+        then_s: Box::new(then_s),
+        else_s,
+    })
+}
+
 fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     match pair.as_rule() {
         Rule::statement => {
-            // statement = { return_stmt | block | expr_stmt }
+            // statement = { return_stmt | if_stmt | block | expr_stmt }
             let inner = pair.into_inner().next().unwrap();
             build_statement(inner)
         }
@@ -175,6 +203,10 @@ fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
             let expr_pair = inner.next().unwrap();
             let expr = build_expression(expr_pair)?;
             Ok(Stmt::Return { value: Some(expr) })
+        }
+        Rule::if_stmt => {
+            // if_stmt = { "if" ~ "(" ~ expression ~ ")" ~ block ~ else_clause? }
+            build_if_stmt(pair)
         }
         Rule::block => {
             // block = { "{" ~ statement* ~ "}" }

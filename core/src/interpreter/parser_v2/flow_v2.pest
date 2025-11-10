@@ -11,9 +11,13 @@ param_list = { identifier ~ ("," ~ identifier)* }
 block = { "{" ~ statement* ~ "}" }
 
 // Statements
-statement = { return_stmt | block | expr_stmt }
+statement = { return_stmt | if_stmt | block | expr_stmt }
 
 return_stmt = { "return" ~ expression }
+
+if_stmt = { "if" ~ "(" ~ expression ~ ")" ~ block ~ else_clause? }
+else_clause = { "else" ~ (if_stmt | block) }
+
 expr_stmt = { expression }
 
 // Identifiers
