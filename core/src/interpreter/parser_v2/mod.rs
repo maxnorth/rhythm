@@ -192,9 +192,19 @@ fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
 fn build_expression(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
     match pair.as_rule() {
         Rule::expression => {
-            // expression = { call_expr }
+            // expression = { await_expr | call_expr }
             let inner = pair.into_inner().next().unwrap();
             build_expression(inner)
+        }
+        Rule::await_expr => {
+            // await_expr = { "await" ~ expression }
+            // The "await" keyword is consumed by the grammar, only expression remains
+            let mut inner = pair.into_inner();
+            let expr_pair = inner.next().unwrap();
+            let inner_expr = build_expression(expr_pair)?;
+            Ok(Expr::Await {
+                inner: Box::new(inner_expr),
+            })
         }
         Rule::call_expr => {
             // call_expr = { member_expr ~ call_suffix? }

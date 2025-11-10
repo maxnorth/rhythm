@@ -19,7 +19,10 @@ expr_stmt = { expression }
 // Identifiers
 identifier = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
-expression = { call_expr }
+expression = { await_expr | call_expr }
+
+// Await expression: await foo(), await task
+await_expr = { "await" ~ expression }
 
 // Function calls: foo(), foo.bar(), foo(1, 2, 3)
 call_expr = { member_expr ~ call_suffix? }

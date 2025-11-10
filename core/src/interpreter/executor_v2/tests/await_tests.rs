@@ -3,32 +3,46 @@
 //! Tests for await expressions, suspension, and resumption
 
 use crate::interpreter::executor_v2::{run_until_done, step, Control, Step, Stmt, Val, VM};
+use crate::interpreter::parser_v2::{self, WorkflowDef};
+use maplit::hashmap;
 use std::collections::HashMap;
+
+/* ===================== Test Helper ===================== */
+
+/// Helper: Parse workflow, validate, serialize/deserialize, and create VM
+fn parse_workflow_and_build_vm(source: &str, inputs: HashMap<String, Val>) -> VM {
+    let workflow = parser_v2::parse_workflow(source).expect("Parse workflow failed");
+    parser_v2::semantic_validator::validate_workflow(&workflow)
+        .expect("Workflow validation failed");
+    let json = serde_json::to_string(&workflow).expect("Workflow serialization failed");
+    let workflow: WorkflowDef =
+        serde_json::from_str(&json).expect("Workflow deserialization failed");
+
+    let mut env = HashMap::new();
+    if workflow.params.len() >= 1 {
+        env.insert(workflow.params[0].clone(), Val::Obj(HashMap::new()));
+    }
+    if workflow.params.len() >= 2 {
+        env.insert(workflow.params[1].clone(), Val::Obj(inputs));
+    }
+
+    VM::new(workflow.body.clone(), env)
+}
 
 #[test]
 fn test_await_suspend_basic() {
     // Test that awaiting a Task value suspends execution
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "Await",
-                "inner": {
-                    "t": "Ident",
-                    "name": "task"
-                }
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            return await inputs.task
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
+    let inputs = hashmap! {
+        "task".to_string() => Val::Task("task-123".to_string()),
+    };
 
-    // Set up environment with a Task value
-    let mut env = HashMap::new();
-    env.insert("task".to_string(), Val::Task("task-123".to_string()));
-
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
 
     // Should suspend on the task
@@ -41,27 +55,17 @@ fn test_await_suspend_basic() {
 #[test]
 fn test_await_resume() {
     // Test that we can resume after suspension and get the result
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "Await",
-                "inner": {
-                    "t": "Ident",
-                    "name": "task"
-                }
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            return await inputs.task
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
+    let inputs = hashmap! {
+        "task".to_string() => Val::Task("task-123".to_string()),
+    };
 
-    // Set up environment with a Task value
-    let mut env = HashMap::new();
-    env.insert("task".to_string(), Val::Task("task-123".to_string()));
-
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
 
     // Should suspend on the task
@@ -93,26 +97,17 @@ fn test_await_resume() {
 #[test]
 fn test_await_resume_with_num() {
     // Test resuming with a number result (with serialization)
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "Await",
-                "inner": {
-                    "t": "Ident",
-                    "name": "task"
-                }
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            return await inputs.task
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
+    let inputs = hashmap! {
+        "task".to_string() => Val::Task("task-456".to_string()),
+    };
 
-    let mut env = HashMap::new();
-    env.insert("task".to_string(), Val::Task("task-456".to_string()));
-
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
 
     assert_eq!(vm.control, Control::Suspend("task-456".to_string()));
@@ -131,22 +126,13 @@ fn test_await_resume_with_num() {
 #[test]
 fn test_await_non_task_idempotent() {
     // Test that awaiting a non-Task value just returns that value (like JS)
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "Await",
-                "inner": {
-                    "t": "LitNum",
-                    "v": 42.0
-                }
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx) {
+            return await 42
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
     // Should NOT suspend - should just return the number
@@ -156,22 +142,13 @@ fn test_await_non_task_idempotent() {
 #[test]
 fn test_await_non_task_string() {
     // Test awaiting a string value
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "Await",
-                "inner": {
-                    "t": "LitStr",
-                    "v": "hello"
-                }
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx) {
+            return await "hello"
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
     // Should NOT suspend
@@ -184,19 +161,13 @@ fn test_await_non_task_string() {
 #[test]
 fn test_resume_when_not_suspended_fails() {
     // Test that calling resume when not suspended returns false
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "LitNum",
-                "v": 42.0
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx) {
+            return 42
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
     // VM is not suspended, so resume should fail
@@ -209,6 +180,7 @@ fn test_resume_when_not_suspended_fails() {
 #[test]
 fn test_await_preserves_frames() {
     // Test that suspension preserves the full frame stack (with serialization)
+    // Note: Uses JSON to test nested blocks, which parser doesn't support yet
     let program_json = r#"{
         "t": "Block",
         "body": [{
@@ -261,26 +233,17 @@ fn test_await_preserves_frames() {
 #[test]
 fn test_serialization_with_suspend() {
     // Test that a suspended VM can be serialized and deserialized
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "Await",
-                "inner": {
-                    "t": "Ident",
-                    "name": "task"
-                }
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            return await inputs.task
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
+    let inputs = hashmap! {
+        "task".to_string() => Val::Task("task-serial".to_string()),
+    };
 
-    let mut env = HashMap::new();
-    env.insert("task".to_string(), Val::Task("task-serial".to_string()));
-
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
 
     // Should suspend
@@ -306,26 +269,17 @@ fn test_serialization_with_suspend() {
 #[test]
 fn test_step_by_step_suspension() {
     // Test stepping through suspension manually
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "Await",
-                "inner": {
-                    "t": "Ident",
-                    "name": "task"
-                }
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            return await inputs.task
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
+    let inputs = hashmap! {
+        "task".to_string() => Val::Task("task-step".to_string()),
+    };
 
-    let mut env = HashMap::new();
-    env.insert("task".to_string(), Val::Task("task-step".to_string()));
-
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, inputs);
 
     // Step through execution manually
     let mut step_count = 0;

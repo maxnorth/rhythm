@@ -536,6 +536,78 @@ fn test_call_method_style() {
     assert_eq!(vm.control, Control::Return(Val::Num(5.0)));
 }
 
+/* ===================== Await Expression Syntax Tests ===================== */
+
+#[test]
+fn test_await_task_creation() {
+    // Test basic await syntax with task creation
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            return await Task.run("test_task", inputs)
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    // Should suspend on the task
+    assert!(matches!(vm.control, Control::Suspend(_)));
+}
+
+#[test]
+fn test_await_with_member_access() {
+    // Test await with member access expression (Task.run)
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            return await Task.run("another_task", inputs)
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    // Should suspend on the task
+    assert!(matches!(vm.control, Control::Suspend(_)));
+}
+
+#[test]
+fn test_await_non_task_value() {
+    // Test that awaiting a non-task value returns the value (like JavaScript)
+    let source = r#"
+        async function workflow(ctx) {
+            return await Math.floor(3.7)
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    // Math.floor returns a number, not a task, so await just returns it
+    assert_eq!(vm.control, Control::Return(Val::Num(3.0)));
+}
+
+#[test]
+fn test_expression_without_await() {
+    // Test that task creation without await returns the Task value
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            return Task.run("test_task", inputs)
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    // Should return a Task value (not suspend)
+    // Task ID is a UUID, so we can't predict it - just verify it's a Task
+    match vm.control {
+        Control::Return(Val::Task(_task_id)) => {
+            // Success - we got a Task value
+        }
+        _ => panic!("Expected Return with Task value, got {:?}", vm.control),
+    }
+}
+
 /* ===================== Bare Statement Execution Tests (Testing Only) ===================== */
 
 #[test]
