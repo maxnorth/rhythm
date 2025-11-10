@@ -1,6 +1,7 @@
 //! Tests for Task.run() and outbox functionality
 
-use crate::interpreter::executor_v2::{errors, run_until_done, Control, Stmt, Val, VM};
+use super::helpers::parse_workflow_and_build_vm;
+use crate::interpreter::executor_v2::{errors, run_until_done, Control, Val};
 use std::collections::HashMap;
 
 /* ===================== Task.run() Tests ===================== */
@@ -8,41 +9,20 @@ use std::collections::HashMap;
 #[test]
 fn test_task_run_basic() {
     // Task.run("my_task", {input: 42})
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "Call",
-                "callee": {
-                    "t": "Member",
-                    "object": {
-                        "t": "Ident",
-                        "name": "Task"
-                    },
-                    "property": "run"
-                },
-                "args": [{
-                    "t": "LitStr",
-                    "v": "my_task"
-                }, {
-                    "t": "Ident",
-                    "name": "inputs"
-                }]
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            return Task.run("my_task", inputs)
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
+    let mut env = HashMap::new();
+    env.insert("input".to_string(), Val::Num(42.0));
+
+    let mut vm = parse_workflow_and_build_vm(source, env);
+    run_until_done(&mut vm);
 
     let mut inputs_obj = HashMap::new();
     inputs_obj.insert("input".to_string(), Val::Num(42.0));
-
-    let mut env = HashMap::new();
-    env.insert("inputs".to_string(), Val::Obj(inputs_obj.clone()));
-
-    let mut vm = VM::new(program, env);
-    run_until_done(&mut vm);
 
     // Should return a Task value with a UUID
     match &vm.control {
@@ -69,37 +49,13 @@ fn test_task_run_basic() {
 #[test]
 fn test_task_run_empty_inputs() {
     // Task.run("simple_task", {})
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "Call",
-                "callee": {
-                    "t": "Member",
-                    "object": {
-                        "t": "Ident",
-                        "name": "Task"
-                    },
-                    "property": "run"
-                },
-                "args": [{
-                    "t": "LitStr",
-                    "v": "simple_task"
-                }, {
-                    "t": "Ident",
-                    "name": "empty"
-                }]
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            return Task.run("simple_task", inputs)
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-
-    let mut env = HashMap::new();
-    env.insert("empty".to_string(), Val::Obj(HashMap::new()));
-
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Should return a Task value
@@ -114,64 +70,21 @@ fn test_task_run_empty_inputs() {
 #[test]
 fn test_task_run_multiple_calls() {
     // Create two tasks in sequence
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Expr",
-                "expr": {
-                    "t": "Call",
-                    "callee": {
-                        "t": "Member",
-                        "object": {
-                            "t": "Ident",
-                            "name": "Task"
-                        },
-                        "property": "run"
-                    },
-                    "args": [{
-                        "t": "LitStr",
-                        "v": "first_task"
-                    }, {
-                        "t": "Ident",
-                        "name": "inputs"
-                    }]
-                }
-            },
-            {
-                "t": "Return",
-                "value": {
-                    "t": "Call",
-                    "callee": {
-                        "t": "Member",
-                        "object": {
-                            "t": "Ident",
-                            "name": "Task"
-                        },
-                        "property": "run"
-                    },
-                    "args": [{
-                        "t": "LitStr",
-                        "v": "second_task"
-                    }, {
-                        "t": "Ident",
-                        "name": "inputs"
-                    }]
-                }
-            }
-        ]
-    }"#;
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            Task.run("first_task", inputs)
+            return Task.run("second_task", inputs)
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
+    let mut env = HashMap::new();
+    env.insert("value".to_string(), Val::Num(123.0));
+
+    let mut vm = parse_workflow_and_build_vm(source, env);
+    run_until_done(&mut vm);
 
     let mut inputs_obj = HashMap::new();
     inputs_obj.insert("value".to_string(), Val::Num(123.0));
-
-    let mut env = HashMap::new();
-    env.insert("inputs".to_string(), Val::Obj(inputs_obj));
-
-    let mut vm = VM::new(program, env);
-    run_until_done(&mut vm);
 
     // Check outbox has two task creations
     assert_eq!(vm.outbox.len(), 2);
@@ -189,70 +102,24 @@ fn test_fire_and_forget_then_await() {
     // 1. Fire-and-forget tasks are recorded in the outbox
     // 2. Awaited tasks also get recorded in the outbox
     // 3. VM suspends on the await, preserving state
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Expr",
-                "expr": {
-                    "t": "Call",
-                    "callee": {
-                        "t": "Member",
-                        "object": {
-                            "t": "Ident",
-                            "name": "Task"
-                        },
-                        "property": "run"
-                    },
-                    "args": [{
-                        "t": "LitStr",
-                        "v": "fire_and_forget_task"
-                    }, {
-                        "t": "Ident",
-                        "name": "inputs1"
-                    }]
-                }
-            },
-            {
-                "t": "Return",
-                "value": {
-                    "t": "Await",
-                    "inner": {
-                        "t": "Call",
-                        "callee": {
-                            "t": "Member",
-                            "object": {
-                                "t": "Ident",
-                                "name": "Task"
-                            },
-                            "property": "run"
-                        },
-                        "args": [{
-                            "t": "LitStr",
-                            "v": "awaited_task"
-                        }, {
-                            "t": "Ident",
-                            "name": "inputs2"
-                        }]
-                    }
-                }
-            }
-        ]
-    }"#;
+    let source = r#"
+        async function workflow(ctx) {
+            Task.run("fire_and_forget_task", inputs1)
+            return await Task.run("awaited_task", inputs2)
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
 
+    // Manually add inputs1 and inputs2 to env (not parameters, just env variables)
     let mut inputs1 = HashMap::new();
     inputs1.insert("background".to_string(), Val::Bool(true));
+    vm.env.insert("inputs1".to_string(), Val::Obj(inputs1.clone()));
 
     let mut inputs2 = HashMap::new();
     inputs2.insert("foreground".to_string(), Val::Bool(true));
+    vm.env.insert("inputs2".to_string(), Val::Obj(inputs2.clone()));
 
-    let mut env = HashMap::new();
-    env.insert("inputs1".to_string(), Val::Obj(inputs1.clone()));
-    env.insert("inputs2".to_string(), Val::Obj(inputs2.clone()));
-
-    let mut vm = VM::new(program, env);
     run_until_done(&mut vm);
 
     // VM should be suspended on the awaited task
@@ -292,30 +159,13 @@ fn test_fire_and_forget_then_await() {
 #[test]
 fn test_task_run_wrong_arg_count_one_arg() {
     // Task.run("my_task") - missing inputs argument
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "Call",
-                "callee": {
-                    "t": "Member",
-                    "object": {
-                        "t": "Ident",
-                        "name": "Task"
-                    },
-                    "property": "run"
-                },
-                "args": [{
-                    "t": "LitStr",
-                    "v": "my_task"
-                }]
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx) {
+            return Task.run("my_task")
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Should throw WRONG_ARG_COUNT error
@@ -329,38 +179,14 @@ fn test_task_run_wrong_arg_count_one_arg() {
 #[test]
 fn test_task_run_wrong_arg_count_three_args() {
     // Task.run("my_task", {}, extra) - too many arguments
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "Call",
-                "callee": {
-                    "t": "Member",
-                    "object": {
-                        "t": "Ident",
-                        "name": "Task"
-                    },
-                    "property": "run"
-                },
-                "args": [{
-                    "t": "LitStr",
-                    "v": "my_task"
-                }, {
-                    "t": "Ident",
-                    "name": "obj"
-                }, {
-                    "t": "LitNum",
-                    "v": 42.0
-                }]
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx) {
+            obj = {}
+            return Task.run("my_task", obj, 42)
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut env = HashMap::new();
-    env.insert("obj".to_string(), Val::Obj(HashMap::new()));
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Should throw WRONG_ARG_COUNT error
@@ -374,35 +200,14 @@ fn test_task_run_wrong_arg_count_three_args() {
 #[test]
 fn test_task_run_first_arg_not_string() {
     // Task.run(42, {}) - task_name must be string
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "Call",
-                "callee": {
-                    "t": "Member",
-                    "object": {
-                        "t": "Ident",
-                        "name": "Task"
-                    },
-                    "property": "run"
-                },
-                "args": [{
-                    "t": "LitNum",
-                    "v": 42.0
-                }, {
-                    "t": "Ident",
-                    "name": "obj"
-                }]
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx) {
+            obj = {}
+            return Task.run(42, obj)
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut env = HashMap::new();
-    env.insert("obj".to_string(), Val::Obj(HashMap::new()));
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Should throw WRONG_ARG_TYPE error
@@ -417,33 +222,13 @@ fn test_task_run_first_arg_not_string() {
 #[test]
 fn test_task_run_second_arg_not_object() {
     // Task.run("my_task", 42) - inputs must be object
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "Call",
-                "callee": {
-                    "t": "Member",
-                    "object": {
-                        "t": "Ident",
-                        "name": "Task"
-                    },
-                    "property": "run"
-                },
-                "args": [{
-                    "t": "LitStr",
-                    "v": "my_task"
-                }, {
-                    "t": "LitNum",
-                    "v": 42.0
-                }]
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow(ctx) {
+            return Task.run("my_task", 42)
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Should throw WRONG_ARG_TYPE error
