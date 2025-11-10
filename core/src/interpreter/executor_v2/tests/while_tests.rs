@@ -1,6 +1,8 @@
 //! Tests for While statements
 
 use super::super::*;
+use crate::interpreter::parser_v2::{self, WorkflowDef};
+use maplit::hashmap;
 use std::collections::HashMap;
 
 #[test]
@@ -590,4 +592,116 @@ fn test_while_accumulator() {
 
     // sum = 1 + 2 + 3 + 4 + 5 = 15
     assert_eq!(vm.control, Control::Return(Val::Num(15.0)));
+}
+
+/* ===================== Parser-based While Tests ===================== */
+
+/// Helper: Parse workflow, validate, serialize/deserialize, and create VM
+fn parse_workflow_and_build_vm(source: &str, inputs: HashMap<String, Val>) -> VM {
+    let workflow = parser_v2::parse_workflow(source).expect("Parse workflow failed");
+    parser_v2::semantic_validator::validate_workflow(&workflow)
+        .expect("Workflow validation failed");
+    let json = serde_json::to_string(&workflow).expect("Workflow serialization failed");
+    let workflow: WorkflowDef =
+        serde_json::from_str(&json).expect("Workflow deserialization failed");
+
+    let mut env = HashMap::new();
+    if workflow.params.len() >= 1 {
+        env.insert(workflow.params[0].clone(), Val::Obj(HashMap::new()));
+    }
+    if workflow.params.len() >= 2 {
+        env.insert(workflow.params[1].clone(), Val::Obj(inputs));
+    }
+
+    VM::new(workflow.body.clone(), env)
+}
+
+#[test]
+fn test_while_false_exits_immediately() {
+    let source = r#"
+        async function workflow(ctx) {
+            while (false) {
+                return 99
+            }
+            return 42
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
+}
+
+#[test]
+fn test_while_break_exits() {
+    let source = r#"
+        async function workflow(ctx) {
+            while (true) {
+                break
+            }
+            return 100
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(100.0)));
+}
+
+#[test]
+fn test_while_break_in_nested_block() {
+    let source = r#"
+        async function workflow(ctx) {
+            while (true) {
+                {
+                    break
+                }
+                return 99
+            }
+            return 42
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
+}
+
+#[test]
+fn test_while_return_exits_immediately() {
+    let source = r#"
+        async function workflow(ctx) {
+            while (true) {
+                return 55
+            }
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(55.0)));
+}
+
+#[test]
+fn test_nested_while_with_breaks() {
+    let source = r#"
+        async function workflow(ctx) {
+            while (true) {
+                while (true) {
+                    break
+                }
+                break
+            }
+            return 77
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(77.0)));
 }

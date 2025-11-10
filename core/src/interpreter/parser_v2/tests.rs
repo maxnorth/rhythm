@@ -497,3 +497,161 @@ fn test_parse_invalid_syntax() {
     let result = parser_v2::parse(source);
     assert!(result.is_err());
 }
+
+/* ===================== While/Break/Continue Tests ===================== */
+
+#[test]
+fn test_parse_while_loop() {
+    let source = r#"
+        async function workflow(ctx) {
+            while (true) {
+                return 42
+            }
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    assert_eq!(workflow.params, vec!["ctx"]);
+
+    // Verify body is a block with one while statement
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::While { test, body: while_body } => {
+                    // Test should be true
+                    match test {
+                        Expr::LitBool { v } => assert_eq!(*v, true),
+                        _ => panic!("Expected LitBool for test"),
+                    }
+                    // Body should be a block with return statement
+                    match &**while_body {
+                        Stmt::Block { body } => {
+                            assert_eq!(body.len(), 1);
+                            assert!(matches!(&body[0], Stmt::Return { .. }));
+                        }
+                        _ => panic!("Expected Block for while body"),
+                    }
+                }
+                _ => panic!("Expected While statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_while_with_break() {
+    let source = r#"
+        async function workflow(ctx) {
+            while (true) {
+                break
+            }
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify body contains while with break
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::While { body: while_body, .. } => {
+                    match &**while_body {
+                        Stmt::Block { body } => {
+                            assert_eq!(body.len(), 1);
+                            assert!(matches!(&body[0], Stmt::Break));
+                        }
+                        _ => panic!("Expected Block for while body"),
+                    }
+                }
+                _ => panic!("Expected While statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_while_with_continue() {
+    let source = r#"
+        async function workflow(ctx) {
+            while (false) {
+                continue
+            }
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify body contains while with continue
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::While { body: while_body, .. } => {
+                    match &**while_body {
+                        Stmt::Block { body } => {
+                            assert_eq!(body.len(), 1);
+                            assert!(matches!(&body[0], Stmt::Continue));
+                        }
+                        _ => panic!("Expected Block for while body"),
+                    }
+                }
+                _ => panic!("Expected While statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_nested_while() {
+    let source = r#"
+        async function workflow(ctx) {
+            while (true) {
+                while (false) {
+                    break
+                }
+            }
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify nested while structure
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::While { body: outer_body, .. } => {
+                    match &**outer_body {
+                        Stmt::Block { body } => {
+                            assert_eq!(body.len(), 1);
+                            // Inner statement should be another while
+                            assert!(matches!(&body[0], Stmt::While { .. }));
+                        }
+                        _ => panic!("Expected Block for outer while body"),
+                    }
+                }
+                _ => panic!("Expected While statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_break_standalone() {
+    // Test that break can be parsed as a statement (using test API)
+    let ast = parser_v2::parse("break").expect("Should parse");
+    assert!(matches!(ast, Stmt::Break));
+}
+
+#[test]
+fn test_parse_continue_standalone() {
+    // Test that continue can be parsed as a statement (using test API)
+    let ast = parser_v2::parse("continue").expect("Should parse");
+    assert!(matches!(ast, Stmt::Continue));
+}

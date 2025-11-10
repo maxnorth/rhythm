@@ -190,10 +190,28 @@ fn build_if_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     })
 }
 
+fn build_while_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
+    // while_stmt = { "while" ~ "(" ~ expression ~ ")" ~ block }
+    let mut inner = pair.into_inner();
+
+    // Get the test expression
+    let test_pair = inner.next().unwrap();
+    let test = build_expression(test_pair)?;
+
+    // Get the body block
+    let body_pair = inner.next().unwrap();
+    let body = build_statement(body_pair)?;
+
+    Ok(Stmt::While {
+        test,
+        body: Box::new(body),
+    })
+}
+
 fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     match pair.as_rule() {
         Rule::statement => {
-            // statement = { return_stmt | if_stmt | block | expr_stmt }
+            // statement = { return_stmt | if_stmt | while_stmt | break_stmt | continue_stmt | block | expr_stmt }
             let inner = pair.into_inner().next().unwrap();
             build_statement(inner)
         }
@@ -207,6 +225,18 @@ fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
         Rule::if_stmt => {
             // if_stmt = { "if" ~ "(" ~ expression ~ ")" ~ block ~ else_clause? }
             build_if_stmt(pair)
+        }
+        Rule::while_stmt => {
+            // while_stmt = { "while" ~ "(" ~ expression ~ ")" ~ block }
+            build_while_stmt(pair)
+        }
+        Rule::break_stmt => {
+            // break_stmt = { "break" }
+            Ok(Stmt::Break)
+        }
+        Rule::continue_stmt => {
+            // continue_stmt = { "continue" }
+            Ok(Stmt::Continue)
         }
         Rule::block => {
             // block = { "{" ~ statement* ~ "}" }
