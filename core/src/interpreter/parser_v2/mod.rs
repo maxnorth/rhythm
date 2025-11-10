@@ -208,6 +208,29 @@ fn build_while_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     })
 }
 
+fn build_try_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
+    // try_stmt = { "try" ~ block ~ "catch" ~ "(" ~ identifier ~ ")" ~ block }
+    let mut inner = pair.into_inner();
+
+    // Get the try body block
+    let try_body_pair = inner.next().unwrap();
+    let body = build_statement(try_body_pair)?;
+
+    // Get the catch variable (identifier)
+    let catch_var_pair = inner.next().unwrap();
+    let catch_var = catch_var_pair.as_str().to_string();
+
+    // Get the catch body block
+    let catch_body_pair = inner.next().unwrap();
+    let catch_body = build_statement(catch_body_pair)?;
+
+    Ok(Stmt::Try {
+        body: Box::new(body),
+        catch_var,
+        catch_body: Box::new(catch_body),
+    })
+}
+
 fn build_assign_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     // assign_stmt = { identifier ~ ("." ~ identifier)* ~ "=" ~ expression }
     let mut inner = pair.into_inner();
@@ -263,6 +286,10 @@ fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
         Rule::while_stmt => {
             // while_stmt = { "while" ~ "(" ~ expression ~ ")" ~ block }
             build_while_stmt(pair)
+        }
+        Rule::try_stmt => {
+            // try_stmt = { "try" ~ block ~ "catch" ~ "(" ~ identifier ~ ")" ~ block }
+            build_try_stmt(pair)
         }
         Rule::break_stmt => {
             // break_stmt = { "break" }
