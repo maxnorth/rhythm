@@ -6,6 +6,7 @@ mod assign_tests;
 mod await_tests;
 mod basic_tests;
 mod error_tests;
+pub mod helpers; // Public helper utilities for tests
 mod if_tests;
 mod literal_tests;
 mod stdlib_tests;

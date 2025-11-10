@@ -51,11 +51,22 @@ primary = {
 }
 
 literal = {
-    boolean
+    object_lit
+    | array_lit
+    | boolean
     | number
     | string
     | null_lit
 }
+
+// Object literal: { key: value, key2: value2 }
+object_lit = { "{" ~ property_list? ~ "}" }
+property_list = { property ~ ("," ~ property)* ~ ","? }
+property = { identifier ~ ":" ~ expression }
+
+// Array literal: [1, 2, 3]
+array_lit = { "[" ~ element_list? ~ "]" }
+element_list = { expression ~ ("," ~ expression)* ~ ","? }
 
 // Literals
 number = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }

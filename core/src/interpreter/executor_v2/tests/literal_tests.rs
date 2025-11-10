@@ -1,25 +1,20 @@
 //! Tests for literal expressions (arrays and objects)
 
-use crate::interpreter::executor_v2::{run_until_done, Control, Stmt, Val, VM};
+use super::helpers::parse_workflow_and_build_vm;
+use crate::interpreter::executor_v2::{run_until_done, Control, Val};
 use std::collections::HashMap;
 
 /* ===================== Array Literal Tests ===================== */
 
 #[test]
 fn test_array_literal_empty() {
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "LitList",
-                "elements": []
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow() {
+            return []
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     assert_eq!(vm.control, Control::Return(Val::List(vec![])));
@@ -27,23 +22,13 @@ fn test_array_literal_empty() {
 
 #[test]
 fn test_array_literal_numbers() {
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "LitList",
-                "elements": [
-                    {"t": "LitNum", "v": 1.0},
-                    {"t": "LitNum", "v": 2.0},
-                    {"t": "LitNum", "v": 3.0}
-                ]
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow() {
+            return [1, 2, 3]
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     assert_eq!(
@@ -54,23 +39,13 @@ fn test_array_literal_numbers() {
 
 #[test]
 fn test_array_literal_mixed_types() {
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "LitList",
-                "elements": [
-                    {"t": "LitNum", "v": 42.0},
-                    {"t": "LitStr", "v": "hello"},
-                    {"t": "LitBool", "v": true}
-                ]
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow() {
+            return [42, "hello", true]
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     assert_eq!(
@@ -85,34 +60,14 @@ fn test_array_literal_mixed_types() {
 
 #[test]
 fn test_array_literal_nested() {
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "LitList",
-                "elements": [
-                    {
-                        "t": "LitList",
-                        "elements": [
-                            {"t": "LitNum", "v": 1.0},
-                            {"t": "LitNum", "v": 2.0}
-                        ]
-                    },
-                    {
-                        "t": "LitList",
-                        "elements": [
-                            {"t": "LitNum", "v": 3.0},
-                            {"t": "LitNum", "v": 4.0}
-                        ]
-                    }
-                ]
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow() {
+            return [[1, 2], [3, 4]]
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     assert_eq!(
@@ -126,28 +81,18 @@ fn test_array_literal_nested() {
 
 #[test]
 fn test_array_literal_with_expressions() {
-    // [x, y] where x=10, y=20
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "LitList",
-                "elements": [
-                    {"t": "Ident", "name": "x"},
-                    {"t": "Ident", "name": "y"}
-                ]
-            }
-        }]
-    }"#;
-
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
+    // [inputs.x, inputs.y] where x=10, y=20
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            return [inputs.x, inputs.y]
+        }
+    "#;
 
     let mut env = HashMap::new();
     env.insert("x".to_string(), Val::Num(10.0));
     env.insert("y".to_string(), Val::Num(20.0));
 
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, env);
     run_until_done(&mut vm);
 
     assert_eq!(
@@ -160,19 +105,14 @@ fn test_array_literal_with_expressions() {
 
 #[test]
 fn test_object_literal_empty() {
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "LitObj",
-                "properties": []
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow() {
+            return {}
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     assert_eq!(vm.control, Control::Return(Val::Obj(HashMap::new())));
@@ -180,22 +120,14 @@ fn test_object_literal_empty() {
 
 #[test]
 fn test_object_literal_simple() {
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "LitObj",
-                "properties": [
-                    ["name", {"t": "LitStr", "v": "Alice"}],
-                    ["age", {"t": "LitNum", "v": 30.0}]
-                ]
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow() {
+            return {name: "Alice", age: 30}
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     let mut expected = HashMap::new();
@@ -207,27 +139,14 @@ fn test_object_literal_simple() {
 
 #[test]
 fn test_object_literal_nested() {
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "LitObj",
-                "properties": [
-                    ["user", {
-                        "t": "LitObj",
-                        "properties": [
-                            ["name", {"t": "LitStr", "v": "Bob"}],
-                            ["id", {"t": "LitNum", "v": 123.0}]
-                        ]
-                    }]
-                ]
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow() {
+            return {user: {name: "Bob", id: 123}}
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     let mut inner = HashMap::new();
@@ -242,28 +161,18 @@ fn test_object_literal_nested() {
 
 #[test]
 fn test_object_literal_with_expressions() {
-    // {x: a, y: b} where a=10, b=20
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "LitObj",
-                "properties": [
-                    ["x", {"t": "Ident", "name": "a"}],
-                    ["y", {"t": "Ident", "name": "b"}]
-                ]
-            }
-        }]
-    }"#;
-
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
+    // {x: inputs.a, y: inputs.b} where a=10, b=20
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            return {x: inputs.a, y: inputs.b}
+        }
+    "#;
 
     let mut env = HashMap::new();
     env.insert("a".to_string(), Val::Num(10.0));
     env.insert("b".to_string(), Val::Num(20.0));
 
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, env);
     run_until_done(&mut vm);
 
     let mut expected = HashMap::new();
@@ -275,28 +184,14 @@ fn test_object_literal_with_expressions() {
 
 #[test]
 fn test_object_literal_with_array() {
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "LitObj",
-                "properties": [
-                    ["items", {
-                        "t": "LitList",
-                        "elements": [
-                            {"t": "LitNum", "v": 1.0},
-                            {"t": "LitNum", "v": 2.0},
-                            {"t": "LitNum", "v": 3.0}
-                        ]
-                    }]
-                ]
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow() {
+            return {items: [1, 2, 3]}
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     let mut expected = HashMap::new();
@@ -313,42 +208,14 @@ fn test_object_literal_with_array() {
 #[test]
 fn test_array_in_task_run() {
     // Task.run("my_task", {items: [1, 2, 3]})
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Return",
-            "value": {
-                "t": "Call",
-                "callee": {
-                    "t": "Member",
-                    "object": {
-                        "t": "Ident",
-                        "name": "Task"
-                    },
-                    "property": "run"
-                },
-                "args": [{
-                    "t": "LitStr",
-                    "v": "my_task"
-                }, {
-                    "t": "LitObj",
-                    "properties": [
-                        ["items", {
-                            "t": "LitList",
-                            "elements": [
-                                {"t": "LitNum", "v": 1.0},
-                                {"t": "LitNum", "v": 2.0},
-                                {"t": "LitNum", "v": 3.0}
-                            ]
-                        }]
-                    ]
-                }]
-            }
-        }]
-    }"#;
+    let source = r#"
+        async function workflow() {
+            return Task.run("my_task", {items: [1, 2, 3]})
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Should return a Task value

@@ -792,3 +792,519 @@ fn test_parse_assignment_standalone() {
         _ => panic!("Expected Assign statement"),
     }
 }
+
+/* ===================== Object Literal Tests ===================== */
+
+#[test]
+fn test_parse_empty_object_literal() {
+    let source = r#"
+        async function workflow(ctx) {
+            return {}
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    assert_eq!(workflow.params, vec!["ctx"]);
+
+    // Verify body is a block with return statement containing empty object
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitObj { properties } => {
+                        assert_eq!(properties.len(), 0);
+                    }
+                    _ => panic!("Expected LitObj expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_object_literal_single_property() {
+    let source = r#"
+        async function workflow(ctx) {
+            return {code: "E"}
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify object with single property
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitObj { properties } => {
+                        assert_eq!(properties.len(), 1);
+                        assert_eq!(properties[0].0, "code");
+                        assert!(matches!(&properties[0].1, Expr::LitStr { v } if v == "E"));
+                    }
+                    _ => panic!("Expected LitObj expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_object_literal_multiple_properties() {
+    let source = r#"
+        async function workflow(ctx) {
+            return {code: "E", message: "msg", value: 42}
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify object with multiple properties
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitObj { properties } => {
+                        assert_eq!(properties.len(), 3);
+                        assert_eq!(properties[0].0, "code");
+                        assert!(matches!(&properties[0].1, Expr::LitStr { v } if v == "E"));
+                        assert_eq!(properties[1].0, "message");
+                        assert!(matches!(&properties[1].1, Expr::LitStr { v } if v == "msg"));
+                        assert_eq!(properties[2].0, "value");
+                        assert!(matches!(&properties[2].1, Expr::LitNum { v } if *v == 42.0));
+                    }
+                    _ => panic!("Expected LitObj expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_object_literal_with_trailing_comma() {
+    let source = r#"
+        async function workflow(ctx) {
+            return {code: "E", message: "msg",}
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify object parses correctly with trailing comma
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitObj { properties } => {
+                        assert_eq!(properties.len(), 2);
+                    }
+                    _ => panic!("Expected LitObj expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_object_literal_nested() {
+    let source = r#"
+        async function workflow(ctx) {
+            return {outer: {inner: 42}}
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify nested object literal
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitObj { properties } => {
+                        assert_eq!(properties.len(), 1);
+                        assert_eq!(properties[0].0, "outer");
+                        match &properties[0].1 {
+                            Expr::LitObj { properties: inner_props } => {
+                                assert_eq!(inner_props.len(), 1);
+                                assert_eq!(inner_props[0].0, "inner");
+                                assert!(matches!(&inner_props[0].1, Expr::LitNum { v } if *v == 42.0));
+                            }
+                            _ => panic!("Expected nested LitObj"),
+                        }
+                    }
+                    _ => panic!("Expected LitObj expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_object_literal_in_assignment() {
+    let source = r#"
+        async function workflow(ctx) {
+            obj = {x: 1, y: 2}
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify object literal in assignment
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Assign { var, path, value } => {
+                    assert_eq!(var, "obj");
+                    assert_eq!(path.len(), 0);
+                    match value {
+                        Expr::LitObj { properties } => {
+                            assert_eq!(properties.len(), 2);
+                            assert_eq!(properties[0].0, "x");
+                            assert_eq!(properties[1].0, "y");
+                        }
+                        _ => panic!("Expected LitObj expression"),
+                    }
+                }
+                _ => panic!("Expected Assign statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_object_literal_with_expression_values() {
+    let source = r#"
+        async function workflow(ctx) {
+            return {x: add(1, 2), y: ctx.value}
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify object with expression values
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitObj { properties } => {
+                        assert_eq!(properties.len(), 2);
+                        assert_eq!(properties[0].0, "x");
+                        assert!(matches!(&properties[0].1, Expr::Call { .. }));
+                        assert_eq!(properties[1].0, "y");
+                        assert!(matches!(&properties[1].1, Expr::Member { .. }));
+                    }
+                    _ => panic!("Expected LitObj expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+/* ===================== Array Literal Tests ===================== */
+
+#[test]
+fn test_parse_empty_array_literal() {
+    let source = r#"
+        async function workflow(ctx) {
+            return []
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    assert_eq!(workflow.params, vec!["ctx"]);
+
+    // Verify body is a block with return statement containing empty array
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitList { elements } => {
+                        assert_eq!(elements.len(), 0);
+                    }
+                    _ => panic!("Expected LitList expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_array_literal_single_element() {
+    let source = r#"
+        async function workflow(ctx) {
+            return [42]
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify array with single element
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitList { elements } => {
+                        assert_eq!(elements.len(), 1);
+                        assert!(matches!(&elements[0], Expr::LitNum { v } if *v == 42.0));
+                    }
+                    _ => panic!("Expected LitList expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_array_literal_multiple_elements() {
+    let source = r#"
+        async function workflow(ctx) {
+            return [1, 2, 3, 4, 5]
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify array with multiple elements
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitList { elements } => {
+                        assert_eq!(elements.len(), 5);
+                        for (i, elem) in elements.iter().enumerate() {
+                            assert!(matches!(elem, Expr::LitNum { v } if *v == (i + 1) as f64));
+                        }
+                    }
+                    _ => panic!("Expected LitList expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_array_literal_mixed_types() {
+    let source = r#"
+        async function workflow(ctx) {
+            return [1, "hello", true, null]
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify array with mixed types
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitList { elements } => {
+                        assert_eq!(elements.len(), 4);
+                        assert!(matches!(&elements[0], Expr::LitNum { v } if *v == 1.0));
+                        assert!(matches!(&elements[1], Expr::LitStr { v } if v == "hello"));
+                        assert!(matches!(&elements[2], Expr::LitBool { v } if *v == true));
+                        assert!(matches!(&elements[3], Expr::LitNull));
+                    }
+                    _ => panic!("Expected LitList expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_array_literal_with_trailing_comma() {
+    let source = r#"
+        async function workflow(ctx) {
+            return [1, 2, 3,]
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify array parses correctly with trailing comma
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitList { elements } => {
+                        assert_eq!(elements.len(), 3);
+                    }
+                    _ => panic!("Expected LitList expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_array_literal_nested() {
+    let source = r#"
+        async function workflow(ctx) {
+            return [[1, 2], [3, 4]]
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify nested array literal
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitList { elements } => {
+                        assert_eq!(elements.len(), 2);
+                        // Check first nested array
+                        match &elements[0] {
+                            Expr::LitList { elements: inner } => {
+                                assert_eq!(inner.len(), 2);
+                                assert!(matches!(&inner[0], Expr::LitNum { v } if *v == 1.0));
+                                assert!(matches!(&inner[1], Expr::LitNum { v } if *v == 2.0));
+                            }
+                            _ => panic!("Expected nested LitList"),
+                        }
+                        // Check second nested array
+                        match &elements[1] {
+                            Expr::LitList { elements: inner } => {
+                                assert_eq!(inner.len(), 2);
+                                assert!(matches!(&inner[0], Expr::LitNum { v } if *v == 3.0));
+                                assert!(matches!(&inner[1], Expr::LitNum { v } if *v == 4.0));
+                            }
+                            _ => panic!("Expected nested LitList"),
+                        }
+                    }
+                    _ => panic!("Expected LitList expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_array_literal_in_assignment() {
+    let source = r#"
+        async function workflow(ctx) {
+            arr = [1, 2, 3]
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify array literal in assignment
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Assign { var, path, value } => {
+                    assert_eq!(var, "arr");
+                    assert_eq!(path.len(), 0);
+                    match value {
+                        Expr::LitList { elements } => {
+                            assert_eq!(elements.len(), 3);
+                        }
+                        _ => panic!("Expected LitList expression"),
+                    }
+                }
+                _ => panic!("Expected Assign statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_array_literal_with_expression_elements() {
+    let source = r#"
+        async function workflow(ctx) {
+            return [add(1, 2), ctx.value, Math.floor(3.7)]
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify array with expression elements
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitList { elements } => {
+                        assert_eq!(elements.len(), 3);
+                        assert!(matches!(&elements[0], Expr::Call { .. }));
+                        assert!(matches!(&elements[1], Expr::Member { .. }));
+                        assert!(matches!(&elements[2], Expr::Call { .. }));
+                    }
+                    _ => panic!("Expected LitList expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_array_with_object_elements() {
+    let source = r#"
+        async function workflow(ctx) {
+            return [{x: 1}, {x: 2}]
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify array with object elements
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitList { elements } => {
+                        assert_eq!(elements.len(), 2);
+                        assert!(matches!(&elements[0], Expr::LitObj { .. }));
+                        assert!(matches!(&elements[1], Expr::LitObj { .. }));
+                    }
+                    _ => panic!("Expected LitList expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}

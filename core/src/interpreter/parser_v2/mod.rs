@@ -390,6 +390,14 @@ fn build_expression(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
             Ok(Expr::LitStr { v: value })
         }
         Rule::null_lit => Ok(Expr::LitNull),
+        Rule::object_lit => {
+            // object_lit = { "{" ~ property_list? ~ "}" }
+            build_object_literal(pair)
+        }
+        Rule::array_lit => {
+            // array_lit = { "[" ~ element_list? ~ "]" }
+            build_array_literal(pair)
+        }
         _ => Err(ParseError::BuildError(format!(
             "Unexpected expression rule: {:?}",
             pair.as_rule()
@@ -404,4 +412,66 @@ fn build_arg_list(pair: pest::iterators::Pair<Rule>) -> ParseResult<Vec<Expr>> {
         .map(|expr_pair| build_expression(expr_pair))
         .collect();
     args
+}
+
+fn build_object_literal(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
+    // object_lit = { "{" ~ property_list? ~ "}" }
+    let mut inner = pair.into_inner();
+
+    let properties = if let Some(property_list_pair) = inner.next() {
+        // Has properties - build the property list
+        build_property_list(property_list_pair)?
+    } else {
+        // Empty object
+        vec![]
+    };
+
+    Ok(Expr::LitObj { properties })
+}
+
+fn build_property_list(pair: pest::iterators::Pair<Rule>) -> ParseResult<Vec<(String, Expr)>> {
+    // property_list = { property ~ ("," ~ property)* ~ ","? }
+    let properties: Result<Vec<(String, Expr)>, ParseError> = pair
+        .into_inner()
+        .map(|property_pair| build_property(property_pair))
+        .collect();
+    properties
+}
+
+fn build_property(pair: pest::iterators::Pair<Rule>) -> ParseResult<(String, Expr)> {
+    // property = { identifier ~ ":" ~ expression }
+    let mut inner = pair.into_inner();
+
+    // Get the key (identifier)
+    let key = inner.next().unwrap().as_str().to_string();
+
+    // Get the value (expression)
+    let value_pair = inner.next().unwrap();
+    let value = build_expression(value_pair)?;
+
+    Ok((key, value))
+}
+
+fn build_array_literal(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
+    // array_lit = { "[" ~ element_list? ~ "]" }
+    let mut inner = pair.into_inner();
+
+    let elements = if let Some(element_list_pair) = inner.next() {
+        // Has elements - build the element list
+        build_element_list(element_list_pair)?
+    } else {
+        // Empty array
+        vec![]
+    };
+
+    Ok(Expr::LitList { elements })
+}
+
+fn build_element_list(pair: pest::iterators::Pair<Rule>) -> ParseResult<Vec<Expr>> {
+    // element_list = { expression ~ ("," ~ expression)* ~ ","? }
+    let elements: Result<Vec<Expr>, ParseError> = pair
+        .into_inner()
+        .map(|expr_pair| build_expression(expr_pair))
+        .collect();
+    elements
 }

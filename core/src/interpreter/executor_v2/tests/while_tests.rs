@@ -1,7 +1,7 @@
 //! Tests for While statements
 
 use super::super::*;
-use crate::interpreter::parser_v2::{self, WorkflowDef};
+use super::helpers::parse_workflow_and_build_vm;
 use maplit::hashmap;
 use std::collections::HashMap;
 
@@ -283,26 +283,6 @@ fn test_while_accumulator() {
 }
 
 /* ===================== Parser-based While Tests ===================== */
-
-/// Helper: Parse workflow, validate, serialize/deserialize, and create VM
-fn parse_workflow_and_build_vm(source: &str, inputs: HashMap<String, Val>) -> VM {
-    let workflow = parser_v2::parse_workflow(source).expect("Parse workflow failed");
-    parser_v2::semantic_validator::validate_workflow(&workflow)
-        .expect("Workflow validation failed");
-    let json = serde_json::to_string(&workflow).expect("Workflow serialization failed");
-    let workflow: WorkflowDef =
-        serde_json::from_str(&json).expect("Workflow deserialization failed");
-
-    let mut env = HashMap::new();
-    if workflow.params.len() >= 1 {
-        env.insert(workflow.params[0].clone(), Val::Obj(HashMap::new()));
-    }
-    if workflow.params.len() >= 2 {
-        env.insert(workflow.params[1].clone(), Val::Obj(inputs));
-    }
-
-    VM::new(workflow.body.clone(), env)
-}
 
 #[test]
 fn test_while_false_exits_immediately() {
