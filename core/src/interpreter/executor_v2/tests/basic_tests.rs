@@ -131,26 +131,20 @@ fn test_return_null() {
 
 #[test]
 fn test_nested_blocks() {
-    // Note: Parser doesn't support bare block statements yet, using JSON
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Block",
-            "body": [{
-                "t": "Block",
-                "body": [{
-                    "t": "Return",
-                    "value": {
-                        "t": "LitNum",
-                        "v": 42.0
+    // Test nested block statements
+    let source = r#"
+        async function workflow(ctx) {
+            {
+                {
+                    {
+                        return 42
                     }
-                }]
-            }]
-        }]
-    }"#;
+                }
+            }
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
     assert_eq!(vm.control, Control::Return(Val::Num(42.0)));

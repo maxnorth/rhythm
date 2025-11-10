@@ -2,7 +2,7 @@
 //!
 //! Tests for await expressions, suspension, and resumption
 
-use crate::interpreter::executor_v2::{run_until_done, step, Control, Step, Stmt, Val, VM};
+use crate::interpreter::executor_v2::{run_until_done, step, Control, Step, Val, VM};
 use crate::interpreter::parser_v2::{self, WorkflowDef};
 use maplit::hashmap;
 use std::collections::HashMap;
@@ -180,44 +180,36 @@ fn test_resume_when_not_suspended_fails() {
 #[test]
 fn test_await_preserves_frames() {
     // Test that suspension preserves the full frame stack (with serialization)
-    // Note: Uses JSON to test nested blocks, which parser doesn't support yet
-    let program_json = r#"{
-        "t": "Block",
-        "body": [{
-            "t": "Block",
-            "body": [{
-                "t": "Return",
-                "value": {
-                    "t": "Await",
-                    "inner": {
-                        "t": "Ident",
-                        "name": "task"
-                    }
+    // Uses nested blocks to create multiple frames
+    let source = r#"
+        async function workflow(ctx, inputs) {
+            {
+                {
+                    return await inputs.task
                 }
-            }]
-        }]
-    }"#;
+            }
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
+    let inputs = hashmap! {
+        "task".to_string() => Val::Task("task-789".to_string()),
+    };
 
-    let mut env = HashMap::new();
-    env.insert("task".to_string(), Val::Task("task-789".to_string()));
-
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
 
     // Should suspend
     assert_eq!(vm.control, Control::Suspend("task-789".to_string()));
 
-    // Should have 3 frames: outer Block, inner Block, Return
-    assert_eq!(vm.frames.len(), 3);
+    // Should have 4 frames: workflow body Block, outer nested Block, inner nested Block, Return
+    assert_eq!(vm.frames.len(), 4);
 
     // Serialize and deserialize
     let serialized = serde_json::to_string(&vm).unwrap();
     let mut vm2: VM = serde_json::from_str(&serialized).unwrap();
 
     // Frames should be preserved
-    assert_eq!(vm2.frames.len(), 3);
+    assert_eq!(vm2.frames.len(), 4);
 
     // Resume and finish
     assert!(vm2.resume(Val::Bool(true)));

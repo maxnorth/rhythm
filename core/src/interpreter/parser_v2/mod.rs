@@ -165,7 +165,7 @@ fn build_block(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
 fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     match pair.as_rule() {
         Rule::statement => {
-            // statement = { return_stmt | expr_stmt }
+            // statement = { return_stmt | block | expr_stmt }
             let inner = pair.into_inner().next().unwrap();
             build_statement(inner)
         }
@@ -175,6 +175,10 @@ fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
             let expr_pair = inner.next().unwrap();
             let expr = build_expression(expr_pair)?;
             Ok(Stmt::Return { value: Some(expr) })
+        }
+        Rule::block => {
+            // block = { "{" ~ statement* ~ "}" }
+            build_block(pair)
         }
         Rule::expr_stmt => {
             // expr_stmt = { expression }
