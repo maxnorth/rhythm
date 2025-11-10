@@ -15,7 +15,8 @@ statement = { return_stmt | if_stmt | while_stmt | try_stmt | break_stmt | conti
 
 return_stmt = { "return" ~ expression }
 
-assign_stmt = { identifier ~ ("." ~ identifier)* ~ "=" ~ expression }
+assign_stmt = { identifier ~ assign_path_segment* ~ "=" ~ expression }
+assign_path_segment = { "." ~ identifier | "[" ~ expression ~ "]" }
 
 if_stmt = { "if" ~ "(" ~ expression ~ ")" ~ block ~ else_clause? }
 else_clause = { "else" ~ (if_stmt | block) }

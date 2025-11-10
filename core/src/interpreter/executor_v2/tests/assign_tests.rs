@@ -2,6 +2,7 @@
 
 use super::helpers::parse_workflow_and_build_vm;
 use crate::interpreter::executor_v2::{run_until_done, Control, Stmt, Val, VM};
+use maplit::hashmap;
 use std::collections::HashMap;
 
 /* ===================== Basic Assignment Tests ===================== */
@@ -76,10 +77,10 @@ fn test_assign_object() {
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
-    let mut expected_map = HashMap::new();
-    expected_map.insert("name".to_string(), Val::Str("Bob".to_string()));
-    expected_map.insert("age".to_string(), Val::Num(30.0));
-    let expected = Val::Obj(expected_map);
+    let expected = Val::Obj(hashmap! {
+        "name".to_string() => Val::Str("Bob".to_string()),
+        "age".to_string() => Val::Num(30.0),
+    });
 
     assert_eq!(vm.control, Control::Return(expected.clone()));
     assert_eq!(vm.env.get("user"), Some(&expected));
@@ -97,8 +98,9 @@ fn test_assign_from_variable() {
         }
     "#;
 
-    let mut env = HashMap::new();
-    env.insert("x".to_string(), Val::Num(100.0));
+    let env = hashmap! {
+        "x".to_string() => Val::Num(100.0),
+    };
 
     let mut vm = parse_workflow_and_build_vm(source, env);
     run_until_done(&mut vm);
@@ -120,8 +122,9 @@ fn test_assign_with_member_access() {
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
 
     // Set up ctx with user property
-    let mut ctx_obj = HashMap::new();
-    ctx_obj.insert("user".to_string(), Val::Str("Alice".to_string()));
+    let ctx_obj = hashmap! {
+        "user".to_string() => Val::Str("Alice".to_string()),
+    };
     vm.env.insert("ctx".to_string(), Val::Obj(ctx_obj));
 
     run_until_done(&mut vm);
@@ -143,8 +146,9 @@ fn test_assign_with_function_call() {
         }
     "#;
 
-    let mut env = HashMap::new();
-    env.insert("x".to_string(), Val::Num(-42.0));
+    let env = hashmap! {
+        "x".to_string() => Val::Num(-42.0),
+    };
 
     let mut vm = parse_workflow_and_build_vm(source, env);
     run_until_done(&mut vm);
@@ -258,32 +262,14 @@ fn test_assign_with_await_resume() {
 #[test]
 fn test_assign_with_error() {
     // result = ctx.nonexistent;
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Assign",
-                "path": [],
-                "var": "result",
-                "value": {
-                    "t": "Member",
-                    "object": {"t": "Ident", "name": "ctx"},
-                    "property": "nonexistent"
-                }
-            },
-            {
-                "t": "Return",
-                "value": {"t": "Ident", "name": "result"}
-            }
-        ]
-    }"#;
+    let source = r#"
+        async function workflow(ctx) {
+            result = ctx.nonexistent
+            return result
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-
-    let mut env = HashMap::new();
-    env.insert("ctx".to_string(), Val::Obj(HashMap::new()));
-
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Should throw an error
@@ -301,42 +287,18 @@ fn test_assign_with_error() {
 #[test]
 fn test_assign_in_try_catch() {
     // try { result = ctx.bad; } catch (e) { result = "error"; } return result;
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Try",
-                "body": {
-                    "t": "Assign",
-                "path": [],
-                    "var": "result",
-                    "value": {
-                        "t": "Member",
-                        "object": {"t": "Ident", "name": "ctx"},
-                        "property": "bad"
-                    }
-                },
-                "catch_var": "e",
-                "catch_body": {
-                    "t": "Assign",
-                "path": [],
-                    "var": "result",
-                    "value": {"t": "LitStr", "v": "error"}
-                }
-            },
-            {
-                "t": "Return",
-                "value": {"t": "Ident", "name": "result"}
+    let source = r#"
+        async function workflow(ctx) {
+            try {
+                result = ctx.bad
+            } catch (e) {
+                result = "error"
             }
-        ]
-    }"#;
+            return result
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-
-    let mut env = HashMap::new();
-    env.insert("ctx".to_string(), Val::Obj(HashMap::new()));
-
-    let mut vm = VM::new(program, env);
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Should return "error" from the catch block
@@ -403,38 +365,16 @@ fn test_assign_object_property() {
 
 #[test]
 fn test_assign_array_index() {
-    // items = [1, 2, 3]; items[1] = 99; return items[1];
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Assign",
-                "path": [],
-                "var": "items",
-                "value": {
-                    "t": "LitList",
-                    "elements": [
-                        {"t": "LitNum", "v": 1.0},
-                        {"t": "LitNum", "v": 2.0},
-                        {"t": "LitNum", "v": 3.0}
-                    ]
-                }
-            },
-            {
-                "t": "Assign",
-                "path": [{"t": "Index", "expr": {"t": "LitNum", "v": 1.0}}],
-                "var": "items",
-                "value": {"t": "LitNum", "v": 99.0}
-            },
-            {
-                "t": "Return",
-                "value": {"t": "Ident", "name": "items"}
-            }
-        ]
-    }"#;
+    // items = [1, 2, 3]; items[1] = 99; return items;
+    let source = r#"
+        async function workflow() {
+            items = [1, 2, 3]
+            items[1] = 99
+            return items
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Verify the array was mutated
@@ -462,46 +402,16 @@ fn test_assign_nested_property() {
 
 #[test]
 fn test_assign_mixed_path() {
-    // data = {items: [1, 2, 3]}; data.items[0] = 99; return data.items[0];
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Assign",
-                "path": [],
-                "var": "data",
-                "value": {
-                    "t": "LitObj",
-                    "properties": [
-                        ["items", {
-                            "t": "LitList",
-                            "elements": [
-                                {"t": "LitNum", "v": 1.0},
-                                {"t": "LitNum", "v": 2.0},
-                                {"t": "LitNum", "v": 3.0}
-                            ]
-                        }]
-                    ]
-                }
-            },
-            {
-                "t": "Assign",
-                "path": [
-                    {"t": "Prop", "property": "items"},
-                    {"t": "Index", "expr": {"t": "LitNum", "v": 0.0}}
-                ],
-                "var": "data",
-                "value": {"t": "LitNum", "v": 99.0}
-            },
-            {
-                "t": "Return",
-                "value": {"t": "Ident", "name": "data"}
-            }
-        ]
-    }"#;
+    // data = {items: [1, 2, 3]}; data.items[0] = 99; return data;
+    let source = r#"
+        async function workflow() {
+            data = {items: [1, 2, 3]}
+            data.items[0] = 99
+            return data
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Verify the nested property was mutated
@@ -518,44 +428,17 @@ fn test_assign_mixed_path() {
 
 #[test]
 fn test_assign_computed_index() {
-    // arr = [10, 20, 30]; i = 1; arr[i] = 99; return arr[i];
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Assign",
-                "path": [],
-                "var": "arr",
-                "value": {
-                    "t": "LitList",
-                    "elements": [
-                        {"t": "LitNum", "v": 10.0},
-                        {"t": "LitNum", "v": 20.0},
-                        {"t": "LitNum", "v": 30.0}
-                    ]
-                }
-            },
-            {
-                "t": "Assign",
-                "path": [],
-                "var": "i",
-                "value": {"t": "LitNum", "v": 1.0}
-            },
-            {
-                "t": "Assign",
-                "path": [{"t": "Index", "expr": {"t": "Ident", "name": "i"}}],
-                "var": "arr",
-                "value": {"t": "LitNum", "v": 99.0}
-            },
-            {
-                "t": "Return",
-                "value": {"t": "Ident", "name": "arr"}
-            }
-        ]
-    }"#;
+    // arr = [10, 20, 30]; i = 1; arr[i] = 99; return arr;
+    let source = r#"
+        async function workflow() {
+            arr = [10, 20, 30]
+            i = 1
+            arr[i] = 99
+            return arr
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Verify the array was mutated at the computed index
@@ -590,26 +473,14 @@ fn test_assign_prop_access_on_non_object_error() {
 #[test]
 fn test_assign_index_access_on_primitive_error() {
     // x = 42; x[0] = "bar"; (should error - can't use Index on number)
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Assign",
-                "path": [],
-                "var": "x",
-                "value": {"t": "LitNum", "v": 42.0}
-            },
-            {
-                "t": "Assign",
-                "path": [{"t": "Index", "expr": {"t": "LitNum", "v": 0.0}}],
-                "var": "x",
-                "value": {"t": "LitStr", "v": "bar"}
-            }
-        ]
-    }"#;
+    let source = r#"
+        async function workflow() {
+            x = 42
+            x[0] = "bar"
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Should get a TypeError for trying to use Index access on a number
@@ -671,39 +542,21 @@ fn test_assign_nested_prop_access_on_non_object_error() {
 #[test]
 fn test_assign_index_access_on_object_allowed() {
     // obj = {}; obj["foo"] = "bar"; return obj; (should work - Index allowed on objects)
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Assign",
-                "path": [],
-                "var": "obj",
-                "value": {
-                    "t": "LitObj",
-                    "properties": []
-                }
-            },
-            {
-                "t": "Assign",
-                "path": [{"t": "Index", "expr": {"t": "LitStr", "v": "foo"}}],
-                "var": "obj",
-                "value": {"t": "LitStr", "v": "bar"}
-            },
-            {
-                "t": "Return",
-                "value": {"t": "Ident", "name": "obj"}
-            }
-        ]
-    }"#;
+    let source = r#"
+        async function workflow() {
+            obj = {}
+            obj["foo"] = "bar"
+            return obj
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Should succeed - Index access is allowed on objects
-    let mut expected_map = HashMap::new();
-    expected_map.insert("foo".to_string(), Val::Str("bar".to_string()));
-    let expected = Val::Obj(expected_map);
+    let expected = Val::Obj(hashmap! {
+        "foo".to_string() => Val::Str("bar".to_string()),
+    });
     assert_eq!(vm.control, Control::Return(expected.clone()));
     assert_eq!(vm.env.get("obj"), Some(&expected));
 }

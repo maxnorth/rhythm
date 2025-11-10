@@ -232,26 +232,38 @@ fn build_try_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
 }
 
 fn build_assign_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
-    // assign_stmt = { identifier ~ ("." ~ identifier)* ~ "=" ~ expression }
+    // assign_stmt = { identifier ~ assign_path_segment* ~ "=" ~ expression }
     let mut inner = pair.into_inner();
 
     // Get the first identifier (variable name)
     let var = inner.next().unwrap().as_str().to_string();
 
-    // Collect property path - all identifiers before the expression
+    // Collect path segments (property and index access)
     let mut path = Vec::new();
     let mut expr_pair = None;
 
     for pair in inner {
         match pair.as_rule() {
-            Rule::identifier => {
-                // This is a property access
-                path.push(MemberAccess::Prop {
-                    property: pair.as_str().to_string(),
-                });
+            Rule::assign_path_segment => {
+                // Process the path segment
+                let segment_inner = pair.into_inner().next().unwrap();
+                match segment_inner.as_rule() {
+                    Rule::identifier => {
+                        // Property access: .prop
+                        path.push(MemberAccess::Prop {
+                            property: segment_inner.as_str().to_string(),
+                        });
+                    }
+                    Rule::expression => {
+                        // Index access: [expr]
+                        let index_expr = build_expression(segment_inner)?;
+                        path.push(MemberAccess::Index { expr: index_expr });
+                    }
+                    _ => {}
+                }
             }
             Rule::expression => {
-                // This is the value expression
+                // This is the value expression (right-hand side of =)
                 expr_pair = Some(pair);
                 break;
             }
