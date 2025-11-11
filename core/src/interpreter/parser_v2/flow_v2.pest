@@ -81,8 +81,11 @@ call_suffix = { "(" ~ arg_list? ~ ")" }
 
 arg_list = { expression ~ ("," ~ expression)* }
 
-// Member access: foo, foo.bar, foo.bar.baz
-member_expr = { primary ~ ("." ~ identifier)* }
+// Member access: foo, foo.bar, foo?.bar, foo.bar.baz
+member_expr = { primary ~ (member_access)* }
+member_access = { optional_access | regular_access }
+optional_access = { "?." ~ identifier }
+regular_access = { "." ~ identifier }
 
 primary = {
     "(" ~ expression ~ ")"

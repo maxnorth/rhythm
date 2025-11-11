@@ -130,7 +130,7 @@ pub fn eval_expr(
             },
         },
 
-        Expr::Member { object, property } => {
+        Expr::Member { object, property, optional } => {
             // First, evaluate the object expression
             let obj_result = eval_expr(object, env, resume_value, outbox);
 
@@ -151,6 +151,11 @@ pub fn eval_expr(
                     EvalResult::Throw { error }
                 }
                 EvalResult::Value { v: obj_val } => {
+                    // If optional chaining (?.) and object is null, return null
+                    if *optional && matches!(obj_val, Val::Null) {
+                        return EvalResult::Value { v: Val::Null };
+                    }
+
                     // Extract the property from the object
                     match obj_val {
                         Val::Obj(map) => match map.get(property).cloned() {

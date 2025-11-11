@@ -190,7 +190,7 @@ fn test_parse_member_access_simple() {
     let ast = parser_v2::parse("return inputs.userId").expect("Should parse");
 
     match ast {
-        Stmt::Return { value: Some(Expr::Member { object, property }) } => {
+        Stmt::Return { value: Some(Expr::Member { object, property, .. }) } => {
             // Verify object is an identifier
             match *object {
                 Expr::Ident { name } => assert_eq!(name, "inputs"),
@@ -207,12 +207,12 @@ fn test_parse_member_access_nested() {
     let ast = parser_v2::parse("return ctx.user.id").expect("Should parse");
 
     match ast {
-        Stmt::Return { value: Some(Expr::Member { object, property }) } => {
+        Stmt::Return { value: Some(Expr::Member { object, property, .. }) } => {
             assert_eq!(property, "id");
 
             // object should be ctx.user
             match *object {
-                Expr::Member { object: inner_object, property: inner_property } => {
+                Expr::Member { object: inner_object, property: inner_property, .. } => {
                     assert_eq!(inner_property, "user");
 
                     // inner_object should be ctx
@@ -376,7 +376,7 @@ fn test_parse_workflow_with_member_access() {
         Stmt::Block { body } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(Expr::Member { object, property }) } => {
+                Stmt::Return { value: Some(Expr::Member { object, property, .. }) } => {
                     assert_eq!(*property, "userId");
                     match &**object {
                         Expr::Ident { name } => assert_eq!(name, "inputs"),

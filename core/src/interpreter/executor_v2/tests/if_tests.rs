@@ -200,25 +200,19 @@ fn test_if_with_block_statement() {
 #[test]
 fn test_if_with_error_in_test() {
     // if (ctx.bad) { return 1; }
-    let program_json = r#"{
-        "t": "If",
-        "test": {
-            "t": "Member",
-            "object": {"t": "Ident", "name": "ctx"},
-            "property": "bad"
-        },
-        "then_s": {
-            "t": "Return",
-            "value": {"t": "LitNum", "v": 1.0}
-        },
-        "else_s": null
-    }"#;
+    // ctx doesn't have 'bad' property, so this should throw
+    let source = r#"
+        async function workflow() {
+            if (ctx.bad) {
+                return 1
+            }
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
-    // Should throw an error
+    // Should throw an error for undefined variable
     match &vm.control {
         Control::Throw(Val::Error(err)) => {
             // Expression evaluator throws INTERNAL_ERROR for undefined variables
@@ -231,55 +225,21 @@ fn test_if_with_error_in_test() {
 #[test]
 fn test_if_with_try_catch() {
     // result = "not_set"; if (true) { try { throw {code: "E", message: "msg"}; } catch (e) { result = "caught"; } } return result;
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Assign",
-                "path": [],
-                "var": "result",
-                "value": {"t": "LitStr", "v": "not_set"}
-            },
-            {
-                "t": "If",
-                "test": {"t": "LitBool", "v": true},
-                "then_s": {
-                    "t": "Try",
-                    "body": {
-                        "t": "Expr",
-                        "expr": {
-                            "t": "Call",
-                            "callee": {"t": "Ident", "name": "throw"},
-                            "args": [
-                                {
-                                    "t": "LitObj",
-                                    "properties": [
-                                        ["code", {"t": "LitStr", "v": "E"}],
-                                        ["message", {"t": "LitStr", "v": "msg"}]
-                                    ]
-                                }
-                            ]
-                        }
-                    },
-                    "catch_var": "e",
-                    "catch_body": {
-                        "t": "Assign",
-                        "path": [],
-                        "var": "result",
-                        "value": {"t": "LitStr", "v": "caught"}
-                    }
-                },
-                "else_s": null
-            },
-            {
-                "t": "Return",
-                "value": {"t": "Ident", "name": "result"}
+    let source = r#"
+        async function workflow() {
+            result = "not_set"
+            if (true) {
+                try {
+                    throw({code: "E", message: "msg"})
+                } catch (e) {
+                    result = "caught"
+                }
             }
-        ]
-    }"#;
+            return result
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     assert_eq!(

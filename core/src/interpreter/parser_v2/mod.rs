@@ -481,7 +481,7 @@ fn build_expression(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
             Ok(expr)
         }
         Rule::member_expr => {
-            // member_expr = { primary ~ ("." ~ identifier)* }
+            // member_expr = { primary ~ (member_access)* }
             let mut inner = pair.into_inner();
 
             // Start with the primary expression
@@ -489,11 +489,27 @@ fn build_expression(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
             let mut expr = build_expression(primary)?;
 
             // Chain member accesses left-to-right
-            for property_pair in inner {
-                let property = property_pair.as_str().to_string();
+            for access_pair in inner {
+                // member_access = { optional_access | regular_access }
+                let access_inner = access_pair.into_inner().next().unwrap();
+                let (optional, property) = match access_inner.as_rule() {
+                    Rule::optional_access => {
+                        // optional_access = { "?." ~ identifier }
+                        let prop = access_inner.into_inner().next().unwrap().as_str().to_string();
+                        (true, prop)
+                    }
+                    Rule::regular_access => {
+                        // regular_access = { "." ~ identifier }
+                        let prop = access_inner.into_inner().next().unwrap().as_str().to_string();
+                        (false, prop)
+                    }
+                    _ => unreachable!("Unexpected member access rule"),
+                };
+
                 expr = Expr::Member {
                     object: Box::new(expr),
                     property,
+                    optional,
                 };
             }
 

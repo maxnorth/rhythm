@@ -139,24 +139,19 @@ fn test_while_with_return() {
 #[test]
 fn test_while_with_error_in_test() {
     // while (ctx.bad) { return 1; }
-    let program_json = r#"{
-        "t": "While",
-        "test": {
-            "t": "Member",
-            "object": {"t": "Ident", "name": "ctx"},
-            "property": "bad"
-        },
-        "body": {
-            "t": "Return",
-            "value": {"t": "LitNum", "v": 1.0}
+    // ctx doesn't have 'bad' property, so this should throw
+    let source = r#"
+        async function workflow() {
+            while (ctx.bad) {
+                return 1
+            }
         }
-    }"#;
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
-    // Should throw an error
+    // Should throw an error for undefined variable
     match &vm.control {
         Control::Throw(Val::Error(err)) => {
             // Expression evaluator throws INTERNAL_ERROR for undefined variables
@@ -168,92 +163,25 @@ fn test_while_with_error_in_test() {
 
 #[test]
 fn test_while_with_try_catch() {
-    // i = 0; while (i < 5) { try { if (i == 3) { throw {code: \"E\", message: \"msg\"}; } i = i + 1; } catch (e) { i = 10; } } return i;
-    let program_json = r#"{
-        "t": "Block",
-        "body": [
-            {
-                "t": "Assign",
-                "path": [],
-                "var": "i",
-                "value": {"t": "LitNum", "v": 0.0}
-            },
-            {
-                "t": "While",
-                "test": {
-                    "t": "Call",
-                    "callee": {"t": "Ident", "name": "lt"},
-                    "args": [
-                        {"t": "Ident", "name": "i"},
-                        {"t": "LitNum", "v": 5.0}
-                    ]
-                },
-                "body": {
-                    "t": "Try",
-                    "body": {
-                        "t": "Block",
-                        "body": [
-                            {
-                                "t": "If",
-                                "test": {
-                                    "t": "Call",
-                                    "callee": {"t": "Ident", "name": "eq"},
-                                    "args": [
-                                        {"t": "Ident", "name": "i"},
-                                        {"t": "LitNum", "v": 3.0}
-                                    ]
-                                },
-                                "then_s": {
-                                    "t": "Expr",
-                                    "expr": {
-                                        "t": "Call",
-                                        "callee": {"t": "Ident", "name": "throw"},
-                                        "args": [
-                                            {
-                                                "t": "LitObj",
-                                                "properties": [
-                                                    ["code", {"t": "LitStr", "v": "E"}],
-                                                    ["message", {"t": "LitStr", "v": "msg"}]
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                },
-                                "else_s": null
-                            },
-                            {
-                                "t": "Assign",
-                                "path": [],
-                                "var": "i",
-                                "value": {
-                                    "t": "Call",
-                                    "callee": {"t": "Ident", "name": "add"},
-                                    "args": [
-                                        {"t": "Ident", "name": "i"},
-                                        {"t": "LitNum", "v": 1.0}
-                                    ]
-                                }
-                            }
-                        ]
-                    },
-                    "catch_var": "e",
-                    "catch_body": {
-                        "t": "Assign",
-                        "path": [],
-                        "var": "i",
-                        "value": {"t": "LitNum", "v": 10.0}
+    // i = 0; while (i < 5) { try { if (i == 3) { throw {code: "E", message: "msg"}; } i = i + 1; } catch (e) { i = 10; } } return i;
+    let source = r#"
+        async function workflow() {
+            i = 0
+            while (lt(i, 5)) {
+                try {
+                    if (eq(i, 3)) {
+                        throw({code: "E", message: "msg"})
                     }
+                    i = add(i, 1)
+                } catch (e) {
+                    i = 10
                 }
-            },
-            {
-                "t": "Return",
-                "value": {"t": "Ident", "name": "i"}
             }
-        ]
-    }"#;
+            return i
+        }
+    "#;
 
-    let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Loop runs 0,1,2 iterations normally, then throws on i=3, catch sets i=10, loop exits

@@ -10,6 +10,7 @@ pub mod helpers; // Public helper utilities for tests
 mod if_tests;
 mod literal_tests;
 mod operator_tests;
+mod optional_chaining_tests;
 mod stdlib_tests;
 mod task_tests;
 mod truthy_tests;
