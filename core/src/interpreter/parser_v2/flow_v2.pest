@@ -33,10 +33,42 @@ expr_stmt = { expression }
 // Identifiers
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
-expression = { await_expr | call_expr }
+expression = { await_expr | logical_or_expr }
 
 // Await expression: await foo(), await task
 await_expr = { "await" ~ expression }
+
+// Operator tokens (captured as named rules)
+op_or = { "||" }
+op_and = { "&&" }
+op_eq = { "==" }
+op_ne = { "!=" }
+op_lte = { "<=" }
+op_gte = { ">=" }
+op_lt = { "<" }
+op_gt = { ">" }
+op_add = { "+" }
+op_sub = { "-" }
+op_mul = { "*" }
+op_div = { "/" }
+
+// Logical OR: a || b
+logical_or_expr = { logical_and_expr ~ (op_or ~ logical_and_expr)* }
+
+// Logical AND: a && b
+logical_and_expr = { equality_expr ~ (op_and ~ equality_expr)* }
+
+// Equality: a == b, a != b
+equality_expr = { comparison_expr ~ ((op_eq | op_ne) ~ comparison_expr)* }
+
+// Comparison: a < b, a <= b, a > b, a >= b
+comparison_expr = { additive_expr ~ ((op_lte | op_gte | op_lt | op_gt) ~ additive_expr)* }
+
+// Addition/Subtraction: a + b, a - b
+additive_expr = { multiplicative_expr ~ ((op_add | op_sub) ~ multiplicative_expr)* }
+
+// Multiplication/Division: a * b, a / b
+multiplicative_expr = { call_expr ~ ((op_mul | op_div) ~ call_expr)* }
 
 // Function calls: foo(), foo.bar(), foo(1, 2, 3)
 call_expr = { member_expr ~ call_suffix? }
@@ -49,7 +81,8 @@ arg_list = { expression ~ ("," ~ expression)* }
 member_expr = { primary ~ ("." ~ identifier)* }
 
 primary = {
-    literal
+    "(" ~ expression ~ ")"
+    | literal
     | identifier
 }
 

@@ -32,10 +32,14 @@ pub enum StdlibFunc {
     Div,
     // Comparison operators
     Eq,
+    Ne,
     Lt,
     Lte,
     Gt,
     Gte,
+    // Logical operators
+    And,
+    Or,
 }
 
 /* ===================== Stdlib Dispatcher ===================== */
@@ -60,10 +64,14 @@ pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val], outbox: &mut Outbox) ->
         StdlibFunc::Div => div(args),
         // Comparison operators
         StdlibFunc::Eq => eq(args),
+        StdlibFunc::Ne => ne(args),
         StdlibFunc::Lt => lt(args),
         StdlibFunc::Lte => lte(args),
         StdlibFunc::Gt => gt(args),
         StdlibFunc::Gte => gte(args),
+        // Logical operators
+        StdlibFunc::And => and(args),
+        StdlibFunc::Or => or(args),
     }
 }
 
@@ -144,6 +152,21 @@ fn eq(args: &[Val]) -> EvalResult {
     }
 }
 
+fn ne(args: &[Val]) -> EvalResult {
+    if args.len() != 2 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "ne expects 2 arguments")),
+        };
+    }
+    match (&args[0], &args[1]) {
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Bool(a != b) },
+        (Val::Bool(a), Val::Bool(b)) => EvalResult::Value { v: Val::Bool(a != b) },
+        (Val::Str(a), Val::Str(b)) => EvalResult::Value { v: Val::Bool(a != b) },
+        (Val::Null, Val::Null) => EvalResult::Value { v: Val::Bool(false) },
+        _ => EvalResult::Value { v: Val::Bool(true) },
+    }
+}
+
 fn lt(args: &[Val]) -> EvalResult {
     if args.len() != 2 {
         return EvalResult::Throw {
@@ -196,6 +219,36 @@ fn gte(args: &[Val]) -> EvalResult {
         (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Bool(a >= b) },
         _ => EvalResult::Throw {
             error: Val::Error(ErrorInfo::new("TypeError", "gte expects two numbers")),
+        },
+    }
+}
+
+/* ===================== Logical Operators ===================== */
+
+fn and(args: &[Val]) -> EvalResult {
+    if args.len() != 2 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "and expects 2 arguments")),
+        };
+    }
+    match (&args[0], &args[1]) {
+        (Val::Bool(a), Val::Bool(b)) => EvalResult::Value { v: Val::Bool(*a && *b) },
+        _ => EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "and expects two booleans")),
+        },
+    }
+}
+
+fn or(args: &[Val]) -> EvalResult {
+    if args.len() != 2 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "or expects 2 arguments")),
+        };
+    }
+    match (&args[0], &args[1]) {
+        (Val::Bool(a), Val::Bool(b)) => EvalResult::Value { v: Val::Bool(*a || *b) },
+        _ => EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "or expects two booleans")),
         },
     }
 }
@@ -275,8 +328,11 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     env.insert("mul".to_string(), Val::NativeFunc(StdlibFunc::Mul));
     env.insert("div".to_string(), Val::NativeFunc(StdlibFunc::Div));
     env.insert("eq".to_string(), Val::NativeFunc(StdlibFunc::Eq));
+    env.insert("ne".to_string(), Val::NativeFunc(StdlibFunc::Ne));
     env.insert("lt".to_string(), Val::NativeFunc(StdlibFunc::Lt));
     env.insert("lte".to_string(), Val::NativeFunc(StdlibFunc::Lte));
     env.insert("gt".to_string(), Val::NativeFunc(StdlibFunc::Gt));
     env.insert("gte".to_string(), Val::NativeFunc(StdlibFunc::Gte));
+    env.insert("and".to_string(), Val::NativeFunc(StdlibFunc::And));
+    env.insert("or".to_string(), Val::NativeFunc(StdlibFunc::Or));
 }

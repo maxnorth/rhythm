@@ -277,6 +277,66 @@ fn build_assign_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     Ok(Stmt::Assign { var, path, value })
 }
 
+fn build_binary_expr(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
+    let inner_pairs: Vec<_> = pair.into_inner().collect();
+
+    if inner_pairs.is_empty() {
+        return Err(ParseError::BuildError(format!("Empty binary expression")));
+    }
+
+    // Get the first operand
+    let mut left = build_expression(inner_pairs[0].clone())?;
+
+    // Process remaining pairs (operator, operand, operator, operand, ...)
+    let mut i = 1;
+    while i < inner_pairs.len() {
+        // Get operator (as a named rule)
+        let op_rule = inner_pairs[i].as_rule();
+
+        // Map operator rule to function name
+        let func_name = match op_rule {
+            Rule::op_or => "or",
+            Rule::op_and => "and",
+            Rule::op_eq => "eq",
+            Rule::op_ne => "ne",
+            Rule::op_lt => "lt",
+            Rule::op_lte => "lte",
+            Rule::op_gt => "gt",
+            Rule::op_gte => "gte",
+            Rule::op_add => "add",
+            Rule::op_sub => "sub",
+            Rule::op_mul => "mul",
+            Rule::op_div => "div",
+            _ => {
+                return Err(ParseError::BuildError(format!(
+                    "Expected operator rule at index {}, got {:?}",
+                    i, op_rule
+                )));
+            }
+        };
+
+        // Get the right operand
+        i += 1;
+        if i >= inner_pairs.len() {
+            return Err(ParseError::BuildError(format!("Missing right operand after operator")));
+        }
+
+        let right = build_expression(inner_pairs[i].clone())?;
+
+        // Build function call: func_name(left, right)
+        left = Expr::Call {
+            callee: Box::new(Expr::Ident {
+                name: func_name.to_string(),
+            }),
+            args: vec![left, right],
+        };
+
+        i += 1;
+    }
+
+    Ok(left)
+}
+
 fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     match pair.as_rule() {
         Rule::statement => {
@@ -335,10 +395,16 @@ fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
 fn build_expression(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
     match pair.as_rule() {
         Rule::expression => {
-            // expression = { await_expr | call_expr }
+            // expression = { await_expr | logical_or_expr }
             let inner = pair.into_inner().next().unwrap();
             build_expression(inner)
         }
+        Rule::logical_or_expr => build_binary_expr(pair),
+        Rule::logical_and_expr => build_binary_expr(pair),
+        Rule::equality_expr => build_binary_expr(pair),
+        Rule::comparison_expr => build_binary_expr(pair),
+        Rule::additive_expr => build_binary_expr(pair),
+        Rule::multiplicative_expr => build_binary_expr(pair),
         Rule::await_expr => {
             // await_expr = { "await" ~ expression }
             // The "await" keyword is consumed by the grammar, only expression remains
