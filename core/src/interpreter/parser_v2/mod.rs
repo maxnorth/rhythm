@@ -6,7 +6,7 @@ use pest::Parser;
 use pest_derive::Parser;
 use serde::{Deserialize, Serialize};
 
-use super::executor_v2::types::ast::{Expr, MemberAccess, Stmt};
+use super::executor_v2::types::ast::{BinaryOp, Expr, MemberAccess, Stmt};
 
 pub mod semantic_validator;
 
@@ -293,28 +293,6 @@ fn build_binary_expr(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
         // Get operator (as a named rule)
         let op_rule = inner_pairs[i].as_rule();
 
-        // Map operator rule to function name
-        let func_name = match op_rule {
-            Rule::op_or => "or",
-            Rule::op_and => "and",
-            Rule::op_eq => "eq",
-            Rule::op_ne => "ne",
-            Rule::op_lt => "lt",
-            Rule::op_lte => "lte",
-            Rule::op_gt => "gt",
-            Rule::op_gte => "gte",
-            Rule::op_add => "add",
-            Rule::op_sub => "sub",
-            Rule::op_mul => "mul",
-            Rule::op_div => "div",
-            _ => {
-                return Err(ParseError::BuildError(format!(
-                    "Expected operator rule at index {}, got {:?}",
-                    i, op_rule
-                )));
-            }
-        };
-
         // Get the right operand
         i += 1;
         if i >= inner_pairs.len() {
@@ -323,12 +301,48 @@ fn build_binary_expr(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
 
         let right = build_expression(inner_pairs[i].clone())?;
 
-        // Build function call: func_name(left, right)
-        left = Expr::Call {
-            callee: Box::new(Expr::Ident {
-                name: func_name.to_string(),
-            }),
-            args: vec![left, right],
+        // For && and ||, create BinaryOp nodes for short-circuit evaluation
+        // For other operators, desugar to function calls
+        left = match op_rule {
+            Rule::op_and => Expr::BinaryOp {
+                op: BinaryOp::And,
+                left: Box::new(left),
+                right: Box::new(right),
+            },
+            Rule::op_or => Expr::BinaryOp {
+                op: BinaryOp::Or,
+                left: Box::new(left),
+                right: Box::new(right),
+            },
+            _ => {
+                // Map other operators to function calls
+                let func_name = match op_rule {
+                    Rule::op_eq => "eq",
+                    Rule::op_ne => "ne",
+                    Rule::op_lt => "lt",
+                    Rule::op_lte => "lte",
+                    Rule::op_gt => "gt",
+                    Rule::op_gte => "gte",
+                    Rule::op_add => "add",
+                    Rule::op_sub => "sub",
+                    Rule::op_mul => "mul",
+                    Rule::op_div => "div",
+                    _ => {
+                        return Err(ParseError::BuildError(format!(
+                            "Expected operator rule at index {}, got {:?}",
+                            i - 1,
+                            op_rule
+                        )));
+                    }
+                };
+
+                Expr::Call {
+                    callee: Box::new(Expr::Ident {
+                        name: func_name.to_string(),
+                    }),
+                    args: vec![left, right],
+                }
+            }
         };
 
         i += 1;

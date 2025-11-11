@@ -5,6 +5,7 @@
 
 use super::errors;
 use super::outbox::Outbox;
+use super::types::ast::BinaryOp;
 use super::types::{ErrorInfo, Expr, Val};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -272,6 +273,83 @@ pub fn eval_expr(
                         _ => {
                             // Like JavaScript, awaiting a non-task value just returns that value
                             EvalResult::Value { v }
+                        }
+                    }
+                }
+            }
+        }
+
+        Expr::BinaryOp { op, left, right } => {
+            // Short-circuit evaluation for && and ||
+            // Evaluate left operand first
+            let left_result = eval_expr(left, env, resume_value, outbox);
+
+            match left_result {
+                EvalResult::Suspend { .. } => {
+                    // This should never happen - validator ensures no await in binary ops
+                    EvalResult::Throw {
+                        error: Val::Error(ErrorInfo::new(
+                            errors::INTERNAL_ERROR,
+                            "Suspension during binary operator left operand evaluation (should be prevented by semantic validator)",
+                        )),
+                    }
+                }
+                EvalResult::Throw { error } => {
+                    // Propagate error from left operand
+                    EvalResult::Throw { error }
+                }
+                EvalResult::Value { v: left_val } => {
+                    // Convert left value to boolean using truthiness
+                    let left_bool = left_val.to_bool();
+
+                    match op {
+                        BinaryOp::And => {
+                            // For &&: if left is falsy, short-circuit and return left value
+                            if !left_bool {
+                                return EvalResult::Value { v: left_val };
+                            }
+                            // Left is truthy, evaluate right operand and return its value
+                            let right_result = eval_expr(right, env, resume_value, outbox);
+                            match right_result {
+                                EvalResult::Suspend { .. } => {
+                                    // This should never happen - validator ensures no await in binary ops
+                                    EvalResult::Throw {
+                                        error: Val::Error(ErrorInfo::new(
+                                            errors::INTERNAL_ERROR,
+                                            "Suspension during binary operator right operand evaluation (should be prevented by semantic validator)",
+                                        )),
+                                    }
+                                }
+                                EvalResult::Throw { error } => EvalResult::Throw { error },
+                                EvalResult::Value { v: right_val } => {
+                                    // Return the right value (not converted to boolean)
+                                    EvalResult::Value { v: right_val }
+                                }
+                            }
+                        }
+                        BinaryOp::Or => {
+                            // For ||: if left is truthy, short-circuit and return left value
+                            if left_bool {
+                                return EvalResult::Value { v: left_val };
+                            }
+                            // Left is falsy, evaluate right operand and return its value
+                            let right_result = eval_expr(right, env, resume_value, outbox);
+                            match right_result {
+                                EvalResult::Suspend { .. } => {
+                                    // This should never happen - validator ensures no await in binary ops
+                                    EvalResult::Throw {
+                                        error: Val::Error(ErrorInfo::new(
+                                            errors::INTERNAL_ERROR,
+                                            "Suspension during binary operator right operand evaluation (should be prevented by semantic validator)",
+                                        )),
+                                    }
+                                }
+                                EvalResult::Throw { error } => EvalResult::Throw { error },
+                                EvalResult::Value { v: right_val } => {
+                                    // Return the right value (not converted to boolean)
+                                    EvalResult::Value { v: right_val }
+                                }
+                            }
                         }
                     }
                 }

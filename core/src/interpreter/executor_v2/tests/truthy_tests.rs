@@ -174,7 +174,7 @@ fn test_while_with_number() {
 
 #[test]
 fn test_and_with_truthy_number() {
-    // 5 && 10 should evaluate to true
+    // 5 && 10 should return 10 (right value when left is truthy)
     let source = r#"
         async function workflow() {
             return 5 && 10
@@ -182,12 +182,12 @@ fn test_and_with_truthy_number() {
     "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
+    assert_eq!(vm.control, Control::Return(Val::Num(10.0)));
 }
 
 #[test]
 fn test_and_with_zero() {
-    // 0 && true should evaluate to false (0 is falsy)
+    // 0 && true should return 0 (left value is falsy)
     let source = r#"
         async function workflow() {
             return 0 && true
@@ -195,12 +195,12 @@ fn test_and_with_zero() {
     "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(vm.control, Control::Return(Val::Bool(false)));
+    assert_eq!(vm.control, Control::Return(Val::Num(0.0)));
 }
 
 #[test]
 fn test_and_with_empty_string() {
-    // "" && true should evaluate to false (empty string is falsy)
+    // "" && true should return "" (left value is falsy)
     let source = r#"
         async function workflow() {
             return "" && true
@@ -208,7 +208,7 @@ fn test_and_with_empty_string() {
     "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(vm.control, Control::Return(Val::Bool(false)));
+    assert_eq!(vm.control, Control::Return(Val::Str("".to_string())));
 }
 
 #[test]
@@ -239,7 +239,7 @@ fn test_or_with_empty_string() {
 
 #[test]
 fn test_or_with_non_empty_string() {
-    // "hello" || false should evaluate to true
+    // "hello" || false should return "hello" (left value is truthy)
     let source = r#"
         async function workflow() {
             return "hello" || false
@@ -247,12 +247,12 @@ fn test_or_with_non_empty_string() {
     "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
+    assert_eq!(vm.control, Control::Return(Val::Str("hello".to_string())));
 }
 
 #[test]
 fn test_and_with_null() {
-    // null && true should evaluate to false
+    // null && true should return null (left value is falsy)
     let source = r#"
         async function workflow() {
             return null && true
@@ -260,12 +260,12 @@ fn test_and_with_null() {
     "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(vm.control, Control::Return(Val::Bool(false)));
+    assert_eq!(vm.control, Control::Return(Val::Null));
 }
 
 #[test]
 fn test_or_with_null() {
-    // null || "default" should evaluate to true
+    // null || "default" should return "default" (right value when left is falsy)
     let source = r#"
         async function workflow() {
             return null || "default"
@@ -273,7 +273,7 @@ fn test_or_with_null() {
     "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
+    assert_eq!(vm.control, Control::Return(Val::Str("default".to_string())));
 }
 
 #[test]
@@ -307,9 +307,8 @@ fn test_and_with_object() {
 #[test]
 fn test_truthiness_in_complex_expression() {
     // (0 || 5) && ("" || "hello")
-    // = (false || true) && (false || true)
-    // = true && true
-    // = true
+    // = 5 && "hello" (OR returns the truthy right values)
+    // = "hello" (AND returns right value when left is truthy)
     let source = r#"
         async function workflow() {
             return (0 || 5) && ("" || "hello")
@@ -317,7 +316,7 @@ fn test_truthiness_in_complex_expression() {
     "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
+    assert_eq!(vm.control, Control::Return(Val::Str("hello".to_string())));
 }
 
 #[test]

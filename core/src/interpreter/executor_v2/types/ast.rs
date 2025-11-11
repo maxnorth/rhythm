@@ -55,6 +55,13 @@ pub enum Stmt {
     Continue,
 }
 
+/// Binary operator for short-circuit evaluation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BinaryOp {
+    And,  // &&
+    Or,   // ||
+}
+
 /// Expression AST node
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "t")]
@@ -69,4 +76,9 @@ pub enum Expr {
     Member { object: Box<Expr>, property: String },
     Call { callee: Box<Expr>, args: Vec<Expr> },
     Await { inner: Box<Expr> },
+    BinaryOp {
+        op: BinaryOp,
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
 }

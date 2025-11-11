@@ -475,3 +475,270 @@ fn test_multiple_parentheses_groups() {
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Num(25.0)));
 }
+
+/* ===================== Short-Circuit Evaluation ===================== */
+
+#[test]
+fn test_and_short_circuit_false_left() {
+    // false && <anything> should return false without evaluating right
+    // Testing with a value that would be truthy if evaluated
+    let source = r#"
+        async function workflow() {
+            return false && true
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(false)));
+}
+
+#[test]
+fn test_and_short_circuit_zero_left() {
+    // 0 && <anything> should return 0 (the falsy left value) without evaluating right
+    let source = r#"
+        async function workflow() {
+            return 0 && 100
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(0.0)));
+}
+
+#[test]
+fn test_and_short_circuit_empty_string_left() {
+    // "" && <anything> should return "" (the falsy left value)
+    let source = r#"
+        async function workflow() {
+            return "" && "hello"
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Str("".to_string())));
+}
+
+#[test]
+fn test_and_no_short_circuit_true_left() {
+    // true && false should evaluate both sides and return false
+    let source = r#"
+        async function workflow() {
+            return true && false
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(false)));
+}
+
+#[test]
+fn test_and_no_short_circuit_truthy_left() {
+    // 5 && 10 should evaluate both sides and return 10 (the right value)
+    let source = r#"
+        async function workflow() {
+            return 5 && 10
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(10.0)));
+}
+
+#[test]
+fn test_or_short_circuit_true_left() {
+    // true || <anything> should return true without evaluating right
+    let source = r#"
+        async function workflow() {
+            return true || false
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
+}
+
+#[test]
+fn test_or_short_circuit_truthy_number_left() {
+    // 5 || <anything> should return 5 (the truthy left value) without evaluating right
+    let source = r#"
+        async function workflow() {
+            return 5 || 0
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(5.0)));
+}
+
+#[test]
+fn test_or_short_circuit_truthy_string_left() {
+    // "hello" || <anything> should return "hello" (the truthy left value)
+    let source = r#"
+        async function workflow() {
+            return "hello" || ""
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Str("hello".to_string())));
+}
+
+#[test]
+fn test_or_no_short_circuit_false_left() {
+    // false || true should evaluate both sides and return true
+    let source = r#"
+        async function workflow() {
+            return false || true
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
+}
+
+#[test]
+fn test_or_no_short_circuit_falsy_left() {
+    // 0 || 5 should evaluate both sides and return 5 (the right value)
+    let source = r#"
+        async function workflow() {
+            return 0 || 5
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(5.0)));
+}
+
+#[test]
+fn test_short_circuit_complex_and() {
+    // (5 > 10) && (10 / 0) should short-circuit on false left and not divide by zero
+    // 5 > 10 = false, so right side should not be evaluated
+    let source = r#"
+        async function workflow() {
+            return 5 > 10 && 10 > 0
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(false)));
+}
+
+#[test]
+fn test_short_circuit_complex_or() {
+    // (10 > 5) || <expr> should short-circuit on true left
+    let source = r#"
+        async function workflow() {
+            return 10 > 5 || 0 > 1
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
+}
+
+#[test]
+fn test_short_circuit_chained_and() {
+    // false && true && true should short-circuit at first false
+    let source = r#"
+        async function workflow() {
+            return false && true && true
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(false)));
+}
+
+#[test]
+fn test_short_circuit_chained_or() {
+    // true || false || false should short-circuit at first true
+    let source = r#"
+        async function workflow() {
+            return true || false || false
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
+}
+
+/* ===================== JavaScript-Style Value Returning ===================== */
+
+#[test]
+fn test_and_returns_actual_values() {
+    // "hello" && "world" should return "world" (not true)
+    let source = r#"
+        async function workflow() {
+            return "hello" && "world"
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Str("world".to_string())));
+}
+
+#[test]
+fn test_or_returns_actual_values() {
+    // "first" || "second" should return "first" (not true)
+    let source = r#"
+        async function workflow() {
+            return "first" || "second"
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Str("first".to_string())));
+}
+
+#[test]
+fn test_and_with_mixed_types() {
+    // 42 && "text" should return "text"
+    let source = r#"
+        async function workflow() {
+            return 42 && "text"
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Str("text".to_string())));
+}
+
+#[test]
+fn test_or_with_null() {
+    // null || 100 should return 100
+    let source = r#"
+        async function workflow() {
+            return null || 100
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(100.0)));
+}
+
+#[test]
+fn test_and_with_array() {
+    // [1, 2] && 42 should return 42
+    let source = r#"
+        async function workflow() {
+            return [1, 2] && 42
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
+}
+
+#[test]
+fn test_default_value_pattern() {
+    // x = null; result = x || "default" should return "default"
+    let source = r#"
+        async function workflow() {
+            x = null
+            return x || "default"
+        }
+    "#;
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Str("default".to_string())));
+}
