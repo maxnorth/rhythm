@@ -51,6 +51,7 @@ op_add = { "+" }
 op_sub = { "-" }
 op_mul = { "*" }
 op_div = { "/" }
+op_not = { "!" }
 
 // Logical OR: a || b
 logical_or_expr = { logical_and_expr ~ (op_or ~ logical_and_expr)* }
@@ -68,7 +69,10 @@ comparison_expr = { additive_expr ~ ((op_lte | op_gte | op_lt | op_gt) ~ additiv
 additive_expr = { multiplicative_expr ~ ((op_add | op_sub) ~ multiplicative_expr)* }
 
 // Multiplication/Division: a * b, a / b
-multiplicative_expr = { call_expr ~ ((op_mul | op_div) ~ call_expr)* }
+multiplicative_expr = { unary_expr ~ ((op_mul | op_div) ~ unary_expr)* }
+
+// Unary operators: !x
+unary_expr = { op_not ~ unary_expr | call_expr }
 
 // Function calls: foo(), foo.bar(), foo(1, 2, 3)
 call_expr = { member_expr ~ call_suffix? }

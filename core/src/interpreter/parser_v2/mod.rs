@@ -405,6 +405,29 @@ fn build_expression(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
         Rule::comparison_expr => build_binary_expr(pair),
         Rule::additive_expr => build_binary_expr(pair),
         Rule::multiplicative_expr => build_binary_expr(pair),
+        Rule::unary_expr => {
+            // unary_expr = { op_not ~ unary_expr | call_expr }
+            let mut inner = pair.into_inner();
+            let first = inner.next().unwrap();
+
+            match first.as_rule() {
+                Rule::op_not => {
+                    // This is !expr - build it as a function call: not(expr)
+                    let operand_pair = inner.next().unwrap();
+                    let operand = build_expression(operand_pair)?;
+                    Ok(Expr::Call {
+                        callee: Box::new(Expr::Ident {
+                            name: "not".to_string(),
+                        }),
+                        args: vec![operand],
+                    })
+                }
+                _ => {
+                    // This is just a call_expr
+                    build_expression(first)
+                }
+            }
+        }
         Rule::await_expr => {
             // await_expr = { "await" ~ expression }
             // The "await" keyword is consumed by the grammar, only expression remains

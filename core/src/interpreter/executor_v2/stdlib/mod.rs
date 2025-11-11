@@ -40,6 +40,7 @@ pub enum StdlibFunc {
     // Logical operators
     And,
     Or,
+    Not,
 }
 
 /* ===================== Stdlib Dispatcher ===================== */
@@ -72,6 +73,7 @@ pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val], outbox: &mut Outbox) ->
         // Logical operators
         StdlibFunc::And => and(args),
         StdlibFunc::Or => or(args),
+        StdlibFunc::Not => not(args),
     }
 }
 
@@ -231,11 +233,11 @@ fn and(args: &[Val]) -> EvalResult {
             error: Val::Error(ErrorInfo::new("TypeError", "and expects 2 arguments")),
         };
     }
-    match (&args[0], &args[1]) {
-        (Val::Bool(a), Val::Bool(b)) => EvalResult::Value { v: Val::Bool(*a && *b) },
-        _ => EvalResult::Throw {
-            error: Val::Error(ErrorInfo::new("TypeError", "and expects two booleans")),
-        },
+    // JavaScript-style truthiness: convert to boolean using truthiness rules
+    let a = args[0].to_bool();
+    let b = args[1].to_bool();
+    EvalResult::Value {
+        v: Val::Bool(a && b),
     }
 }
 
@@ -245,11 +247,24 @@ fn or(args: &[Val]) -> EvalResult {
             error: Val::Error(ErrorInfo::new("TypeError", "or expects 2 arguments")),
         };
     }
-    match (&args[0], &args[1]) {
-        (Val::Bool(a), Val::Bool(b)) => EvalResult::Value { v: Val::Bool(*a || *b) },
-        _ => EvalResult::Throw {
-            error: Val::Error(ErrorInfo::new("TypeError", "or expects two booleans")),
-        },
+    // JavaScript-style truthiness: convert to boolean using truthiness rules
+    let a = args[0].to_bool();
+    let b = args[1].to_bool();
+    EvalResult::Value {
+        v: Val::Bool(a || b),
+    }
+}
+
+fn not(args: &[Val]) -> EvalResult {
+    if args.len() != 1 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "not expects 1 argument")),
+        };
+    }
+    // JavaScript-style truthiness: convert to boolean using truthiness rules, then negate
+    let val = args[0].to_bool();
+    EvalResult::Value {
+        v: Val::Bool(!val),
     }
 }
 
@@ -335,4 +350,5 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     env.insert("gte".to_string(), Val::NativeFunc(StdlibFunc::Gte));
     env.insert("and".to_string(), Val::NativeFunc(StdlibFunc::And));
     env.insert("or".to_string(), Val::NativeFunc(StdlibFunc::Or));
+    env.insert("not".to_string(), Val::NativeFunc(StdlibFunc::Not));
 }
