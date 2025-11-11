@@ -58,8 +58,9 @@ pub enum Stmt {
 /// Binary operator for short-circuit evaluation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BinaryOp {
-    And,  // &&
-    Or,   // ||
+    And,     // &&
+    Or,      // ||
+    Nullish, // ??
 }
 
 /// Expression AST node

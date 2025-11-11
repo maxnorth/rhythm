@@ -301,7 +301,7 @@ fn build_binary_expr(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
 
         let right = build_expression(inner_pairs[i].clone())?;
 
-        // For && and ||, create BinaryOp nodes for short-circuit evaluation
+        // For &&, ||, and ??, create BinaryOp nodes for short-circuit evaluation
         // For other operators, desugar to function calls
         left = match op_rule {
             Rule::op_and => Expr::BinaryOp {
@@ -311,6 +311,11 @@ fn build_binary_expr(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
             },
             Rule::op_or => Expr::BinaryOp {
                 op: BinaryOp::Or,
+                left: Box::new(left),
+                right: Box::new(right),
+            },
+            Rule::op_nullish => Expr::BinaryOp {
+                op: BinaryOp::Nullish,
                 left: Box::new(left),
                 right: Box::new(right),
             },
@@ -409,10 +414,11 @@ fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
 fn build_expression(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
     match pair.as_rule() {
         Rule::expression => {
-            // expression = { await_expr | logical_or_expr }
+            // expression = { await_expr | nullish_expr }
             let inner = pair.into_inner().next().unwrap();
             build_expression(inner)
         }
+        Rule::nullish_expr => build_binary_expr(pair),
         Rule::logical_or_expr => build_binary_expr(pair),
         Rule::logical_and_expr => build_binary_expr(pair),
         Rule::equality_expr => build_binary_expr(pair),

@@ -285,7 +285,7 @@ pub fn eval_expr(
         }
 
         Expr::BinaryOp { op, left, right } => {
-            // Short-circuit evaluation for && and ||
+            // Short-circuit evaluation for &&, ||, and ??
             // Evaluate left operand first
             let left_result = eval_expr(left, env, resume_value, outbox);
 
@@ -304,12 +304,10 @@ pub fn eval_expr(
                     EvalResult::Throw { error }
                 }
                 EvalResult::Value { v: left_val } => {
-                    // Convert left value to boolean using truthiness
-                    let left_bool = left_val.to_bool();
-
                     match op {
                         BinaryOp::And => {
                             // For &&: if left is falsy, short-circuit and return left value
+                            let left_bool = left_val.to_bool();
                             if !left_bool {
                                 return EvalResult::Value { v: left_val };
                             }
@@ -334,6 +332,7 @@ pub fn eval_expr(
                         }
                         BinaryOp::Or => {
                             // For ||: if left is truthy, short-circuit and return left value
+                            let left_bool = left_val.to_bool();
                             if left_bool {
                                 return EvalResult::Value { v: left_val };
                             }
@@ -354,6 +353,33 @@ pub fn eval_expr(
                                     // Return the right value (not converted to boolean)
                                     EvalResult::Value { v: right_val }
                                 }
+                            }
+                        }
+                        BinaryOp::Nullish => {
+                            // For ??: if left is null, evaluate and return right value
+                            // Otherwise return left (even if it's 0, "", false, etc.)
+                            if matches!(left_val, Val::Null) {
+                                // Left is null, evaluate right operand and return its value
+                                let right_result = eval_expr(right, env, resume_value, outbox);
+                                match right_result {
+                                    EvalResult::Suspend { .. } => {
+                                        // This should never happen - validator ensures no await in binary ops
+                                        EvalResult::Throw {
+                                            error: Val::Error(ErrorInfo::new(
+                                                errors::INTERNAL_ERROR,
+                                                "Suspension during binary operator right operand evaluation (should be prevented by semantic validator)",
+                                            )),
+                                        }
+                                    }
+                                    EvalResult::Throw { error } => EvalResult::Throw { error },
+                                    EvalResult::Value { v: right_val } => {
+                                        // Return the right value
+                                        EvalResult::Value { v: right_val }
+                                    }
+                                }
+                            } else {
+                                // Left is not null, return it (even if falsy)
+                                EvalResult::Value { v: left_val }
                             }
                         }
                     }
