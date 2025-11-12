@@ -1120,6 +1120,126 @@ fn test_parse_object_literal_with_expression_values() {
     }
 }
 
+#[test]
+fn test_parse_object_literal_multiline() {
+    // Test object literal with properties on multiple lines
+    let source = r#"
+        return {
+            name: "Alice",
+            age: 30,
+            city: "New York"
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify multiline object literal parses correctly
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitObj { properties } => {
+                        assert_eq!(properties.len(), 3);
+                        assert_eq!(properties[0].0, "name");
+                        assert_eq!(properties[1].0, "age");
+                        assert_eq!(properties[2].0, "city");
+                    }
+                    _ => panic!("Expected LitObj expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_function_call_multiline() {
+    // Test function call with arguments on multiple lines
+    let source = r#"
+        return add(
+            10,
+            32
+        )
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify multiline function call parses correctly
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::Call { callee, args } => {
+                        assert_eq!(args.len(), 2);
+                        // Verify callee is the 'add' identifier
+                        match &**callee {
+                            Expr::Ident { name } => assert_eq!(name, "add"),
+                            _ => panic!("Expected Ident for callee"),
+                        }
+                    }
+                    _ => panic!("Expected Call expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_function_call_with_multiline_object() {
+    // Test function call with multiline object argument
+    let source = r#"
+        return Task.run("processOrder", {
+            orderId: 123,
+            userId: 456,
+            total: 99.99
+        })
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify function call with multiline object parses correctly
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::Call { callee, args } => {
+                        assert_eq!(args.len(), 2);
+
+                        // Verify callee is Task.run
+                        match &**callee {
+                            Expr::Member { property, .. } => assert_eq!(property, "run"),
+                            _ => panic!("Expected Member for callee"),
+                        }
+
+                        // First arg should be string
+                        assert!(matches!(&args[0], Expr::LitStr { .. }));
+
+                        // Second arg should be object literal
+                        match &args[1] {
+                            Expr::LitObj { properties } => {
+                                assert_eq!(properties.len(), 3);
+                                assert_eq!(properties[0].0, "orderId");
+                                assert_eq!(properties[1].0, "userId");
+                                assert_eq!(properties[2].0, "total");
+                            }
+                            _ => panic!("Expected LitObj for second argument"),
+                        }
+                    }
+                    _ => panic!("Expected Call expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
 /* ===================== Array Literal Tests ===================== */
 
 #[test]

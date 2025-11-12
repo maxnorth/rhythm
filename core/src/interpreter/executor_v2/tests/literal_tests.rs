@@ -209,3 +209,71 @@ fn test_array_in_task_run() {
         &Val::List(vec![Val::Num(1.0), Val::Num(2.0), Val::Num(3.0)])
     );
 }
+
+/* ===================== Multiline Literal Tests ===================== */
+
+#[test]
+fn test_multiline_object_literal() {
+    // Test object literal with properties on multiple lines
+    let source = r#"
+        return {
+            name: "Alice",
+            age: 30,
+            city: "New York"
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    let expected = maplit::hashmap! {
+        "name".to_string() => Val::Str("Alice".to_string()),
+        "age".to_string() => Val::Num(30.0),
+        "city".to_string() => Val::Str("New York".to_string()),
+    };
+
+    assert_eq!(vm.control, Control::Return(Val::Obj(expected)));
+}
+
+#[test]
+fn test_multiline_function_call() {
+    // Test function call with arguments on multiple lines
+    let source = r#"
+        return add(
+            10,
+            32
+        )
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
+}
+
+#[test]
+fn test_task_run_with_multiline_object() {
+    // Test Task.run with multiline object argument
+    let source = r#"
+        return Task.run("processOrder", {
+            orderId: 123,
+            userId: 456,
+            total: 99.99
+        })
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    // Should return a Task value
+    assert!(matches!(vm.control, Control::Return(Val::Task(_))));
+
+    // Check outbox has the task with correct inputs
+    assert_eq!(vm.outbox.len(), 1);
+    assert_eq!(vm.outbox[0].task_name, "processOrder");
+
+    let inputs = &vm.outbox[0].inputs;
+    assert_eq!(inputs.get("orderId").unwrap(), &Val::Num(123.0));
+    assert_eq!(inputs.get("userId").unwrap(), &Val::Num(456.0));
+    assert_eq!(inputs.get("total").unwrap(), &Val::Num(99.99));
+}

@@ -268,3 +268,54 @@ fn test_step_by_step_suspension() {
         Control::Return(Val::Str("stepped".to_string()))
     );
 }
+
+#[test]
+fn test_await_task_run_with_multiline_object() {
+    // Test await Task.run() with multiline object argument
+    let source = r#"
+        let result = await Task.run("processOrder", {
+            orderId: 123,
+            userId: 456,
+            total: 99.99,
+            items: ["item1", "item2"]
+        })
+        return result
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    // Should suspend on the task
+    let Control::Suspend(task_id) = &vm.control else {
+        panic!("Expected Suspend, got {:?}", vm.control);
+    };
+
+    // Check outbox has the task with correct inputs
+    assert_eq!(vm.outbox.len(), 1);
+    assert_eq!(vm.outbox[0].task_name, "processOrder");
+    assert_eq!(&vm.outbox[0].task_id, task_id);
+
+    let inputs = &vm.outbox[0].inputs;
+    assert_eq!(inputs.get("orderId").unwrap(), &Val::Num(123.0));
+    assert_eq!(inputs.get("userId").unwrap(), &Val::Num(456.0));
+    assert_eq!(inputs.get("total").unwrap(), &Val::Num(99.99));
+
+    let items = inputs.get("items").unwrap();
+    assert_eq!(
+        items,
+        &Val::List(vec![
+            Val::Str("item1".to_string()),
+            Val::Str("item2".to_string())
+        ])
+    );
+
+    // Resume with a result
+    vm.resume(Val::Str("order_processed".to_string()));
+    run_until_done(&mut vm);
+
+    // Should return the resumed value
+    assert_eq!(
+        vm.control,
+        Control::Return(Val::Str("order_processed".to_string()))
+    );
+}
