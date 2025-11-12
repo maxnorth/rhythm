@@ -7,20 +7,31 @@ use super::errors::ErrorInfo;
 use super::expressions::{eval_expr, EvalResult};
 use super::stdlib::to_string;
 use super::types::{
-    AssignPhase, BlockPhase, BreakPhase, ContinuePhase, Control, Expr, ExprPhase, IfPhase,
-    MemberAccess, ReturnPhase, Stmt, TryPhase, Val, WhilePhase,
+    AssignPhase, BlockPhase, BreakPhase, ContinuePhase, Control, DeclarePhase, Expr, ExprPhase,
+    FrameKind, IfPhase, MemberAccess, ReturnPhase, Stmt, TryPhase, Val, VarKind, WhilePhase,
 };
 use super::vm::{push_stmt, Step, VM};
 
 /* ===================== Statement Handlers ===================== */
 
 /// Execute Block statement
-pub fn execute_block(vm: &mut VM, phase: BlockPhase, idx: usize, body: Vec<Stmt>) -> Step {
+pub fn execute_block(
+    vm: &mut VM,
+    phase: BlockPhase,
+    idx: usize,
+    mut declared_vars: Vec<String>,
+    body: &[Stmt],
+) -> Step {
     match phase {
         BlockPhase::Execute => {
             // Check if we've finished all statements in the block
             if idx >= body.len() {
-                // Block complete, pop frame
+                // Block complete, clean up declared variables
+                for var_name in declared_vars.iter() {
+                    vm.env.remove(var_name);
+                }
+
+                // Pop frame
                 vm.frames.pop();
                 return Step::Continue;
             }
@@ -28,11 +39,17 @@ pub fn execute_block(vm: &mut VM, phase: BlockPhase, idx: usize, body: Vec<Stmt>
             // Get the current statement to execute
             let child_stmt = &body[idx];
 
+            // If this is a declaration, track it for cleanup
+            if let Stmt::Declare { name, .. } = child_stmt {
+                declared_vars.push(name.clone());
+            }
+
             // Update our frame to point to the next statement
             let frame_idx = vm.frames.len() - 1;
-            vm.frames[frame_idx].kind = super::types::FrameKind::Block {
+            vm.frames[frame_idx].kind = FrameKind::Block {
                 phase: BlockPhase::Execute,
                 idx: idx + 1,
+                declared_vars,
             };
 
             // Push a frame for the child statement
@@ -424,4 +441,49 @@ pub fn execute_continue(vm: &mut VM, _phase: ContinuePhase) -> Step {
     // Pop this Continue frame
     vm.frames.pop();
     Step::Continue
+}
+
+/// Execute Declare statement (let/const)
+pub fn execute_declare(
+    vm: &mut VM,
+    phase: DeclarePhase,
+    _var_kind: VarKind,
+    name: String,
+    init: Option<Expr>,
+) -> Step {
+    match phase {
+        DeclarePhase::Eval => {
+            // Evaluate the initialization expression (if present) or use null
+            let value = if let Some(expr) = init {
+                match eval_expr(&expr, &vm.env, &mut vm.resume_value, &mut vm.outbox) {
+                    EvalResult::Value { v } => v,
+                    EvalResult::Suspend { task_id } => {
+                        // Expression suspended (await encountered)
+                        // Set control to Suspend and stop execution
+                        // DO NOT pop the frame - we need to preserve state for resumption
+                        vm.control = Control::Suspend(task_id);
+                        return Step::Done;
+                    }
+                    EvalResult::Throw { error } => {
+                        // Expression threw an error
+                        // Set control to Throw and DO NOT pop frame (unwinding will handle it)
+                        vm.control = Control::Throw(error);
+                        return Step::Continue;
+                    }
+                }
+            } else {
+                // No initialization expression - default to null
+                Val::Null
+            };
+
+            // Insert the variable into the environment
+            // Note: Shadowing checks are handled by the semantic validator
+            // Note: The parent block frame has already added this variable to its declared_vars list
+            vm.env.insert(name, value);
+
+            // Pop this frame and continue
+            vm.frames.pop();
+            Step::Continue
+        }
+    }
 }

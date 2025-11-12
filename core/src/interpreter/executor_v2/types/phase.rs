@@ -77,6 +77,10 @@ pub enum ContinuePhase {
     Execute = 0,
 }
 
-// Future Phase enums will be added here as we implement more statement types:
-// - LetPhase
-// - ForPhase
+/// Execution phase for Declare statements (let/const)
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum DeclarePhase {
+    /// Evaluate the initialization expression
+    Eval = 0,
+}

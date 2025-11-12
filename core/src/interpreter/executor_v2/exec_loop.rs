@@ -9,8 +9,8 @@
 //! 2. step() - Main execution loop (dispatches to statement handlers)
 
 use super::statements::{
-    execute_assign, execute_block, execute_break, execute_continue, execute_expr, execute_if,
-    execute_return, execute_try, execute_while,
+    execute_assign, execute_block, execute_break, execute_continue, execute_declare, execute_expr,
+    execute_if, execute_return, execute_try, execute_while,
 };
 use super::types::{Control, FrameKind, Stmt};
 use super::vm::{Step, VM};
@@ -63,8 +63,17 @@ pub fn step(vm: &mut VM) -> Step {
             execute_return(vm, phase, value)
         }
 
-        (FrameKind::Block { phase, idx }, Stmt::Block { body }) => {
-            execute_block(vm, phase, idx, body)
+        (
+            FrameKind::Block {
+                phase,
+                idx,
+                declared_vars,
+            },
+            Stmt::Block { body },
+        ) => {
+            // Clone once to get ownership
+            let declared_vars = declared_vars.clone();
+            execute_block(vm, phase, idx, declared_vars, body.as_slice())
         }
 
         (
@@ -100,6 +109,15 @@ pub fn step(vm: &mut VM) -> Step {
 
         (FrameKind::Continue { phase }, Stmt::Continue) => execute_continue(vm, phase),
 
+        (
+            FrameKind::Declare { phase },
+            Stmt::Declare {
+                var_kind,
+                name,
+                init,
+            },
+        ) => execute_declare(vm, phase, var_kind, name, init),
+
         // Shouldn't happen - frame kind doesn't match node
         _ => panic!("Frame kind does not match statement node"),
     }
@@ -114,8 +132,15 @@ pub fn step(vm: &mut VM) -> Step {
 fn unwind(vm: &mut VM) -> Step {
     match &vm.control {
         Control::Return(_) => {
-            // Pop all frames - return exits the entire program
-            vm.frames.clear();
+            // Pop all frames, cleaning up block scopes as we go
+            while let Some(frame) = vm.frames.pop() {
+                // Clean up any variables declared in this block
+                if let FrameKind::Block { declared_vars, .. } = frame.kind {
+                    for var_name in declared_vars {
+                        vm.env.remove(&var_name);
+                    }
+                }
+            }
             // No frames left means execution is complete
             Step::Done
         }
@@ -159,8 +184,14 @@ fn unwind(vm: &mut VM) -> Step {
                         return Step::Continue;
                     }
                     _ => {
-                        // Not a try/catch handler, pop this frame and continue
-                        vm.frames.pop();
+                        // Not a try/catch handler, pop this frame and clean up if needed
+                        let frame = vm.frames.pop().unwrap();
+                        // Clean up any variables declared in this block
+                        if let FrameKind::Block { declared_vars, .. } = frame.kind {
+                            for var_name in declared_vars {
+                                vm.env.remove(&var_name);
+                            }
+                        }
                     }
                 }
             }
@@ -187,12 +218,24 @@ fn unwind(vm: &mut VM) -> Step {
                             return Step::Continue;
                         } else {
                             // Not the target loop - pop and continue searching
-                            vm.frames.pop();
+                            let frame = vm.frames.pop().unwrap();
+                            // Clean up any variables declared in this block
+                            if let FrameKind::Block { declared_vars, .. } = frame.kind {
+                                for var_name in declared_vars {
+                                    vm.env.remove(&var_name);
+                                }
+                            }
                         }
                     }
                     _ => {
-                        // Not a loop frame - pop it and continue
-                        vm.frames.pop();
+                        // Not a loop frame - pop it and clean up if needed
+                        let frame = vm.frames.pop().unwrap();
+                        // Clean up any variables declared in this block
+                        if let FrameKind::Block { declared_vars, .. } = frame.kind {
+                            for var_name in declared_vars {
+                                vm.env.remove(&var_name);
+                            }
+                        }
                     }
                 }
             }
@@ -234,9 +277,15 @@ fn unwind(vm: &mut VM) -> Step {
             }
 
             if found_loop {
-                // Pop all frames above the target loop
+                // Pop all frames above the target loop, cleaning up blocks as we go
                 for _ in 0..frames_to_pop {
-                    vm.frames.pop();
+                    let frame = vm.frames.pop().unwrap();
+                    // Clean up any variables declared in this block
+                    if let FrameKind::Block { declared_vars, .. } = frame.kind {
+                        for var_name in declared_vars {
+                            vm.env.remove(&var_name);
+                        }
+                    }
                 }
 
                 // The target loop is now at the top

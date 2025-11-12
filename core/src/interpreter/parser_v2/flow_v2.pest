@@ -11,9 +11,12 @@ param_list = { identifier ~ ("," ~ identifier)* }
 block = { "{" ~ statement* ~ "}" }
 
 // Statements
-statement = { return_stmt | if_stmt | while_stmt | try_stmt | break_stmt | continue_stmt | block | assign_stmt | expr_stmt }
+statement = { return_stmt | if_stmt | while_stmt | try_stmt | break_stmt | continue_stmt | block | declare_stmt | assign_stmt | expr_stmt }
 
 return_stmt = { "return" ~ expression }
+
+declare_stmt = { var_kind ~ identifier ~ ("=" ~ expression)? }
+var_kind = { "let" | "const" }
 
 assign_stmt = { identifier ~ assign_path_segment* ~ "=" ~ expression }
 assign_path_segment = { "." ~ identifier | "[" ~ expression ~ "]" }

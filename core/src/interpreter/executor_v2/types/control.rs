@@ -2,8 +2,8 @@
 
 use super::ast::Stmt;
 use super::phase::{
-    AssignPhase, BlockPhase, BreakPhase, ContinuePhase, ExprPhase, IfPhase, ReturnPhase, TryPhase,
-    WhilePhase,
+    AssignPhase, BlockPhase, BreakPhase, ContinuePhase, DeclarePhase, ExprPhase, IfPhase,
+    ReturnPhase, TryPhase, WhilePhase,
 };
 use super::values::Val;
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,11 @@ pub enum Control {
 #[serde(tag = "t")]
 pub enum FrameKind {
     Return { phase: ReturnPhase },
-    Block { phase: BlockPhase, idx: usize },
+    Block {
+        phase: BlockPhase,
+        idx: usize,
+        declared_vars: Vec<String>,
+    },
     Try { phase: TryPhase, catch_var: String },
     Expr { phase: ExprPhase },
     Assign { phase: AssignPhase },
@@ -41,9 +45,7 @@ pub enum FrameKind {
     While { phase: WhilePhase, label: Option<String> },
     Break { phase: BreakPhase },
     Continue { phase: ContinuePhase },
-    // Future frame kinds will be added here as we implement more statement types:
-    // Let { phase: LetPhase, name: String, has_init: bool },
-    // For { phase: ForPhase, label: Option<String>, ... },
+    Declare { phase: DeclarePhase },
 }
 
 /// Execution frame - one per active statement
@@ -55,10 +57,6 @@ pub struct Frame {
     /// The kind and state of this frame
     #[serde(flatten)]
     pub kind: FrameKind,
-
-    /// Where this frame's variables start in the environment
-    /// (Not used in Milestone 1, will be needed for Let/Block)
-    pub scope_base_sp: usize,
 
     /// The AST node (statement) this frame represents
     pub node: Stmt,

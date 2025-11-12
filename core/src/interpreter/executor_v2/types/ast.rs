@@ -2,6 +2,13 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Variable declaration kind
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VarKind {
+    Let,
+    Const,
+}
+
 /// Member access segment for assignment paths
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "t")]
@@ -17,7 +24,8 @@ pub enum Stmt {
     Block {
         body: Vec<Stmt>,
     },
-    Let {
+    Declare {
+        var_kind: VarKind,
         name: String,
         init: Option<Expr>,
     },
@@ -33,11 +41,6 @@ pub enum Stmt {
     },
     While {
         test: Expr,
-        body: Box<Stmt>,
-    },
-    For {
-        iterator: String,
-        iterable: Expr,
         body: Box<Stmt>,
     },
     Return {

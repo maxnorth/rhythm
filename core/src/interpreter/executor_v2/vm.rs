@@ -6,8 +6,8 @@
 
 use super::outbox::Outbox;
 use super::types::{
-    AssignPhase, BlockPhase, BreakPhase, ContinuePhase, Control, ExprPhase, Frame, FrameKind,
-    IfPhase, ReturnPhase, Stmt, TryPhase, Val, WhilePhase,
+    AssignPhase, BlockPhase, BreakPhase, ContinuePhase, Control, DeclarePhase, ExprPhase, Frame,
+    FrameKind, IfPhase, ReturnPhase, Stmt, TryPhase, Val, WhilePhase,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -96,8 +96,6 @@ impl VM {
 ///
 /// This determines the initial Phase based on the statement type.
 pub fn push_stmt(vm: &mut VM, stmt: &Stmt) {
-    let base = 0; // For now, no block-scoped variables, so base is always 0
-
     let kind = match stmt {
         Stmt::Return { .. } => FrameKind::Return {
             phase: ReturnPhase::Eval,
@@ -106,6 +104,7 @@ pub fn push_stmt(vm: &mut VM, stmt: &Stmt) {
         Stmt::Block { .. } => FrameKind::Block {
             phase: BlockPhase::Execute,
             idx: 0,
+            declared_vars: vec![],
         },
 
         Stmt::Try { catch_var, .. } => FrameKind::Try {
@@ -138,13 +137,13 @@ pub fn push_stmt(vm: &mut VM, stmt: &Stmt) {
             phase: ContinuePhase::Execute,
         },
 
-        // Other statement types not yet implemented
-        _ => panic!("Statement type not yet supported: {:?}", stmt),
+        Stmt::Declare { .. } => FrameKind::Declare {
+            phase: DeclarePhase::Eval,
+        },
     };
 
     vm.frames.push(Frame {
         kind,
-        scope_base_sp: base,
         node: stmt.clone(),
     });
 }

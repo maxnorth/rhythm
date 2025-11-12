@@ -6,7 +6,7 @@ use pest::Parser;
 use pest_derive::Parser;
 use serde::{Deserialize, Serialize};
 
-use super::executor_v2::types::ast::{BinaryOp, Expr, MemberAccess, Stmt};
+use super::executor_v2::types::ast::{BinaryOp, Expr, MemberAccess, Stmt, VarKind};
 
 pub mod semantic_validator;
 
@@ -208,6 +208,40 @@ fn build_while_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     })
 }
 
+fn build_declare_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
+    // declare_stmt = { ("let" | "const") ~ identifier ~ ("=" ~ expression)? }
+    let mut inner = pair.into_inner();
+
+    // Get the kind (let or const)
+    let kind_pair = inner.next().unwrap();
+    let var_kind = match kind_pair.as_str() {
+        "let" => VarKind::Let,
+        "const" => VarKind::Const,
+        _ => {
+            return Err(ParseError::BuildError(format!(
+                "Expected 'let' or 'const', got: {}",
+                kind_pair.as_str()
+            )))
+        }
+    };
+
+    // Get the variable name
+    let name = inner.next().unwrap().as_str().to_string();
+
+    // Get the optional initialization expression
+    let init = if let Some(expr_pair) = inner.next() {
+        Some(build_expression(expr_pair)?)
+    } else {
+        None
+    };
+
+    Ok(Stmt::Declare {
+        var_kind,
+        name,
+        init,
+    })
+}
+
 fn build_try_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     // try_stmt = { "try" ~ block ~ "catch" ~ "(" ~ identifier ~ ")" ~ block }
     let mut inner = pair.into_inner();
@@ -359,7 +393,7 @@ fn build_binary_expr(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
 fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
     match pair.as_rule() {
         Rule::statement => {
-            // statement = { return_stmt | if_stmt | while_stmt | break_stmt | continue_stmt | block | assign_stmt | expr_stmt }
+            // statement = { return_stmt | if_stmt | while_stmt | try_stmt | break_stmt | continue_stmt | block | declare_stmt | assign_stmt | expr_stmt }
             let inner = pair.into_inner().next().unwrap();
             build_statement(inner)
         }
@@ -394,8 +428,12 @@ fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
             // block = { "{" ~ statement* ~ "}" }
             build_block(pair)
         }
+        Rule::declare_stmt => {
+            // declare_stmt = { ("let" | "const") ~ identifier ~ "=" ~ expression }
+            build_declare_stmt(pair)
+        }
         Rule::assign_stmt => {
-            // assign_stmt = { identifier ~ ("." ~ identifier)* ~ "=" ~ expression }
+            // assign_stmt = { identifier ~ assign_path_segment* ~ "=" ~ expression }
             build_assign_stmt(pair)
         }
         Rule::expr_stmt => {
