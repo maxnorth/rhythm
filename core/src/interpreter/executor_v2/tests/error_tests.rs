@@ -11,11 +11,9 @@ use std::collections::HashMap;
 fn test_property_not_found_throws() {
     // Test that accessing a non-existent property throws an error
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             return obj.missing
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -32,11 +30,9 @@ fn test_property_not_found_throws() {
 fn test_member_access_on_non_object_throws() {
     // Test that accessing a property on a non-object value throws an error
     let source = r#"
-        async function workflow(ctx) {
             num = 42
             return num.foo
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -53,11 +49,9 @@ fn test_member_access_on_non_object_throws() {
 fn test_nested_member_access_error_propagates() {
     // Test that errors in nested member access propagate correctly
     let source = r#"
-        async function workflow(ctx) {
             obj = {inner: {}}
             return obj.inner.missing
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -74,11 +68,9 @@ fn test_nested_member_access_error_propagates() {
 fn test_error_in_first_member_access() {
     // Test error in the first step of nested member access
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             return obj.missing.foo
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -95,11 +87,9 @@ fn test_error_in_first_member_access() {
 fn test_error_serialization() {
     // Test that a VM with Control::Throw can be serialized and deserialized
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             return obj.missing
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -128,11 +118,9 @@ fn test_error_serialization() {
 fn test_await_propagates_error() {
     // Test that await propagates errors from inner expressions
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             return await obj.missing
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -149,12 +137,10 @@ fn test_await_propagates_error() {
 fn test_error_clears_frames() {
     // Test that errors clear the frame stack (like return)
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             {
                 return obj.missing
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -173,14 +159,12 @@ fn test_error_clears_frames() {
 fn test_try_catch_basic() {
     // Test that try/catch catches an error and executes the catch block
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             try {
                 return obj.missing
             } catch (error) {
                 return error
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -201,13 +185,11 @@ fn test_try_catch_basic() {
 fn test_try_catch_no_error() {
     // Test that try/catch executes try block when no error occurs
     let source = r#"
-        async function workflow(ctx) {
             try {
                 return 42
             } catch (error) {
                 return 999
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -221,7 +203,6 @@ fn test_try_catch_no_error() {
 fn test_nested_try_catch() {
     // Test nested try/catch blocks - inner catch should handle error
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             try {
                 try {
@@ -232,7 +213,6 @@ fn test_nested_try_catch() {
             } catch (outer_error) {
                 return "outer"
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -249,7 +229,6 @@ fn test_nested_try_catch() {
 fn test_try_catch_propagates_to_outer() {
     // Test that errors in catch block propagate to outer try/catch
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             obj2 = {}
             try {
@@ -261,7 +240,6 @@ fn test_try_catch_propagates_to_outer() {
             } catch (outer_error) {
                 return outer_error
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -282,7 +260,6 @@ fn test_try_catch_propagates_to_outer() {
 fn test_try_catch_with_blocks() {
     // Test try/catch with block statements
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             try {
                 {
@@ -293,8 +270,7 @@ fn test_try_catch_with_blocks() {
                     return "caught"
                 }
             }
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -310,14 +286,12 @@ fn test_try_catch_with_blocks() {
 fn test_try_catch_serialization() {
     // Test that try/catch works correctly after serialization/deserialization
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             try {
                 return obj.missing
             } catch (error) {
                 return "serialized"
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -338,14 +312,12 @@ fn test_try_catch_serialization() {
 fn test_try_catch_await_error() {
     // Test that errors during await expression evaluation are caught by try/catch
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             try {
                 return await obj.missing
             } catch (e) {
                 return "caught_await_error"
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -362,11 +334,9 @@ fn test_try_catch_await_error() {
 fn test_await_error_uncaught() {
     // Test that errors during await expression evaluation propagate when not caught
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             return await obj.missing
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -383,7 +353,6 @@ fn test_await_error_uncaught() {
 fn test_error_in_catch_handler() {
     // Test that errors thrown inside a catch handler properly propagate
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             try {
                 {
@@ -394,8 +363,7 @@ fn test_error_in_catch_handler() {
                     return obj.another_missing
                 }
             }
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);

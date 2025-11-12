@@ -10,11 +10,9 @@ use std::collections::HashMap;
 #[test]
 fn test_let_with_number() {
     let source = r#"
-        async function workflow(ctx) {
             let x = 42
             return x
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -25,11 +23,9 @@ fn test_let_with_number() {
 #[test]
 fn test_let_with_string() {
     let source = r#"
-        async function workflow(ctx) {
             let message = "hello"
             return message
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -43,11 +39,9 @@ fn test_let_with_string() {
 #[test]
 fn test_let_without_init() {
     let source = r#"
-        async function workflow(ctx) {
             let x
             return x
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -58,11 +52,9 @@ fn test_let_without_init() {
 #[test]
 fn test_const_with_value() {
     let source = r#"
-        async function workflow(ctx) {
             const y = 100
             return y
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -73,11 +65,9 @@ fn test_const_with_value() {
 #[test]
 fn test_const_without_init() {
     let source = r#"
-        async function workflow(ctx) {
             const z
             return z
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -90,13 +80,11 @@ fn test_const_without_init() {
 #[test]
 fn test_multiple_declarations() {
     let source = r#"
-        async function workflow(ctx) {
             let a = 1
             let b = 2
             let c = 3
             return a + b + c
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -107,13 +95,11 @@ fn test_multiple_declarations() {
 #[test]
 fn test_mixed_let_const() {
     let source = r#"
-        async function workflow(ctx) {
             let x = 10
             const y = 20
             let z = 30
             return x + y + z
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -126,13 +112,11 @@ fn test_mixed_let_const() {
 #[test]
 fn test_block_scope_cleanup() {
     let source = r#"
-        async function workflow(ctx) {
             {
                 let scoped = 999
             }
             return scoped
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -149,7 +133,6 @@ fn test_block_scope_cleanup() {
 #[test]
 fn test_nested_blocks_with_declarations() {
     let source = r#"
-        async function workflow(ctx) {
             let outer = 1
             {
                 let inner = 2
@@ -158,8 +141,7 @@ fn test_nested_blocks_with_declarations() {
                     return outer + inner + innermost
                 }
             }
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -175,15 +157,13 @@ fn test_nested_blocks_with_declarations() {
 #[test]
 fn test_variable_accessible_in_nested_block() {
     let source = r#"
-        async function workflow(ctx) {
             let x = 42
             {
                 {
                     return x
                 }
             }
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -196,11 +176,9 @@ fn test_variable_accessible_in_nested_block() {
 #[test]
 fn test_let_with_expression() {
     let source = r#"
-        async function workflow(ctx) {
             let result = 10 + 32
             return result
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -211,11 +189,9 @@ fn test_let_with_expression() {
 #[test]
 fn test_let_with_member_access() {
     let source = r#"
-        async function workflow(ctx, inputs) {
-            let value = inputs.data
+            let value = Inputs.data
             return value
-        }
-    "#;
+        "#;
 
     let inputs = hashmap! {
         "data".to_string() => Val::Num(123.0),
@@ -230,11 +206,9 @@ fn test_let_with_member_access() {
 #[test]
 fn test_let_with_object_literal() {
     let source = r#"
-        async function workflow(ctx) {
             let obj = {name: "Alice", age: 30}
             return obj.name
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -248,11 +222,9 @@ fn test_let_with_object_literal() {
 #[test]
 fn test_let_with_array_literal() {
     let source = r#"
-        async function workflow(ctx) {
             let arr = [1, 2, 3]
             return arr
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -272,12 +244,10 @@ fn test_let_with_array_literal() {
 #[test]
 fn test_declare_and_assign() {
     let source = r#"
-        async function workflow(ctx) {
             let x = 10
             x = 20
             return x
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -288,12 +258,10 @@ fn test_declare_and_assign() {
 #[test]
 fn test_use_previous_declaration() {
     let source = r#"
-        async function workflow(ctx) {
             let a = 5
             let b = a + 10
             return b
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -306,15 +274,13 @@ fn test_use_previous_declaration() {
 #[test]
 fn test_block_scope_cleanup_with_suspension() {
     let source = r#"
-        async function workflow(ctx) {
             let outer = 10
             {
                 let scoped = 100
                 let task = await Task.run("test", {})
             }
             return outer
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -347,18 +313,16 @@ fn test_block_scope_cleanup_with_suspension() {
 #[test]
 fn test_throw_unwinds_and_cleans_up_scopes() {
     let source = r#"
-        async function workflow(ctx) {
             let outer = 1
             try {
                 let inTry = 2
                 {
                     let nested = 3
-                    let bad = ctx.missing.property
+                    let bad = Context.missing.property
                 }
             } catch (e) {
                 return 99
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
@@ -375,7 +339,6 @@ fn test_throw_unwinds_and_cleans_up_scopes() {
 #[test]
 fn test_break_unwinds_and_cleans_up_scopes() {
     let source = r#"
-        async function workflow(ctx) {
             let outer = 1
             while (true) {
                 let inLoop = 2
@@ -385,8 +348,7 @@ fn test_break_unwinds_and_cleans_up_scopes() {
                 }
             }
             return outer
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -403,7 +365,6 @@ fn test_break_unwinds_and_cleans_up_scopes() {
 #[test]
 fn test_continue_unwinds_and_cleans_up_scopes() {
     let source = r#"
-        async function workflow(ctx) {
             let outer = 1
             let count = 0
             while (count < 2) {
@@ -415,8 +376,7 @@ fn test_continue_unwinds_and_cleans_up_scopes() {
                 }
             }
             return outer + count
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -433,13 +393,12 @@ fn test_continue_unwinds_and_cleans_up_scopes() {
 #[test]
 fn test_nested_try_blocks_with_cleanup() {
     let source = r#"
-        async function workflow(ctx) {
             let outer = 1
             try {
                 let try1 = 2
                 try {
                     let try2 = 3
-                    let bad = ctx.missing.value
+                    let bad = Context.missing.value
                 } catch (inner) {
                     let catchInner = 4
                     return try1 + try2
@@ -447,7 +406,6 @@ fn test_nested_try_blocks_with_cleanup() {
             } catch (outer_err) {
                 return 99
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
@@ -468,15 +426,47 @@ fn test_nested_try_blocks_with_cleanup() {
 #[test]
 fn test_declare_with_throwing_init() {
     let source = r#"
-        async function workflow(ctx, inputs) {
-            let x = inputs.missing.value
+            let x = Inputs.missing.value
             return x
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
     // Should throw an error during initialization
     assert!(matches!(vm.control, Control::Throw(_)));
+}
+
+/* ===================== New Syntax Tests ===================== */
+
+#[test]
+fn test_new_syntax_simple() {
+    // Test the new top-level syntax without async function wrapper
+    let source = r#"
+        let x = 42
+        return x
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
+}
+
+#[test]
+fn test_new_syntax_with_front_matter() {
+    // Test the new syntax with YAML front matter
+    let source = r#"
+```
+name: test_workflow
+description: A test workflow
+```
+let x = 100
+return x
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(100.0)));
 }

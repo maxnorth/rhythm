@@ -1,9 +1,10 @@
-workflow(ctx, inputs) {
-  Task.run("chargeCard", {
-      "orderId": "order-123",
-      "amount": 99.99
-  })
-  // await Task.delay(500)
+Task.run("chargeCard", {
+    "orderId": "order-123",
+    "amount": 99.99
+})
+// await Task.delay(500)
+try {
   await Task.run("shipOrder", { "orderId": "order-123" })
-  Task.run("sendEmail", { "to": "customer@example.com", "subject": "Order shipped!", "body": "Your order is on the way" })
+} catch (error) {
+  await Task.run("sendEmail", { "to": "customer@example.com", "subject": "Order failed to ship", "body": "Your order did not ship" })
 }

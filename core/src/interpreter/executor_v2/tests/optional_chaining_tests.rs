@@ -10,11 +10,9 @@ use std::collections::HashMap;
 fn test_optional_chaining_with_null() {
     // obj?.prop where obj is null should return null
     let source = r#"
-        async function workflow() {
             obj = null
             return obj?.prop
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Null));
@@ -24,11 +22,9 @@ fn test_optional_chaining_with_null() {
 fn test_optional_chaining_with_object() {
     // obj?.prop where obj exists should return property value
     let source = r#"
-        async function workflow() {
             obj = {prop: "value"}
             return obj?.prop
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(
@@ -41,11 +37,9 @@ fn test_optional_chaining_with_object() {
 fn test_regular_access_with_null_throws() {
     // obj.prop where obj is null should throw an error
     let source = r#"
-        async function workflow() {
             obj = null
             return obj.prop
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -62,11 +56,9 @@ fn test_regular_access_with_null_throws() {
 fn test_optional_chaining_deep_property() {
     // obj?.nested where obj has nested property
     let source = r#"
-        async function workflow() {
             obj = {nested: {value: 42}}
             return obj?.nested
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -84,11 +76,9 @@ fn test_optional_chaining_deep_property() {
 fn test_chained_optional_access_all_present() {
     // obj?.a?.b where all properties exist
     let source = r#"
-        async function workflow() {
             obj = {a: {b: "success"}}
             return obj?.a?.b
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(
@@ -101,11 +91,9 @@ fn test_chained_optional_access_all_present() {
 fn test_chained_optional_access_first_null() {
     // obj?.a?.b where obj is null
     let source = r#"
-        async function workflow() {
             obj = null
             return obj?.a?.b
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Null));
@@ -115,11 +103,9 @@ fn test_chained_optional_access_first_null() {
 fn test_chained_optional_access_middle_null() {
     // obj?.a?.b where obj.a is null
     let source = r#"
-        async function workflow() {
             obj = {a: null}
             return obj?.a?.b
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Null));
@@ -131,11 +117,9 @@ fn test_chained_optional_access_middle_null() {
 fn test_mixed_regular_then_optional() {
     // obj.a?.b where obj and obj.a exist
     let source = r#"
-        async function workflow() {
             obj = {a: {b: "mixed"}}
             return obj.a?.b
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(
@@ -148,11 +132,9 @@ fn test_mixed_regular_then_optional() {
 fn test_mixed_optional_then_regular() {
     // obj?.a.b where obj and obj.a and obj.a.b exist
     let source = r#"
-        async function workflow() {
             obj = {a: {b: "mixed2"}}
             return obj?.a.b
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(
@@ -166,11 +148,9 @@ fn test_mixed_optional_then_regular_with_null() {
     // obj?.a.b where obj is null
     // First obj?.a returns null, then null.b throws
     let source = r#"
-        async function workflow() {
             obj = null
             return obj?.a.b
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -189,11 +169,9 @@ fn test_mixed_optional_then_regular_with_null() {
 fn test_optional_chaining_with_default_value() {
     // (obj?.prop || "default") pattern
     let source = r#"
-        async function workflow() {
             obj = null
             return obj?.prop || "default"
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(
@@ -206,14 +184,12 @@ fn test_optional_chaining_with_default_value() {
 fn test_optional_chaining_in_if_condition() {
     // if (obj?.prop) with null obj
     let source = r#"
-        async function workflow() {
             obj = null
             if (obj?.prop) {
                 return "truthy"
             }
             return "falsy"
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Str("falsy".to_string())));
@@ -223,12 +199,10 @@ fn test_optional_chaining_in_if_condition() {
 fn test_optional_chaining_in_assignment() {
     // x = obj?.prop
     let source = r#"
-        async function workflow() {
             obj = null
             x = obj?.prop
             return x
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Null));
@@ -240,11 +214,9 @@ fn test_optional_chaining_in_assignment() {
 fn test_optional_chaining_with_numeric_value() {
     // obj?.prop where obj is a number (not an object)
     let source = r#"
-        async function workflow() {
             obj = 42
             return obj?.prop
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -261,11 +233,9 @@ fn test_optional_chaining_with_numeric_value() {
 fn test_optional_chaining_with_string_value() {
     // obj?.prop where obj is a string
     let source = r#"
-        async function workflow() {
             obj = "hello"
             return obj?.prop
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -282,11 +252,9 @@ fn test_optional_chaining_with_string_value() {
 fn test_triple_optional_chaining() {
     // obj?.a?.b?.c with all nulls at various levels
     let source = r#"
-        async function workflow() {
             obj = {a: {b: null}}
             return obj?.a?.b?.c
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Null));
@@ -296,11 +264,9 @@ fn test_triple_optional_chaining() {
 fn test_optional_chaining_returns_number() {
     // Ensure optional chaining preserves type
     let source = r#"
-        async function workflow() {
             obj = {count: 0}
             return obj?.count
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Num(0.0)));
@@ -310,11 +276,9 @@ fn test_optional_chaining_returns_number() {
 fn test_optional_chaining_with_boolean() {
     // Ensure optional chaining preserves boolean values
     let source = r#"
-        async function workflow() {
             obj = {flag: false}
             return obj?.flag
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Bool(false)));

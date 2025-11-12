@@ -11,10 +11,8 @@ use std::collections::HashMap;
 fn test_await_suspend_basic() {
     // Test that awaiting a Task value suspends execution
     let source = r#"
-        async function workflow(ctx, inputs) {
-            return await inputs.task
-        }
-    "#;
+            return await Inputs.task
+        "#;
 
     let inputs = hashmap! {
         "task".to_string() => Val::Task("task-123".to_string()),
@@ -34,10 +32,8 @@ fn test_await_suspend_basic() {
 fn test_await_resume() {
     // Test that we can resume after suspension and get the result
     let source = r#"
-        async function workflow(ctx, inputs) {
-            return await inputs.task
-        }
-    "#;
+            return await Inputs.task
+        "#;
 
     let inputs = hashmap! {
         "task".to_string() => Val::Task("task-123".to_string()),
@@ -76,10 +72,8 @@ fn test_await_resume() {
 fn test_await_resume_with_num() {
     // Test resuming with a number result (with serialization)
     let source = r#"
-        async function workflow(ctx, inputs) {
-            return await inputs.task
-        }
-    "#;
+            return await Inputs.task
+        "#;
 
     let inputs = hashmap! {
         "task".to_string() => Val::Task("task-456".to_string()),
@@ -105,10 +99,8 @@ fn test_await_resume_with_num() {
 fn test_await_non_task_idempotent() {
     // Test that awaiting a non-Task value just returns that value (like JS)
     let source = r#"
-        async function workflow(ctx) {
             return await 42
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -121,10 +113,8 @@ fn test_await_non_task_idempotent() {
 fn test_await_non_task_string() {
     // Test awaiting a string value
     let source = r#"
-        async function workflow(ctx) {
             return await "hello"
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -140,10 +130,8 @@ fn test_await_non_task_string() {
 fn test_resume_when_not_suspended_fails() {
     // Test that calling resume when not suspended returns false
     let source = r#"
-        async function workflow(ctx) {
             return 42
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -160,14 +148,12 @@ fn test_await_preserves_frames() {
     // Test that suspension preserves the full frame stack (with serialization)
     // Uses nested blocks to create multiple frames
     let source = r#"
-        async function workflow(ctx, inputs) {
             {
                 {
-                    return await inputs.task
+                    return await Inputs.task
                 }
             }
-        }
-    "#;
+        "#;
 
     let inputs = hashmap! {
         "task".to_string() => Val::Task("task-789".to_string()),
@@ -204,10 +190,8 @@ fn test_await_preserves_frames() {
 fn test_serialization_with_suspend() {
     // Test that a suspended VM can be serialized and deserialized
     let source = r#"
-        async function workflow(ctx, inputs) {
-            return await inputs.task
-        }
-    "#;
+            return await Inputs.task
+        "#;
 
     let inputs = hashmap! {
         "task".to_string() => Val::Task("task-serial".to_string()),
@@ -240,10 +224,8 @@ fn test_serialization_with_suspend() {
 fn test_step_by_step_suspension() {
     // Test stepping through suspension manually
     let source = r#"
-        async function workflow(ctx, inputs) {
-            return await inputs.task
-        }
-    "#;
+            return await Inputs.task
+        "#;
 
     let inputs = hashmap! {
         "task".to_string() => Val::Task("task-step".to_string()),

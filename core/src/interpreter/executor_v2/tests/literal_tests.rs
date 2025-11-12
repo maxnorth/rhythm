@@ -9,10 +9,8 @@ use std::collections::HashMap;
 #[test]
 fn test_array_literal_empty() {
     let source = r#"
-        async function workflow() {
             return []
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -23,10 +21,8 @@ fn test_array_literal_empty() {
 #[test]
 fn test_array_literal_numbers() {
     let source = r#"
-        async function workflow() {
             return [1, 2, 3]
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -40,10 +36,8 @@ fn test_array_literal_numbers() {
 #[test]
 fn test_array_literal_mixed_types() {
     let source = r#"
-        async function workflow() {
             return [42, "hello", true]
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -61,10 +55,8 @@ fn test_array_literal_mixed_types() {
 #[test]
 fn test_array_literal_nested() {
     let source = r#"
-        async function workflow() {
             return [[1, 2], [3, 4]]
-        }
-    "#;
+        "#;
 
     
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -81,12 +73,10 @@ fn test_array_literal_nested() {
 
 #[test]
 fn test_array_literal_with_expressions() {
-    // [inputs.x, inputs.y] where x=10, y=20
+    // [Inputs.x, Inputs.y] where x=10, y=20
     let source = r#"
-        async function workflow(ctx, inputs) {
-            return [inputs.x, inputs.y]
-        }
-    "#;
+            return [Inputs.x, Inputs.y]
+        "#;
 
     let mut env = HashMap::new();
     env.insert("x".to_string(), Val::Num(10.0));
@@ -106,10 +96,8 @@ fn test_array_literal_with_expressions() {
 #[test]
 fn test_object_literal_empty() {
     let source = r#"
-        async function workflow() {
             return {}
-        }
-    "#;
+        "#;
 
     
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -121,10 +109,8 @@ fn test_object_literal_empty() {
 #[test]
 fn test_object_literal_simple() {
     let source = r#"
-        async function workflow() {
             return {name: "Alice", age: 30}
-        }
-    "#;
+        "#;
 
     
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -140,10 +126,8 @@ fn test_object_literal_simple() {
 #[test]
 fn test_object_literal_nested() {
     let source = r#"
-        async function workflow() {
             return {user: {name: "Bob", id: 123}}
-        }
-    "#;
+        "#;
 
     
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -161,12 +145,10 @@ fn test_object_literal_nested() {
 
 #[test]
 fn test_object_literal_with_expressions() {
-    // {x: inputs.a, y: inputs.b} where a=10, b=20
+    // {x: Inputs.a, y: Inputs.b} where a=10, b=20
     let source = r#"
-        async function workflow(ctx, inputs) {
-            return {x: inputs.a, y: inputs.b}
-        }
-    "#;
+            return {x: Inputs.a, y: Inputs.b}
+        "#;
 
     let mut env = HashMap::new();
     env.insert("a".to_string(), Val::Num(10.0));
@@ -185,10 +167,8 @@ fn test_object_literal_with_expressions() {
 #[test]
 fn test_object_literal_with_array() {
     let source = r#"
-        async function workflow() {
             return {items: [1, 2, 3]}
-        }
-    "#;
+        "#;
 
     
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -209,10 +189,8 @@ fn test_object_literal_with_array() {
 fn test_array_in_task_run() {
     // Task.run("my_task", {items: [1, 2, 3]})
     let source = r#"
-        async function workflow() {
             return Task.run("my_task", {items: [1, 2, 3]})
-        }
-    "#;
+        "#;
 
     
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());

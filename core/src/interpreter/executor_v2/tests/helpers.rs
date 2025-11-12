@@ -12,18 +12,14 @@ use std::collections::HashMap;
 /// - Parses the workflow using parser_v2
 /// - Validates the workflow semantically
 /// - Serializes and deserializes (to test round-trip compatibility)
-/// - Creates a VM with proper environment setup
+/// - Creates a VM with Context, Inputs, and stdlib injected
 ///
 /// # Arguments
-/// * `source` - Workflow source code (must use `async function workflow(...)` syntax)
-/// * `inputs` - Input values to pass as the second parameter to the workflow
+/// * `source` - Workflow source code
+/// * `inputs` - Input values to pass as Inputs
 ///
 /// # Returns
 /// A VM ready to execute with `run_until_done()` or `step()`
-///
-/// # Environment Setup
-/// - If workflow has 1+ params: First param (`ctx`) = empty object
-/// - If workflow has 2+ params: Second param (`inputs`) = provided inputs map
 pub fn parse_workflow_and_build_vm(source: &str, inputs: HashMap<String, Val>) -> VM {
     let workflow = parser_v2::parse_workflow(source).expect("Parse workflow failed");
     parser_v2::semantic_validator::validate_workflow(&workflow)
@@ -32,13 +28,5 @@ pub fn parse_workflow_and_build_vm(source: &str, inputs: HashMap<String, Val>) -
     let workflow: WorkflowDef =
         serde_json::from_str(&json).expect("Workflow deserialization failed");
 
-    let mut env = HashMap::new();
-    if workflow.params.len() >= 1 {
-        env.insert(workflow.params[0].clone(), Val::Obj(HashMap::new()));
-    }
-    if workflow.params.len() >= 2 {
-        env.insert(workflow.params[1].clone(), Val::Obj(inputs));
-    }
-
-    VM::new(workflow.body.clone(), env)
+    VM::new(workflow.body.clone(), inputs)
 }

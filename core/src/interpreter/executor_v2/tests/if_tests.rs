@@ -8,11 +8,9 @@ use std::collections::HashMap;
 #[test]
 fn test_if_true_no_else() {
     let source = r#"
-        async function workflow(ctx) {
             if (true) {
                 return 42
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
@@ -24,13 +22,11 @@ fn test_if_true_no_else() {
 #[test]
 fn test_if_false_no_else() {
     let source = r#"
-        async function workflow(ctx) {
             if (false) {
                 return 42
             }
             return 99
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -41,13 +37,11 @@ fn test_if_false_no_else() {
 #[test]
 fn test_if_true_with_else() {
     let source = r#"
-        async function workflow(ctx) {
             if (true) {
                 return 42
             } else {
                 return 99
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
@@ -59,13 +53,11 @@ fn test_if_true_with_else() {
 #[test]
 fn test_if_false_with_else() {
     let source = r#"
-        async function workflow(ctx) {
             if (false) {
                 return 42
             } else {
                 return 99
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
@@ -78,13 +70,11 @@ fn test_if_false_with_else() {
 fn test_if_truthiness_number() {
     // if (42) { return "truthy"; } else { return "falsy"; }
     let source = r#"
-        async function workflow(ctx) {
             if (42) {
                 return "truthy"
             } else {
                 return "falsy"
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
@@ -100,13 +90,11 @@ fn test_if_truthiness_number() {
 fn test_if_truthiness_false() {
     // if (false) { return "truthy"; } else { return "falsy"; }
     let source = r#"
-        async function workflow(ctx) {
             if (false) {
                 return "truthy"
             } else {
                 return "falsy"
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
@@ -119,14 +107,12 @@ fn test_if_truthiness_false() {
 fn test_if_with_variable_test() {
     // x = true; if (x) { return "yes"; } else { return "no"; }
     let source = r#"
-        async function workflow(ctx) {
             x = true
             if (x) {
                 return "yes"
             } else {
                 return "no"
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
@@ -139,14 +125,12 @@ fn test_if_with_variable_test() {
 fn test_if_with_assignment_in_branch() {
     // x = 1; if (true) { x = 42; } return x;
     let source = r#"
-        async function workflow(ctx) {
             x = 1
             if (true) {
                 x = 42
             }
             return x
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
@@ -159,7 +143,6 @@ fn test_if_with_assignment_in_branch() {
 fn test_if_nested() {
     // if (true) { if (false) { return 1; } else { return 2; } } else { return 3; }
     let source = r#"
-        async function workflow(ctx) {
             if (true) {
                 if (false) {
                     return 1
@@ -169,7 +152,6 @@ fn test_if_nested() {
             } else {
                 return 3
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
@@ -182,13 +164,11 @@ fn test_if_nested() {
 fn test_if_with_block_statement() {
     // if (true) { x = 1; x = 2; return x; }
     let source = r#"
-        async function workflow(ctx) {
             if (true) {
                 x = 1
                 x = 2
                 return x
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
@@ -199,24 +179,22 @@ fn test_if_with_block_statement() {
 
 #[test]
 fn test_if_with_error_in_test() {
-    // if (ctx.bad) { return 1; }
+    // if (Context.bad) { return 1; }
     // ctx doesn't have 'bad' property, so this should throw
     let source = r#"
-        async function workflow() {
-            if (ctx.bad) {
+            if (Context.bad) {
                 return 1
             }
-        }
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
-    // Should throw an error for undefined variable
+    // Should throw an error for accessing property that doesn't exist
     match &vm.control {
         Control::Throw(Val::Error(err)) => {
-            // Expression evaluator throws INTERNAL_ERROR for undefined variables
-            assert_eq!(err.code, "INTERNAL_ERROR");
+            // Context is defined but doesn't have 'bad' property
+            assert_eq!(err.code, errors::PROPERTY_NOT_FOUND);
         }
         _ => panic!("Expected error, got: {:?}", vm.control),
     }
@@ -226,7 +204,6 @@ fn test_if_with_error_in_test() {
 fn test_if_with_try_catch() {
     // result = "not_set"; if (true) { try { throw {code: "E", message: "msg"}; } catch (e) { result = "caught"; } } return result;
     let source = r#"
-        async function workflow() {
             result = "not_set"
             if (true) {
                 try {
@@ -236,8 +213,7 @@ fn test_if_with_try_catch() {
                 }
             }
             return result
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -254,15 +230,13 @@ fn test_if_with_try_catch() {
 fn test_else_if_chain() {
     // Test else-if chain: if/else if/else
     let source = r#"
-        async function workflow(ctx, inputs) {
-            if (inputs.value) {
+            if (Inputs.value) {
                 return "first"
-            } else if (inputs.fallback) {
+            } else if (Inputs.fallback) {
                 return "second"
             } else {
                 return "third"
             }
-        }
     "#;
 
     // Test first branch
@@ -306,17 +280,15 @@ fn test_else_if_chain() {
 fn test_multiple_else_if() {
     // Test multiple else-if clauses
     let source = r#"
-        async function workflow(ctx, inputs) {
-            if (inputs.a) {
+            if (Inputs.a) {
                 return 1
-            } else if (inputs.b) {
+            } else if (Inputs.b) {
                 return 2
-            } else if (inputs.c) {
+            } else if (Inputs.c) {
                 return 3
             } else {
                 return 4
             }
-        }
     "#;
 
     // Test third branch (c)

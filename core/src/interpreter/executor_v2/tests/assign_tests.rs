@@ -11,11 +11,9 @@ use std::collections::HashMap;
 fn test_assign_number() {
     // x = 42; return x;
     let source = r#"
-        async function workflow() {
             x = 42
             return x
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -28,11 +26,9 @@ fn test_assign_number() {
 fn test_assign_string() {
     // name = "Alice"; return name;
     let source = r#"
-        async function workflow() {
             name = "Alice"
             return name
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -48,11 +44,9 @@ fn test_assign_string() {
 fn test_assign_array() {
     // items = [1, 2, 3]; return items;
     let source = r#"
-        async function workflow() {
             items = [1, 2, 3]
             return items
-        }
-    "#;
+        "#;
 
     
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -67,11 +61,9 @@ fn test_assign_array() {
 fn test_assign_object() {
     // user = {name: "Bob", age: 30}; return user;
     let source = r#"
-        async function workflow() {
             user = {name: "Bob", age: 30}
             return user
-        }
-    "#;
+        "#;
 
     
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -90,13 +82,11 @@ fn test_assign_object() {
 
 #[test]
 fn test_assign_from_variable() {
-    // y = inputs.x; return y;
+    // y = Inputs.x; return y;
     let source = r#"
-        async function workflow(ctx, inputs) {
-            y = inputs.x
+            y = Inputs.x
             return y
-        }
-    "#;
+        "#;
 
     let env = hashmap! {
         "x".to_string() => Val::Num(100.0),
@@ -111,21 +101,19 @@ fn test_assign_from_variable() {
 
 #[test]
 fn test_assign_with_member_access() {
-    // name = ctx.user; return name;
+    // name = Context.user; return name;
     let source = r#"
-        async function workflow(ctx) {
-            name = ctx.user
+            name = Context.user
             return name
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
 
-    // Set up ctx with user property
+    // Set up Context with user property
     let ctx_obj = hashmap! {
         "user".to_string() => Val::Str("Alice".to_string()),
     };
-    vm.env.insert("ctx".to_string(), Val::Obj(ctx_obj));
+    vm.env.insert("Context".to_string(), Val::Obj(ctx_obj));
 
     run_until_done(&mut vm);
 
@@ -138,13 +126,11 @@ fn test_assign_with_member_access() {
 
 #[test]
 fn test_assign_with_function_call() {
-    // result = Math.abs(inputs.x); return result;
+    // result = Math.abs(Inputs.x); return result;
     let source = r#"
-        async function workflow(ctx, inputs) {
-            result = Math.abs(inputs.x)
+            result = Math.abs(Inputs.x)
             return result
-        }
-    "#;
+        "#;
 
     let env = hashmap! {
         "x".to_string() => Val::Num(-42.0),
@@ -163,12 +149,10 @@ fn test_assign_with_function_call() {
 fn test_reassignment() {
     // x = 10; x = 20; return x;
     let source = r#"
-        async function workflow() {
             x = 10
             x = 20
             return x
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -181,12 +165,10 @@ fn test_reassignment() {
 fn test_reassignment_different_type() {
     // x = 42; x = "hello"; return x;
     let source = r#"
-        async function workflow() {
             x = 42
             x = "hello"
             return x
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -204,11 +186,9 @@ fn test_reassignment_different_type() {
 fn test_assign_with_await() {
     // result = await Task.run("my_task", {});
     let source = r#"
-        async function workflow() {
             result = await Task.run("my_task", {})
             return result
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -232,11 +212,9 @@ fn test_assign_with_await() {
 fn test_assign_with_await_resume() {
     // result = await Task.run("my_task", {}); return result;
     let source = r#"
-        async function workflow() {
             result = await Task.run("my_task", {})
             return result
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -261,13 +239,11 @@ fn test_assign_with_await_resume() {
 
 #[test]
 fn test_assign_with_error() {
-    // result = ctx.nonexistent;
+    // result = Context.nonexistent;
     let source = r#"
-        async function workflow(ctx) {
-            result = ctx.nonexistent
+            result = Context.nonexistent
             return result
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -286,17 +262,15 @@ fn test_assign_with_error() {
 
 #[test]
 fn test_assign_in_try_catch() {
-    // try { result = ctx.bad; } catch (e) { result = "error"; } return result;
+    // try { result = Context.bad; } catch (e) { result = "error"; } return result;
     let source = r#"
-        async function workflow(ctx) {
             try {
-                result = ctx.bad
+                result = Context.bad
             } catch (e) {
                 result = "error"
             }
             return result
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -315,13 +289,11 @@ fn test_assign_in_try_catch() {
 fn test_multiple_assignments() {
     // a = 1; b = 2; c = 3; return [a, b, c];
     let source = r#"
-        async function workflow() {
             a = 1
             b = 2
             c = 3
             return [a, b, c]
-        }
-    "#;
+        "#;
 
     
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -342,12 +314,10 @@ fn test_multiple_assignments() {
 fn test_assign_object_property() {
     // user = {name: "Alice", age: 25}; user.name = "Bob"; return user.name;
     let source = r#"
-        async function workflow() {
             user = {name: "Alice", age: 25}
             user.name = "Bob"
             return user.name
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -367,12 +337,10 @@ fn test_assign_object_property() {
 fn test_assign_array_index() {
     // items = [1, 2, 3]; items[1] = 99; return items;
     let source = r#"
-        async function workflow() {
             items = [1, 2, 3]
             items[1] = 99
             return items
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -387,12 +355,10 @@ fn test_assign_array_index() {
 fn test_assign_nested_property() {
     // config = {db: {host: "localhost", port: 5432}}; config.db.port = 5433; return config.db.port;
     let source = r#"
-        async function workflow() {
             config = {db: {host: "localhost", port: 5432}}
             config.db.port = 5433
             return config.db.port
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -404,12 +370,10 @@ fn test_assign_nested_property() {
 fn test_assign_mixed_path() {
     // data = {items: [1, 2, 3]}; data.items[0] = 99; return data;
     let source = r#"
-        async function workflow() {
             data = {items: [1, 2, 3]}
             data.items[0] = 99
             return data
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -430,13 +394,11 @@ fn test_assign_mixed_path() {
 fn test_assign_computed_index() {
     // arr = [10, 20, 30]; i = 1; arr[i] = 99; return arr;
     let source = r#"
-        async function workflow() {
             arr = [10, 20, 30]
             i = 1
             arr[i] = 99
             return arr
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -451,11 +413,9 @@ fn test_assign_computed_index() {
 fn test_assign_prop_access_on_non_object_error() {
     // x = 42; x.foo = "bar"; (should error - can't use Prop on number)
     let source = r#"
-        async function workflow() {
             x = 42
             x.foo = "bar"
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -474,11 +434,9 @@ fn test_assign_prop_access_on_non_object_error() {
 fn test_assign_index_access_on_primitive_error() {
     // x = 42; x[0] = "bar"; (should error - can't use Index on number)
     let source = r#"
-        async function workflow() {
             x = 42
             x[0] = "bar"
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -497,11 +455,9 @@ fn test_assign_index_access_on_primitive_error() {
 fn test_assign_prop_access_on_array_error() {
     // arr = [1, 2, 3]; arr.foo = "bar"; (should error - can't use Prop on array)
     let source = r#"
-        async function workflow() {
             arr = [1, 2, 3]
             arr.foo = "bar"
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -520,11 +476,9 @@ fn test_assign_prop_access_on_array_error() {
 fn test_assign_nested_prop_access_on_non_object_error() {
     // obj = {a: 42}; obj.a.b = "bar"; (should error - can't use Prop on number)
     let source = r#"
-        async function workflow() {
             obj = {a: 42}
             obj.a.b = "bar"
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -543,12 +497,10 @@ fn test_assign_nested_prop_access_on_non_object_error() {
 fn test_assign_index_access_on_object_allowed() {
     // obj = {}; obj["foo"] = "bar"; return obj; (should work - Index allowed on objects)
     let source = r#"
-        async function workflow() {
             obj = {}
             obj["foo"] = "bar"
             return obj
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);

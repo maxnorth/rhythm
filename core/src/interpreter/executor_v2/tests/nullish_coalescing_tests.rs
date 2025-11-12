@@ -10,11 +10,9 @@ use std::collections::HashMap;
 fn test_nullish_with_null() {
     // null ?? "default" should return "default"
     let source = r#"
-        async function workflow() {
             x = null
             return x ?? "default"
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(
@@ -27,11 +25,9 @@ fn test_nullish_with_null() {
 fn test_nullish_with_value() {
     // "value" ?? "default" should return "value"
     let source = r#"
-        async function workflow() {
             x = "value"
             return x ?? "default"
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Str("value".to_string())));
@@ -41,11 +37,9 @@ fn test_nullish_with_value() {
 fn test_nullish_with_zero() {
     // 0 ?? 42 should return 0 (not 42, unlike ||)
     let source = r#"
-        async function workflow() {
             x = 0
             return x ?? 42
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Num(0.0)));
@@ -55,11 +49,9 @@ fn test_nullish_with_zero() {
 fn test_nullish_with_false() {
     // false ?? true should return false (not true, unlike ||)
     let source = r#"
-        async function workflow() {
             x = false
             return x ?? true
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Bool(false)));
@@ -69,11 +61,9 @@ fn test_nullish_with_false() {
 fn test_nullish_with_empty_string() {
     // "" ?? "default" should return "" (not "default", unlike ||)
     let source = r#"
-        async function workflow() {
             x = ""
             return x ?? "default"
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Str("".to_string())));
@@ -85,13 +75,11 @@ fn test_nullish_with_empty_string() {
 fn test_nullish_vs_or_with_zero() {
     // Demonstrate the difference between ?? and ||
     let source = r#"
-        async function workflow() {
             x = 0
             coalesce_result = x ?? 10
             or_result = x || 10
             return {coalesce: coalesce_result, orOp: or_result}
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -108,13 +96,11 @@ fn test_nullish_vs_or_with_zero() {
 fn test_nullish_vs_or_with_empty_string() {
     // Demonstrate the difference with empty string
     let source = r#"
-        async function workflow() {
             x = ""
             coalesce_result = x ?? "default"
             or_result = x || "default"
             return {coalesce: coalesce_result, orOp: or_result}
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -131,13 +117,11 @@ fn test_nullish_vs_or_with_empty_string() {
 fn test_nullish_vs_or_with_null() {
     // Both should behave the same with null
     let source = r#"
-        async function workflow() {
             x = null
             coalesce_result = x ?? "default"
             or_result = x || "default"
             return {coalesce: coalesce_result, orOp: or_result}
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -159,10 +143,8 @@ fn test_nullish_vs_or_with_null() {
 fn test_chained_nullish() {
     // null ?? null ?? "final" should return "final"
     let source = r#"
-        async function workflow() {
             return null ?? null ?? "final"
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Str("final".to_string())));
@@ -172,10 +154,8 @@ fn test_chained_nullish() {
 fn test_chained_nullish_short_circuit() {
     // 0 ?? 1 ?? 2 should return 0 (first non-null)
     let source = r#"
-        async function workflow() {
             return 0 ?? 1 ?? 2
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Num(0.0)));
@@ -185,10 +165,8 @@ fn test_chained_nullish_short_circuit() {
 fn test_chained_nullish_middle_value() {
     // null ?? "middle" ?? "last" should return "middle"
     let source = r#"
-        async function workflow() {
             return null ?? "middle" ?? "last"
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(
@@ -203,11 +181,9 @@ fn test_chained_nullish_middle_value() {
 fn test_nullish_with_optional_chaining() {
     // obj?.prop ?? "default" pattern
     let source = r#"
-        async function workflow() {
             obj = null
             return obj?.prop ?? "default"
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(
@@ -220,11 +196,9 @@ fn test_nullish_with_optional_chaining() {
 fn test_nullish_with_optional_chaining_existing() {
     // obj?.prop ?? "default" where obj.prop exists
     let source = r#"
-        async function workflow() {
             obj = {prop: "value"}
             return obj?.prop ?? "default"
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Str("value".to_string())));
@@ -234,11 +208,9 @@ fn test_nullish_with_optional_chaining_existing() {
 fn test_nullish_with_optional_chaining_zero() {
     // obj?.count ?? 10 where obj.count is 0
     let source = r#"
-        async function workflow() {
             obj = {count: 0}
             return obj?.count ?? 10
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Num(0.0))); // Returns 0, not 10
@@ -250,15 +222,13 @@ fn test_nullish_with_optional_chaining_zero() {
 fn test_nullish_in_if_condition() {
     // Using ?? in if condition
     let source = r#"
-        async function workflow() {
             x = null
             value = x ?? 0
             if (value) {
                 return "zero is falsy"
             }
             return "zero is here"
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(
@@ -271,12 +241,10 @@ fn test_nullish_in_if_condition() {
 fn test_nullish_in_assignment() {
     // x = y ?? "default"
     let source = r#"
-        async function workflow() {
             y = null
             x = y ?? "default"
             return x
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(
@@ -289,13 +257,11 @@ fn test_nullish_in_assignment() {
 fn test_nullish_both_sides_expressions() {
     // (a ?? b) ?? c pattern
     let source = r#"
-        async function workflow() {
             a = null
             b = null
             c = "final"
             return (a ?? b) ?? c
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Str("final".to_string())));
@@ -307,11 +273,9 @@ fn test_nullish_both_sides_expressions() {
 fn test_nullish_preserves_type() {
     // Ensure ?? doesn't convert types
     let source = r#"
-        async function workflow() {
             x = 0
             return x ?? 42
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Num(0.0)));
@@ -321,11 +285,9 @@ fn test_nullish_preserves_type() {
 fn test_nullish_with_object() {
     // Objects are never null
     let source = r#"
-        async function workflow() {
             obj = {key: "value"}
             return obj ?? {key: "default"}
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -341,11 +303,9 @@ fn test_nullish_with_object() {
 fn test_nullish_with_list() {
     // Empty list is not null
     let source = r#"
-        async function workflow() {
             list = []
             return list ?? [1, 2, 3]
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -363,12 +323,10 @@ fn test_nullish_with_list() {
 fn test_default_config_value() {
     // Common pattern: config.timeout ?? 5000
     let source = r#"
-        async function workflow() {
             config = {retries: 3}
             timeout = config.timeout ?? 5000
             return timeout
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -385,12 +343,10 @@ fn test_default_config_value() {
 fn test_default_config_value_with_optional() {
     // Correct pattern: config?.timeout ?? 5000
     let source = r#"
-        async function workflow() {
             config = {retries: 3}
             timeout = config?.timeout ?? 5000
             return timeout
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -413,12 +369,10 @@ fn test_default_config_value_with_optional() {
 fn test_user_provided_value_or_default() {
     // Pattern: user_input ?? system_default
     let source = r#"
-        async function workflow() {
             user_input = 0
             value = user_input ?? 100
             return value
-        }
-    "#;
+        "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 

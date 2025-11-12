@@ -46,11 +46,21 @@ pub struct VM {
 }
 
 impl VM {
-    /// Create a new VM with a program and initial environment state
+    /// Create a new VM with a program and workflow inputs
+    ///
+    /// The VM is initialized with:
+    /// - Context: Empty runtime context object
+    /// - Inputs: User-provided workflow inputs
+    /// - Stdlib: Math, Task, and other built-in functions
     ///
     /// The program is wrapped in a root frame and execution begins immediately.
-    /// The environment is initialized with the provided state plus stdlib objects.
-    pub fn new(program: Stmt, mut env: HashMap<String, Val>) -> Self {
+    pub fn new(program: Stmt, inputs: HashMap<String, Val>) -> Self {
+        let mut env = HashMap::new();
+
+        // Inject runtime globals
+        env.insert("Context".to_string(), Val::Obj(HashMap::new()));
+        env.insert("Inputs".to_string(), Val::Obj(inputs));
+
         // Inject stdlib objects into environment
         super::stdlib::inject_stdlib(&mut env);
 

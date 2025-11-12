@@ -10,10 +10,8 @@ use std::collections::HashMap;
 fn test_task_run_basic() {
     // Task.run("my_task", {input: 42})
     let source = r#"
-        async function workflow(ctx, inputs) {
-            return Task.run("my_task", inputs)
-        }
-    "#;
+            return Task.run("my_task", Inputs)
+        "#;
 
     let mut env = HashMap::new();
     env.insert("input".to_string(), Val::Num(42.0));
@@ -50,10 +48,8 @@ fn test_task_run_basic() {
 fn test_task_run_empty_inputs() {
     // Task.run("simple_task", {})
     let source = r#"
-        async function workflow(ctx, inputs) {
-            return Task.run("simple_task", inputs)
-        }
-    "#;
+            return Task.run("simple_task", Inputs)
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -71,11 +67,9 @@ fn test_task_run_empty_inputs() {
 fn test_task_run_multiple_calls() {
     // Create two tasks in sequence
     let source = r#"
-        async function workflow(ctx, inputs) {
-            Task.run("first_task", inputs)
-            return Task.run("second_task", inputs)
-        }
-    "#;
+            Task.run("first_task", Inputs)
+            return Task.run("second_task", Inputs)
+        "#;
 
     let mut env = HashMap::new();
     env.insert("value".to_string(), Val::Num(123.0));
@@ -103,11 +97,9 @@ fn test_fire_and_forget_then_await() {
     // 2. Awaited tasks also get recorded in the outbox
     // 3. VM suspends on the await, preserving state
     let source = r#"
-        async function workflow(ctx) {
             Task.run("fire_and_forget_task", inputs1)
             return await Task.run("awaited_task", inputs2)
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
 
@@ -160,10 +152,8 @@ fn test_fire_and_forget_then_await() {
 fn test_task_run_wrong_arg_count_one_arg() {
     // Task.run("my_task") - missing inputs argument
     let source = r#"
-        async function workflow(ctx) {
             return Task.run("my_task")
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -180,11 +170,9 @@ fn test_task_run_wrong_arg_count_one_arg() {
 fn test_task_run_wrong_arg_count_three_args() {
     // Task.run("my_task", {}, extra) - too many arguments
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             return Task.run("my_task", obj, 42)
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -201,11 +189,9 @@ fn test_task_run_wrong_arg_count_three_args() {
 fn test_task_run_first_arg_not_string() {
     // Task.run(42, {}) - task_name must be string
     let source = r#"
-        async function workflow(ctx) {
             obj = {}
             return Task.run(42, obj)
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
@@ -223,10 +209,8 @@ fn test_task_run_first_arg_not_string() {
 fn test_task_run_second_arg_not_object() {
     // Task.run("my_task", 42) - inputs must be object
     let source = r#"
-        async function workflow(ctx) {
             return Task.run("my_task", 42)
-        }
-    "#;
+        "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);

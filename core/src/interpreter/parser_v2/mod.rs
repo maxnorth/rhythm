@@ -17,20 +17,34 @@ mod tests;
 
 /// Workflow definition - represents a complete workflow file
 ///
-/// A workflow file defines a single async function with parameters and a body.
-/// Example:
+/// Supports two formats:
+/// 1. Old: `async function workflow(params) { body }`
+/// 2. New: Optional front matter + top-level statements
+///
+/// Example (old):
 /// ```js
 /// async function workflow(input1, input2) {
 ///     let x = add(input1, input2)
 ///     return x
 /// }
 /// ```
+///
+/// Example (new):
+/// ```
+/// name: my_workflow
+/// ```
+/// let x = 42
+/// return x
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowDef {
-    /// Parameter names (inputs to the workflow)
+    /// Parameter names (for old format only, empty for new format)
     pub params: Vec<String>,
     /// Workflow body (statements to execute)
     pub body: Stmt,
+    /// Optional YAML front matter (new format only)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub front_matter: Option<String>,
 }
 
 /* ===================== PEST Parser ===================== */
@@ -59,7 +73,9 @@ pub type ParseResult<T> = Result<T, ParseError>;
 
 /// Parse a Flow source string into a workflow definition
 ///
-/// ONLY accepts workflow function syntax: `async function workflow(params) { body }`
+/// Accepts both old and new syntax:
+/// - Old: `async function workflow(params) { body }`
+/// - New: Optional front matter + top-level statements
 ///
 /// This is the production API. Use `parse()` for testing individual statements.
 pub fn parse_workflow(source: &str) -> ParseResult<WorkflowDef> {
@@ -67,15 +83,16 @@ pub fn parse_workflow(source: &str) -> ParseResult<WorkflowDef> {
 
     let program = pairs.next().unwrap();
 
-    // program = { SOI ~ (workflow_function | statement) ~ EOI }
+    // program = { SOI ~ (workflow_function | bare_workflow | statement) ~ EOI }
     let content = program.into_inner().next().unwrap();
 
     match content.as_rule() {
         Rule::workflow_function => build_workflow_function(content),
+        Rule::bare_workflow => build_bare_workflow(content),
         Rule::statement => {
-            // Reject bare statements - must use workflow wrapper
+            // Reject bare statements - must use workflow wrapper or bare workflow format
             Err(ParseError::BuildError(
-                "Workflow must be wrapped in 'async function workflow(...) { ... }'".to_string()
+                "Workflow must be either: (1) wrapped in 'async function workflow(...) { ... }' or (2) top-level statements".to_string()
             ))
         }
         _ => Err(ParseError::BuildError(format!(
@@ -100,6 +117,11 @@ pub fn parse(source: &str) -> ParseResult<Stmt> {
         Rule::workflow_function => {
             // If it's a workflow function, extract the body
             let workflow = build_workflow_function(content)?;
+            Ok(workflow.body)
+        }
+        Rule::bare_workflow => {
+            // If it's a bare workflow (new format), extract the body
+            let workflow = build_bare_workflow(content)?;
             Ok(workflow.body)
         }
         Rule::statement => {
@@ -138,7 +160,49 @@ fn build_workflow_function(pair: pest::iterators::Pair<Rule>) -> ParseResult<Wor
     // Build body from block
     let body = build_block(block_pair)?;
 
-    Ok(WorkflowDef { params, body })
+    Ok(WorkflowDef {
+        params,
+        body,
+        front_matter: None,
+    })
+}
+
+fn build_bare_workflow(pair: pest::iterators::Pair<Rule>) -> ParseResult<WorkflowDef> {
+    // bare_workflow = { front_matter? ~ statement+ }
+    let mut inner = pair.into_inner();
+
+    // Check for optional front matter
+    let mut front_matter = None;
+    let mut statements = Vec::new();
+
+    for pair in inner {
+        match pair.as_rule() {
+            Rule::front_matter => {
+                // Extract the front matter content
+                let content_pair = pair.into_inner().next().unwrap();
+                front_matter = Some(content_pair.as_str().to_string());
+            }
+            Rule::statement => {
+                // Build each top-level statement
+                statements.push(build_statement(pair)?);
+            }
+            _ => {
+                return Err(ParseError::BuildError(format!(
+                    "Unexpected bare_workflow content: {:?}",
+                    pair.as_rule()
+                )))
+            }
+        }
+    }
+
+    // Wrap all statements in a Block
+    let body = Stmt::Block { body: statements };
+
+    Ok(WorkflowDef {
+        params: vec![], // No params in new format
+        body,
+        front_matter,
+    })
 }
 
 fn build_param_list(pair: pest::iterators::Pair<Rule>) -> ParseResult<Vec<String>> {

@@ -1,12 +1,20 @@
-// Flow v2 Grammar - Minimal Phase 1
-// Supports: async function workflow definition OR single statement (legacy)
+// Flow v2 Grammar - Supports both old and new syntax
+// Old: async function workflow(...) { ... }
+// New: optional front matter + top-level statements
 
-program = { SOI ~ (workflow_function | statement) ~ EOI }
+program = { SOI ~ (workflow_function | bare_workflow | statement) ~ EOI }
 
-// Workflow function definition
+// Old format: Workflow function definition
 workflow_function = { "async" ~ "function" ~ identifier ~ "(" ~ param_list? ~ ")" ~ block }
 
 param_list = { identifier ~ ("," ~ identifier)* }
+
+// New format: Optional front matter followed by top-level statements
+bare_workflow = { front_matter? ~ statement+ }
+
+// Front matter - triple backticks at start containing YAML config
+front_matter = { "```" ~ front_matter_content ~ "```" }
+front_matter_content = @{ (!("```") ~ ANY)* }
 
 block = { "{" ~ statement* ~ "}" }
 
