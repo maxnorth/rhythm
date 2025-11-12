@@ -480,6 +480,59 @@ fn test_expression_without_await() {
     }
 }
 
+/* ===================== Optional Main Function Wrapper Tests ===================== */
+
+#[test]
+fn test_main_function_wrapper_executes() {
+    // Test that optional async function main() wrapper works end-to-end
+    let source = r#"
+        async function main() {
+            return 42
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
+}
+
+#[test]
+fn test_main_function_wrapper_with_inputs() {
+    // Test main wrapper with inputs access
+    let source = r#"
+        async function main() {
+            return Inputs.value
+        }
+    "#;
+
+    let inputs = hashmap! {
+        "value".to_string() => Val::Str("from_input".to_string()),
+    };
+
+    let mut vm = parse_workflow_and_build_vm(source, inputs);
+    run_until_done(&mut vm);
+    assert_eq!(
+        vm.control,
+        Control::Return(Val::Str("from_input".to_string()))
+    );
+}
+
+#[test]
+fn test_main_function_wrapper_with_variables() {
+    // Test main wrapper with variable declarations
+    let source = r#"
+        async function main() {
+            let x = 10
+            let y = 32
+            return x + y
+        }
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(42.0)));
+}
+
 /* ===================== Bare Statement Execution Tests (Testing Only) ===================== */
 
 #[test]

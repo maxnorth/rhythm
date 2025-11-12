@@ -1,15 +1,12 @@
-// Flow v2 Grammar - Supports both old and new syntax
-// Old: async function workflow(...) { ... }
-// New: optional front matter + top-level statements
+// Flow v2 Grammar - Top-level statements with optional front matter
 
-program = { SOI ~ (workflow_function | bare_workflow | statement) ~ EOI }
+program = { SOI ~ (main_function | bare_workflow | statement) ~ EOI }
 
-// Old format: Workflow function definition
-workflow_function = { "async" ~ "function" ~ identifier ~ "(" ~ param_list? ~ ")" ~ block }
+// Optional syntax sugar: async function main() { ... }
+// This wrapper is parsed but immediately unwrapped - used to suppress IDE errors
+main_function = { "async" ~ "function" ~ "main" ~ "(" ~ ")" ~ block }
 
-param_list = { identifier ~ ("," ~ identifier)* }
-
-// New format: Optional front matter followed by top-level statements
+// Workflow: Optional front matter followed by top-level statements
 bare_workflow = { front_matter? ~ statement+ }
 
 // Front matter - triple backticks at start containing YAML config

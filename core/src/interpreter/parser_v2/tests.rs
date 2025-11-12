@@ -6,78 +6,97 @@
 use crate::interpreter::executor_v2::types::ast::{Expr, MemberAccess, Stmt};
 use crate::interpreter::parser_v2::{self, WorkflowDef};
 
+/* ===================== Test Helpers ===================== */
+
+/// Helper to extract the first statement from a Block returned by parse()
+fn unwrap_block(stmt: Stmt) -> Stmt {
+    match stmt {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1, "Expected single statement in block");
+            body.into_iter().next().unwrap()
+        }
+        _ => panic!("Expected Block, got {:?}", stmt),
+    }
+}
+
 /* ===================== Basic Parsing Tests ===================== */
 
 #[test]
 fn test_parse_return_number() {
     let ast = parser_v2::parse("return 42").expect("Should parse");
+    let stmt = unwrap_block(ast);
 
     // Verify AST structure
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::LitNum { v }) } => {
             assert_eq!(v, 42.0);
         }
-        _ => panic!("Expected Return with LitNum, got {:?}", ast),
+        _ => panic!("Expected Return with LitNum, got {:?}", stmt),
     }
 }
 
 #[test]
 fn test_parse_return_negative_number() {
     let ast = parser_v2::parse("return -3.14").expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::LitNum { v }) } => {
             assert_eq!(v, -3.14);
         }
-        _ => panic!("Expected Return with LitNum, got {:?}", ast),
+        _ => panic!("Expected Return with LitNum, got {:?}", stmt),
     }
 }
 
 #[test]
 fn test_parse_return_boolean_true() {
     let ast = parser_v2::parse("return true").expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::LitBool { v }) } => {
             assert!(v);
         }
-        _ => panic!("Expected Return with LitBool, got {:?}", ast),
+        _ => panic!("Expected Return with LitBool, got {:?}", stmt),
     }
 }
 
 #[test]
 fn test_parse_return_boolean_false() {
     let ast = parser_v2::parse("return false").expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::LitBool { v }) } => {
             assert!(!v);
         }
-        _ => panic!("Expected Return with LitBool, got {:?}", ast),
+        _ => panic!("Expected Return with LitBool, got {:?}", stmt),
     }
 }
 
 #[test]
 fn test_parse_return_string() {
     let ast = parser_v2::parse(r#"return "hello world""#).expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::LitStr { v }) } => {
             assert_eq!(v, "hello world");
         }
-        _ => panic!("Expected Return with LitStr, got {:?}", ast),
+        _ => panic!("Expected Return with LitStr, got {:?}", stmt),
     }
 }
 
 #[test]
 fn test_parse_return_empty_string() {
     let ast = parser_v2::parse(r#"return """#).expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::LitStr { v }) } => {
             assert_eq!(v, "");
         }
-        _ => panic!("Expected Return with LitStr, got {:?}", ast),
+        _ => panic!("Expected Return with LitStr, got {:?}", stmt),
     }
 }
 
@@ -86,36 +105,39 @@ fn test_parse_return_empty_string() {
 #[test]
 fn test_parse_with_whitespace() {
     let ast = parser_v2::parse("   return   42   ").expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::LitNum { v }) } => {
             assert_eq!(v, 42.0);
         }
-        _ => panic!("Expected Return with LitNum, got {:?}", ast),
+        _ => panic!("Expected Return with LitNum, got {:?}", stmt),
     }
 }
 
 #[test]
 fn test_parse_with_line_comment() {
     let ast = parser_v2::parse("// This is a comment\nreturn 42").expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::LitNum { v }) } => {
             assert_eq!(v, 42.0);
         }
-        _ => panic!("Expected Return with LitNum, got {:?}", ast),
+        _ => panic!("Expected Return with LitNum, got {:?}", stmt),
     }
 }
 
 #[test]
 fn test_parse_with_block_comment() {
     let ast = parser_v2::parse("/* Block comment */ return 42").expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::LitNum { v }) } => {
             assert_eq!(v, 42.0);
         }
-        _ => panic!("Expected Return with LitNum, got {:?}", ast),
+        _ => panic!("Expected Return with LitNum, got {:?}", stmt),
     }
 }
 
@@ -124,36 +146,39 @@ fn test_parse_with_block_comment() {
 #[test]
 fn test_parse_zero() {
     let ast = parser_v2::parse("return 0").expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::LitNum { v }) } => {
             assert_eq!(v, 0.0);
         }
-        _ => panic!("Expected Return with LitNum, got {:?}", ast),
+        _ => panic!("Expected Return with LitNum, got {:?}", stmt),
     }
 }
 
 #[test]
 fn test_parse_decimal_number() {
     let ast = parser_v2::parse("return 123.456").expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::LitNum { v }) } => {
             assert_eq!(v, 123.456);
         }
-        _ => panic!("Expected Return with LitNum, got {:?}", ast),
+        _ => panic!("Expected Return with LitNum, got {:?}", stmt),
     }
 }
 
 #[test]
 fn test_parse_string_with_spaces() {
     let ast = parser_v2::parse(r#"return "hello   world   with   spaces""#).expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::LitStr { v }) } => {
             assert_eq!(v, "hello   world   with   spaces");
         }
-        _ => panic!("Expected Return with LitStr, got {:?}", ast),
+        _ => panic!("Expected Return with LitStr, got {:?}", stmt),
     }
 }
 
@@ -162,24 +187,26 @@ fn test_parse_string_with_spaces() {
 #[test]
 fn test_parse_identifier() {
     let ast = parser_v2::parse("return x").expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::Ident { name }) } => {
             assert_eq!(name, "x");
         }
-        _ => panic!("Expected Return with Ident, got {:?}", ast),
+        _ => panic!("Expected Return with Ident, got {:?}", stmt),
     }
 }
 
 #[test]
 fn test_parse_identifier_inputs() {
     let ast = parser_v2::parse("return inputs").expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::Ident { name }) } => {
             assert_eq!(name, "inputs");
         }
-        _ => panic!("Expected Return with Ident, got {:?}", ast),
+        _ => panic!("Expected Return with Ident, got {:?}", stmt),
     }
 }
 
@@ -188,8 +215,9 @@ fn test_parse_identifier_inputs() {
 #[test]
 fn test_parse_member_access_simple() {
     let ast = parser_v2::parse("return inputs.userId").expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::Member { object, property, .. }) } => {
             // Verify object is an identifier
             match *object {
@@ -198,15 +226,16 @@ fn test_parse_member_access_simple() {
             }
             assert_eq!(property, "userId");
         }
-        _ => panic!("Expected Return with Member, got {:?}", ast),
+        _ => panic!("Expected Return with Member, got {:?}", stmt),
     }
 }
 
 #[test]
 fn test_parse_member_access_nested() {
     let ast = parser_v2::parse("return ctx.user.id").expect("Should parse");
+    let stmt = unwrap_block(ast);
 
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::Member { object, property, .. }) } => {
             assert_eq!(property, "id");
 
@@ -224,21 +253,22 @@ fn test_parse_member_access_nested() {
                 _ => panic!("Expected Member for object, got {:?}", object),
             }
         }
-        _ => panic!("Expected Return with Member, got {:?}", ast),
+        _ => panic!("Expected Return with Member, got {:?}", stmt),
     }
 }
 
 #[test]
 fn test_parse_member_access_deeply_nested() {
     let ast = parser_v2::parse("return ctx.user.address.city").expect("Should parse");
+    let stmt = unwrap_block(ast);
 
     // Verify it's a return statement with nested member access
-    match ast {
+    match stmt {
         Stmt::Return { value: Some(Expr::Member { property, .. }) } => {
             assert_eq!(property, "city");
             // The nesting structure is correct if parsing succeeds
         }
-        _ => panic!("Expected Return with Member, got {:?}", ast),
+        _ => panic!("Expected Return with Member, got {:?}", stmt),
     }
 }
 
@@ -247,15 +277,10 @@ fn test_parse_member_access_deeply_nested() {
 #[test]
 fn test_parse_workflow_minimal() {
     let source = r#"
-        async function workflow(ctx) {
-            return 42
-        }
+        return 42
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
-
-    // Verify params
-    assert_eq!(workflow.params, vec!["ctx"]);
 
     // Verify body is a block
     match workflow.body {
@@ -276,29 +301,21 @@ fn test_parse_workflow_minimal() {
 #[test]
 fn test_parse_workflow_no_params() {
     let source = r#"
-        async function workflow() {
-            return 42
-        }
+        return 42
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
 
     // Verify no params
-    assert_eq!(workflow.params, Vec::<String>::new());
 }
 
 #[test]
 fn test_parse_workflow_with_ctx_and_inputs() {
     let source = r#"
-        async function workflow(ctx, inputs) {
-            return 123
-        }
+        return 123
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
-
-    // Verify params
-    assert_eq!(workflow.params, vec!["ctx", "inputs"]);
 
     // Verify body
     match workflow.body {
@@ -318,15 +335,12 @@ fn test_parse_workflow_with_ctx_and_inputs() {
 #[test]
 fn test_parse_workflow_multiline_body() {
     let source = r#"
-        async function workflow(ctx) {
-            return 1
-            return 2
-            return 3
-        }
+        return 1
+        return 2
+        return 3
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
-    assert_eq!(workflow.params, vec!["ctx"]);
 
     // Verify body has 3 statements
     match workflow.body {
@@ -349,27 +363,21 @@ fn test_parse_workflow_multiline_body() {
 #[test]
 fn test_parse_workflow_custom_param_names() {
     let source = r#"
-        async function workflow(context, data) {
-            return data.value
-        }
+        return data.value
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
 
     // Verify custom param names
-    assert_eq!(workflow.params, vec!["context", "data"]);
 }
 
 #[test]
 fn test_parse_workflow_with_member_access() {
     let source = r#"
-        async function workflow(ctx, inputs) {
-            return inputs.userId
-        }
+        return inputs.userId
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
-    assert_eq!(workflow.params, vec!["ctx", "inputs"]);
 
     // Verify body contains member access
     match workflow.body {
@@ -395,9 +403,7 @@ fn test_parse_workflow_with_member_access() {
 #[test]
 fn test_workflow_serialization_roundtrip() {
     let source = r#"
-        async function workflow(ctx, inputs) {
-            return inputs.userId
-        }
+        return inputs.userId
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -407,9 +413,6 @@ fn test_workflow_serialization_roundtrip() {
 
     // Deserialize back
     let workflow2: WorkflowDef = serde_json::from_str(&json).expect("Deserialization should succeed");
-
-    // Verify params match
-    assert_eq!(workflow.params, workflow2.params);
 
     // Verify body structure matches (we can't do deep equality without implementing PartialEq)
     match (&workflow.body, &workflow2.body) {
@@ -422,10 +425,9 @@ fn test_workflow_serialization_roundtrip() {
 
 #[test]
 fn test_statement_serialization_roundtrip() {
-    let ast = parser_v2::parse("return 42").expect("Should parse");
+    let program = parser_v2::parse("return 42").expect("Should parse");
 
-    // Wrap in Block as executor expects
-    let program = Stmt::Block { body: vec![ast] };
+    // parse() already wraps in Block
 
     // Serialize to JSON
     let json = serde_json::to_string(&program).expect("Serialization should succeed");
@@ -451,48 +453,177 @@ fn test_statement_serialization_roundtrip() {
 /* ===================== Parse Error Tests ===================== */
 
 #[test]
-fn test_parser_rejects_bare_statement() {
-    // parse_workflow() rejects bare statements - must use workflow wrapper
+fn test_parser_accepts_bare_statement() {
+    // parse_workflow() now accepts bare statements - no wrapper needed
     let source = "return 42";
 
-    let result = parser_v2::parse_workflow(source);
-    assert!(result.is_err());
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse bare statement");
 
-    // Error message should mention workflow wrapper requirement
-    let err = result.unwrap_err();
-    assert!(matches!(err, parser_v2::ParseError::BuildError(_)));
+    // Verify it's wrapped in a Block
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            assert!(matches!(&body[0], Stmt::Return { .. }));
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
 }
 
 #[test]
 fn test_parser_accepts_workflow_wrapper() {
     // Parser accepts proper workflow syntax
     let source = r#"
-        async function workflow(ctx) {
+        return 42
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+}
+
+/* ===================== Optional Main Function Wrapper Tests ===================== */
+
+#[test]
+fn test_main_function_wrapper_simple() {
+    // Test optional async function main() wrapper
+    let source = r#"
+        async function main() {
             return 42
         }
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
-    assert_eq!(workflow.params, vec!["ctx"]);
+
+    // Verify body is a block with return statement
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            assert!(matches!(&body[0], Stmt::Return { .. }));
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_main_function_wrapper_multiple_statements() {
+    // Test main wrapper with multiple statements
+    let source = r#"
+        async function main() {
+            let x = 10
+            let y = 32
+            return x + y
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify body is a block with three statements
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 3);
+            assert!(matches!(&body[0], Stmt::Declare { .. }));
+            assert!(matches!(&body[1], Stmt::Declare { .. }));
+            assert!(matches!(&body[2], Stmt::Return { .. }));
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_main_function_wrapper_with_control_flow() {
+    // Test main wrapper with if statement
+    let source = r#"
+        async function main() {
+            if (true) {
+                return 1
+            } else {
+                return 2
+            }
+        }
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify body is a block with if statement
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            assert!(matches!(&body[0], Stmt::If { .. }));
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_main_function_produces_same_ast_as_bare() {
+    // Verify that main function wrapper produces identical AST to bare syntax
+    let with_wrapper = r#"
+        async function main() {
+            return 42
+        }
+    "#;
+
+    let bare = r#"
+        return 42
+    "#;
+
+    let workflow_wrapped = parser_v2::parse_workflow(with_wrapper).expect("Should parse");
+    let workflow_bare = parser_v2::parse_workflow(bare).expect("Should parse");
+
+    // Both should produce identical AST
+    match (&workflow_wrapped.body, &workflow_bare.body) {
+        (Stmt::Block { body: body1 }, Stmt::Block { body: body2 }) => {
+            assert_eq!(body1.len(), body2.len());
+            assert_eq!(body1.len(), 1);
+            // Both should be Return statements
+            assert!(matches!(&body1[0], Stmt::Return { .. }));
+            assert!(matches!(&body2[0], Stmt::Return { .. }));
+        }
+        _ => panic!("Both should produce Block bodies"),
+    }
+}
+
+#[test]
+fn test_parse_function_allows_main_wrapper() {
+    // Test that parse() function also accepts main wrapper
+    let source = r#"
+        async function main() {
+            return 42
+        }
+    "#;
+
+    let stmt = parser_v2::parse(source).expect("Should parse");
+
+    // Should produce a Block with return statement
+    match stmt {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            assert!(matches!(&body[0], Stmt::Return { .. }));
+        }
+        _ => panic!("Expected Block, got {:?}", stmt),
+    }
 }
 
 #[test]
 fn test_parse_for_testing_allows_bare_statements() {
-    // The parse() function (for testing) allows bare statements
+    // The parse() function (for testing) allows bare statements and wraps in Block
     let source = "return 42";
 
     let stmt = parser_v2::parse(source).expect("Should parse for testing");
 
-    // Verify it's a return statement
-    assert!(matches!(stmt, Stmt::Return { .. }));
+    // Verify it's wrapped in a Block
+    match stmt {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            assert!(matches!(&body[0], Stmt::Return { .. }));
+        }
+        _ => panic!("Expected Block, got {:?}", stmt),
+    }
 }
 
 #[test]
 fn test_parse_invalid_syntax() {
     // Test that invalid syntax is rejected
-    // Note: "return" alone is now valid as an expression statement (identifier)
-    // Test something that's genuinely invalid
-    let source = "return return return";
+    // Use genuinely invalid syntax that can't be parsed
+    let source = "return ===";
 
     let result = parser_v2::parse(source);
     assert!(result.is_err());
@@ -503,15 +634,12 @@ fn test_parse_invalid_syntax() {
 #[test]
 fn test_parse_while_loop() {
     let source = r#"
-        async function workflow(ctx) {
-            while (true) {
-                return 42
-            }
+        while (true) {
+            return 42
         }
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
-    assert_eq!(workflow.params, vec!["ctx"]);
 
     // Verify body is a block with one while statement
     match workflow.body {
@@ -543,10 +671,8 @@ fn test_parse_while_loop() {
 #[test]
 fn test_parse_while_with_break() {
     let source = r#"
-        async function workflow(ctx) {
-            while (true) {
-                break
-            }
+        while (true) {
+            break
         }
     "#;
 
@@ -576,10 +702,8 @@ fn test_parse_while_with_break() {
 #[test]
 fn test_parse_while_with_continue() {
     let source = r#"
-        async function workflow(ctx) {
-            while (false) {
-                continue
-            }
+        while (false) {
+            continue
         }
     "#;
 
@@ -609,11 +733,9 @@ fn test_parse_while_with_continue() {
 #[test]
 fn test_parse_nested_while() {
     let source = r#"
-        async function workflow(ctx) {
-            while (true) {
-                while (false) {
-                    break
-                }
+        while (true) {
+            while (false) {
+                break
             }
         }
     "#;
@@ -646,14 +768,16 @@ fn test_parse_nested_while() {
 fn test_parse_break_standalone() {
     // Test that break can be parsed as a statement (using test API)
     let ast = parser_v2::parse("break").expect("Should parse");
-    assert!(matches!(ast, Stmt::Break));
+    let stmt = unwrap_block(ast);
+    assert!(matches!(stmt, Stmt::Break));
 }
 
 #[test]
 fn test_parse_continue_standalone() {
     // Test that continue can be parsed as a statement (using test API)
     let ast = parser_v2::parse("continue").expect("Should parse");
-    assert!(matches!(ast, Stmt::Continue));
+    let stmt = unwrap_block(ast);
+    assert!(matches!(stmt, Stmt::Continue));
 }
 
 /* ===================== Assignment Tests ===================== */
@@ -661,13 +785,10 @@ fn test_parse_continue_standalone() {
 #[test]
 fn test_parse_simple_assignment() {
     let source = r#"
-        async function workflow(ctx) {
-            x = 42
-        }
+        x = 42
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
-    assert_eq!(workflow.params, vec!["ctx"]);
 
     // Verify body is a block with one assignment
     match workflow.body {
@@ -689,9 +810,7 @@ fn test_parse_simple_assignment() {
 #[test]
 fn test_parse_property_assignment() {
     let source = r#"
-        async function workflow(ctx) {
-            obj.prop = 99
-        }
+        obj.prop = 99
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -720,9 +839,7 @@ fn test_parse_property_assignment() {
 #[test]
 fn test_parse_nested_property_assignment() {
     let source = r#"
-        async function workflow(ctx) {
-            obj.a.b = "test"
-        }
+        obj.a.b = "test"
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -755,9 +872,7 @@ fn test_parse_nested_property_assignment() {
 #[test]
 fn test_parse_assignment_with_expression() {
     let source = r#"
-        async function workflow(ctx) {
-            x = Math.floor(3.7)
-        }
+        x = Math.floor(3.7)
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -783,7 +898,8 @@ fn test_parse_assignment_with_expression() {
 fn test_parse_assignment_standalone() {
     // Test that assignment can be parsed as a statement (using test API)
     let ast = parser_v2::parse("x = 42").expect("Should parse");
-    match ast {
+    let stmt = unwrap_block(ast);
+    match stmt {
         Stmt::Assign { var, path, value } => {
             assert_eq!(var, "x");
             assert_eq!(path.len(), 0);
@@ -798,13 +914,10 @@ fn test_parse_assignment_standalone() {
 #[test]
 fn test_parse_empty_object_literal() {
     let source = r#"
-        async function workflow(ctx) {
-            return {}
-        }
+        return {}
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
-    assert_eq!(workflow.params, vec!["ctx"]);
 
     // Verify body is a block with return statement containing empty object
     match workflow.body {
@@ -827,9 +940,7 @@ fn test_parse_empty_object_literal() {
 #[test]
 fn test_parse_object_literal_single_property() {
     let source = r#"
-        async function workflow(ctx) {
-            return {code: "E"}
-        }
+        return {code: "E"}
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -857,9 +968,7 @@ fn test_parse_object_literal_single_property() {
 #[test]
 fn test_parse_object_literal_multiple_properties() {
     let source = r#"
-        async function workflow(ctx) {
-            return {code: "E", message: "msg", value: 42}
-        }
+        return {code: "E", message: "msg", value: 42}
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -891,9 +1000,7 @@ fn test_parse_object_literal_multiple_properties() {
 #[test]
 fn test_parse_object_literal_with_trailing_comma() {
     let source = r#"
-        async function workflow(ctx) {
-            return {code: "E", message: "msg",}
-        }
+        return {code: "E", message: "msg",}
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -919,9 +1026,7 @@ fn test_parse_object_literal_with_trailing_comma() {
 #[test]
 fn test_parse_object_literal_nested() {
     let source = r#"
-        async function workflow(ctx) {
-            return {outer: {inner: 42}}
-        }
+        return {outer: {inner: 42}}
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -956,9 +1061,7 @@ fn test_parse_object_literal_nested() {
 #[test]
 fn test_parse_object_literal_in_assignment() {
     let source = r#"
-        async function workflow(ctx) {
-            obj = {x: 1, y: 2}
-        }
+        obj = {x: 1, y: 2}
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -990,9 +1093,7 @@ fn test_parse_object_literal_in_assignment() {
 #[test]
 fn test_parse_object_literal_with_expression_values() {
     let source = r#"
-        async function workflow(ctx) {
-            return {x: add(1, 2), y: ctx.value}
-        }
+        return {x: add(1, 2), y: ctx.value}
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -1024,13 +1125,10 @@ fn test_parse_object_literal_with_expression_values() {
 #[test]
 fn test_parse_empty_array_literal() {
     let source = r#"
-        async function workflow(ctx) {
-            return []
-        }
+        return []
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
-    assert_eq!(workflow.params, vec!["ctx"]);
 
     // Verify body is a block with return statement containing empty array
     match workflow.body {
@@ -1053,9 +1151,7 @@ fn test_parse_empty_array_literal() {
 #[test]
 fn test_parse_array_literal_single_element() {
     let source = r#"
-        async function workflow(ctx) {
-            return [42]
-        }
+        return [42]
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -1082,9 +1178,7 @@ fn test_parse_array_literal_single_element() {
 #[test]
 fn test_parse_array_literal_multiple_elements() {
     let source = r#"
-        async function workflow(ctx) {
-            return [1, 2, 3, 4, 5]
-        }
+        return [1, 2, 3, 4, 5]
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -1113,9 +1207,7 @@ fn test_parse_array_literal_multiple_elements() {
 #[test]
 fn test_parse_array_literal_mixed_types() {
     let source = r#"
-        async function workflow(ctx) {
-            return [1, "hello", true, null]
-        }
+        return [1, "hello", true, null]
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -1145,9 +1237,7 @@ fn test_parse_array_literal_mixed_types() {
 #[test]
 fn test_parse_array_literal_with_trailing_comma() {
     let source = r#"
-        async function workflow(ctx) {
-            return [1, 2, 3,]
-        }
+        return [1, 2, 3,]
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -1173,9 +1263,7 @@ fn test_parse_array_literal_with_trailing_comma() {
 #[test]
 fn test_parse_array_literal_nested() {
     let source = r#"
-        async function workflow(ctx) {
-            return [[1, 2], [3, 4]]
-        }
+        return [[1, 2], [3, 4]]
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -1219,9 +1307,7 @@ fn test_parse_array_literal_nested() {
 #[test]
 fn test_parse_array_literal_in_assignment() {
     let source = r#"
-        async function workflow(ctx) {
-            arr = [1, 2, 3]
-        }
+        arr = [1, 2, 3]
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -1251,9 +1337,7 @@ fn test_parse_array_literal_in_assignment() {
 #[test]
 fn test_parse_array_literal_with_expression_elements() {
     let source = r#"
-        async function workflow(ctx) {
-            return [add(1, 2), ctx.value, Math.floor(3.7)]
-        }
+        return [add(1, 2), ctx.value, Math.floor(3.7)]
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
@@ -1282,9 +1366,7 @@ fn test_parse_array_literal_with_expression_elements() {
 #[test]
 fn test_parse_array_with_object_elements() {
     let source = r#"
-        async function workflow(ctx) {
-            return [{x: 1}, {x: 2}]
-        }
+        return [{x: 1}, {x: 2}]
     "#;
 
     let workflow = parser_v2::parse_workflow(source).expect("Should parse");
