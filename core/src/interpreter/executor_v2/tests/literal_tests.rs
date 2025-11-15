@@ -277,3 +277,92 @@ fn test_task_run_with_multiline_object() {
     assert_eq!(inputs.get("userId").unwrap(), &Val::Num(456.0));
     assert_eq!(inputs.get("total").unwrap(), &Val::Num(99.99));
 }
+
+/* ===================== Object Shorthand Tests ===================== */
+
+#[test]
+fn test_object_shorthand_simple() {
+    // Test ES6-style shorthand: { a } means { a: a }
+    let source = r#"
+        let a = 9
+        let b = { a }
+        return b
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    let expected = maplit::hashmap! {
+        "a".to_string() => Val::Num(9.0),
+    };
+
+    assert_eq!(vm.control, Control::Return(Val::Obj(expected)));
+}
+
+#[test]
+fn test_object_shorthand_multiple() {
+    // Test multiple shorthand properties
+    let source = r#"
+        let name = "Alice"
+        let age = 30
+        let result = { name, age }
+        return result
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    let expected = maplit::hashmap! {
+        "name".to_string() => Val::Str("Alice".to_string()),
+        "age".to_string() => Val::Num(30.0),
+    };
+
+    assert_eq!(vm.control, Control::Return(Val::Obj(expected)));
+}
+
+#[test]
+fn test_object_shorthand_mixed() {
+    // Test mixing shorthand and regular properties
+    let source = r#"
+        let x = 10
+        let y = 20
+        let result = { x, sum: x + y, y }
+        return result
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    let expected = maplit::hashmap! {
+        "x".to_string() => Val::Num(10.0),
+        "sum".to_string() => Val::Num(30.0),
+        "y".to_string() => Val::Num(20.0),
+    };
+
+    assert_eq!(vm.control, Control::Return(Val::Obj(expected)));
+}
+
+#[test]
+fn test_object_shorthand_from_inputs() {
+    // Test shorthand using values from Inputs
+    let source = r#"
+        let userId = Inputs.userId
+        let userName = Inputs.userName
+        return { userId, userName }
+    "#;
+
+    let inputs = maplit::hashmap! {
+        "userId".to_string() => Val::Num(123.0),
+        "userName".to_string() => Val::Str("Bob".to_string()),
+    };
+
+    let mut vm = parse_workflow_and_build_vm(source, inputs);
+    run_until_done(&mut vm);
+
+    let expected = maplit::hashmap! {
+        "userId".to_string() => Val::Num(123.0),
+        "userName".to_string() => Val::Str("Bob".to_string()),
+    };
+
+    assert_eq!(vm.control, Control::Return(Val::Obj(expected)));
+}

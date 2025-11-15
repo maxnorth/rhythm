@@ -114,10 +114,12 @@ literal = {
     | null_lit
 }
 
-// Object literal: { key: value, key2: value2 }
+// Object literal: { key: value, key2: value2 } or { key } (shorthand)
 object_lit = { "{" ~ property_list? ~ "}" }
 property_list = { property ~ ("," ~ property)* ~ ","? }
-property = { identifier ~ ":" ~ expression }
+property = { property_pair | property_shorthand }
+property_pair = { identifier ~ ":" ~ expression }
+property_shorthand = { identifier }
 
 // Array literal: [1, 2, 3]
 array_lit = { "[" ~ element_list? ~ "]" }

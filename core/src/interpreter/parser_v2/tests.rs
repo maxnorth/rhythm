@@ -998,6 +998,79 @@ fn test_parse_object_literal_multiple_properties() {
 }
 
 #[test]
+fn test_parse_object_literal_shorthand() {
+    // Test ES6-style shorthand: { a } means { a: a }
+    let source = r#"
+        return {name, age}
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    // Verify shorthand properties expand to { name: name, age: age }
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitObj { properties } => {
+                        assert_eq!(properties.len(), 2);
+
+                        // First property: name: name
+                        assert_eq!(properties[0].0, "name");
+                        assert!(matches!(&properties[0].1, Expr::Ident { name } if name == "name"));
+
+                        // Second property: age: age
+                        assert_eq!(properties[1].0, "age");
+                        assert!(matches!(&properties[1].1, Expr::Ident { name } if name == "age"));
+                    }
+                    _ => panic!("Expected LitObj expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_object_literal_mixed_shorthand() {
+    // Test mixing shorthand and regular properties
+    let source = r#"
+        return {name, value: 42, age}
+    "#;
+
+    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 1);
+            match &body[0] {
+                Stmt::Return { value: Some(expr) } => match expr {
+                    Expr::LitObj { properties } => {
+                        assert_eq!(properties.len(), 3);
+
+                        // name (shorthand)
+                        assert_eq!(properties[0].0, "name");
+                        assert!(matches!(&properties[0].1, Expr::Ident { name } if name == "name"));
+
+                        // value: 42 (regular)
+                        assert_eq!(properties[1].0, "value");
+                        assert!(matches!(&properties[1].1, Expr::LitNum { v } if *v == 42.0));
+
+                        // age (shorthand)
+                        assert_eq!(properties[2].0, "age");
+                        assert!(matches!(&properties[2].1, Expr::Ident { name } if name == "age"));
+                    }
+                    _ => panic!("Expected LitObj expression"),
+                },
+                _ => panic!("Expected Return statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
 fn test_parse_object_literal_with_trailing_comma() {
     let source = r#"
         return {code: "E", message: "msg",}

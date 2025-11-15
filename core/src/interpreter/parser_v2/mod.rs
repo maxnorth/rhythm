@@ -666,17 +666,32 @@ fn build_property_list(pair: pest::iterators::Pair<Rule>) -> ParseResult<Vec<(St
 }
 
 fn build_property(pair: pest::iterators::Pair<Rule>) -> ParseResult<(String, Expr)> {
-    // property = { identifier ~ ":" ~ expression }
-    let mut inner = pair.into_inner();
+    // property = { property_pair | property_shorthand }
+    let inner = pair.into_inner().next().unwrap();
 
-    // Get the key (identifier)
-    let key = inner.next().unwrap().as_str().to_string();
-
-    // Get the value (expression)
-    let value_pair = inner.next().unwrap();
-    let value = build_expression(value_pair)?;
-
-    Ok((key, value))
+    match inner.as_rule() {
+        Rule::property_pair => {
+            // property_pair = { identifier ~ ":" ~ expression }
+            let mut inner_pairs = inner.into_inner();
+            let key = inner_pairs.next().unwrap().as_str().to_string();
+            let value_pair = inner_pairs.next().unwrap();
+            let value = build_expression(value_pair)?;
+            Ok((key, value))
+        }
+        Rule::property_shorthand => {
+            // property_shorthand = { identifier }
+            // Expands to { key: key } where value is an identifier reference
+            let key = inner.as_str().to_string();
+            let value = Expr::Ident {
+                name: key.clone(),
+            };
+            Ok((key, value))
+        }
+        _ => Err(ParseError::BuildError(format!(
+            "Unexpected property rule: {:?}",
+            inner.as_rule()
+        ))),
+    }
 }
 
 fn build_array_literal(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
