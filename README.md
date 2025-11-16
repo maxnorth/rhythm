@@ -1,92 +1,89 @@
 # Rhythm
 
-Durable workflows using snapshots instead of replay. No determinism constraints.
+Effortless durable execution
 
-Write workflows in a simple DSL (JavaScript-like async/await), implement tasks in any language (Python and Node.js supported now). When a workflow awaits, snapshot the execution state—on resume, continue from the snapshot. No event history, no determinism rules.
+Key features
+- Immutable, self-versioning workflows written in a JS-based DSL
+- Pauses and resumes when you `await` - no replay or determinism constraints
+- Task execution in your application's language
+- Unified model for scheduling workflows and simple background tasks
+- Embedded Rust runtime powering scheduling and workflow execution
+- Single dependency on Postgres, no complex hosting barriers
 
-**Rust core with language bindings**: Single execution engine in Rust, thin FFI adapters for each language. Same workflow runs everywhere—DSL is parsed once, snapshots are universal. Fast parser (Pest-based), efficient execution.
 
-**Also works as a task queue**: Use it for simple async tasks without workflows. Unified interface—tasks and workflows use the same execution model.
+## Example
+```js
+// workflows/onboard_user.flow
 
-**Not** a DAG scheduler (Airflow), not a Temporal clone. This explores snapshot-based execution as an alternative to replay-based models.
+const user = await Task.run("get-user", { userId: Inputs.userId })
+const account = await Task.run("create-billing-account", { user })
+await Task.run("send-welcome-email", { user, account })
 
-**Status**: Experimental prototype. Core execution works. Missing control flow (if/else, loops), observability, production features. Expect bugs and breaking changes.
-
-```javascript
-// workflows/processOrder.flow
-workflow(ctx, inputs) {
-  let payment = await task("chargeCard", {
-    orderId: inputs.orderId,
-    amount: inputs.amount
-  })
-
-  await task("shipOrder", { orderId: inputs.orderId })
+return {
+  userId: user.id,
+  accountId: account.id,
+  status: "onboarded"
 }
 ```
 
-```python
-# tasks.py - implement tasks in Python or JavaScript
-@rhythm.task(queue="orders")
-async def chargeCard(orderId: str, amount: float):
-    # Normal Python - use time.now(), random(), external APIs
-    # No determinism rules
-    return {"success": True, "txn_id": "..."}
+```py
+# app/tasks.py
+
+from rhythm import RhythmApp, task
+
+app = RhythmApp()
+
+@task("get-user")
+def get_user(payload: dict) -> dict:
+    user_id = payload["userId"]
+    user = db.fetch_user(user_id)
+    return {"id": user.id, "email": user.email}
+
+
+@task("create-billing-account")
+def create_billing_account(payload: dict) -> dict:
+    user = payload["user"]
+    account = billing.create_account(email=user["email"])
+    return {"id": account.id}
+
+
+@task("send-welcome-email")
+def send_welcome_email(payload: dict) -> dict:
+    user = payload["user"]
+    account = payload["account"]
+    mailer.send(
+        to=user["email"],
+        template="welcome",
+        context={"accountId": account["id"]},
+    )
+    return {"sent": True}
 ```
 
----
+```py
+# app/main.py
 
-## Why This Exists
+from rhythm import RhythmClient
 
-Temporal's replay-based model is powerful but has friction:
+client = RhythmClient()
 
-- Every line of workflow code must be deterministic (no `time.now()`, no random, no direct I/O)
-- Versioning requires careful migration of in-flight workflows
-- Mental model split: "normal code" vs "workflow code"
-- Testing requires replay mocks and history simulation
+result = await client.start_workflow(
+    "onboard_user",
+    {"userId": 42}
+)
+```
 
-Rhythm experiments with **snapshot execution state instead of replaying code**. Accept a DSL in exchange for eliminating determinism constraints.
+## Architecture at a glance
 
-[Read more about how this differs from Temporal →](FAQ.md#how-does-this-differ-from-temporal)
+**Workflow DSL:** Workflows are written in a custom DSL stored in .flow files, based on a simplified subset of JavaScript. Rhythm 
 
----
+**Immutable, self-versioning workflows:** During app init, Rhythm stores the source of workflows in Postgres, versioned by hash. In-flight workflows resume using the same version they started with. New workflow runs use latest by default.
 
-## What Works / What Doesn't
+**Single dependency:** All state, scheduling, and results are stored in Postgres. All execution happens inside your service. Compare to a simple Postgres-backed task queue.
 
-**Working**:
-- ✅ Snapshot-based execution (await tasks, resume on crash)
-- ✅ Worker failover (heartbeat-based, via Postgres)
-- ✅ Python & Node.js task implementations
-- ✅ Basic DSL: tasks, variables, await, fire-and-forget
-- ✅ Multi-queue workers, retries, timeouts
+Tasks: Regular functions in your application, written in your language, invoked from workflows via adapters (e.g. Task.run("send-email", payload)).
 
-**Missing**:
-- ❌ Control flow (if/else, loops) — **biggest gap**
-- ❌ Expressions (operators, property access)
-- ❌ Observability (metrics, tracing, UI)
-- ❌ Idempotency keys
-- ❌ Rate limiting
-- ❌ Production hardening (edge cases, error handling)
+**No replay:** Workflow code is not replayed from history; it’s a true pause/resume interpreter, not a deterministic replay engine.
 
-**Stability**: Core works. Expect rough edges, breaking changes, missing features.
-
----
-
-## Quick Start
-
-- Python (bla bla replace this)
-- JS (bla bla replace this)
-
----
-
-## Roadmap
-
-**Priority 1**: Control flow (if/else, loops, expressions) — DSL unusable without this
-**Priority 2**: Observability (what's running, where it's stuck)
-**Priority 3**: Production features (idempotency, rate limiting, retention)
-
-[Full roadmap](.context/TODO.md)
-
----
 
 ## Learn More
 
