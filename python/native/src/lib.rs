@@ -210,29 +210,6 @@ fn fail_execution_sync(execution_id: String, error: String, retry: bool) -> PyRe
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
-/// Suspend a workflow
-#[pyfunction]
-fn suspend_workflow_sync(workflow_id: String, checkpoint: String) -> PyResult<()> {
-    let runtime = get_runtime();
-
-    let checkpoint: JsonValue = serde_json::from_str(&checkpoint)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-
-    runtime
-        .block_on(executions::suspend_workflow(&workflow_id, checkpoint))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
-
-/// Resume a workflow
-#[pyfunction]
-fn resume_workflow_sync(workflow_id: String) -> PyResult<()> {
-    let runtime = get_runtime();
-
-    runtime
-        .block_on(executions::resume_workflow(&workflow_id))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
-
 /// Get execution by ID
 #[pyfunction]
 fn get_execution_sync(execution_id: String) -> PyResult<Option<String>> {
@@ -435,8 +412,6 @@ fn rhythm_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(complete_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(complete_executions_batch_sync, m)?)?;
     m.add_function(wrap_pyfunction!(fail_execution_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(suspend_workflow_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(resume_workflow_sync, m)?)?;
     m.add_function(wrap_pyfunction!(get_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(get_workflow_tasks_sync, m)?)?;
     m.add_function(wrap_pyfunction!(update_heartbeat_sync, m)?)?;

@@ -169,48 +169,6 @@ pub async fn fail_execution(execution_id: &str, error: JsonValue, retry: bool) -
     Ok(())
 }
 
-/// Suspend a workflow (for task execution)
-pub async fn suspend_workflow(workflow_id: &str, checkpoint: JsonValue) -> Result<()> {
-    let pool = get_pool().await?;
-
-    sqlx::query(
-        r#"
-        UPDATE executions
-        SET status = 'suspended',
-            checkpoint = $1
-        WHERE id = $2
-        "#,
-    )
-    .bind(checkpoint)
-    .bind(workflow_id)
-    .execute(pool.as_ref())
-    .await
-    .context("Failed to suspend workflow")?;
-
-    Ok(())
-}
-
-/// Resume a workflow (re-queue it)
-pub async fn resume_workflow(workflow_id: &str) -> Result<()> {
-    let pool = get_pool().await?;
-
-    sqlx::query(
-        r#"
-        UPDATE executions
-        SET status = 'pending',
-            worker_id = NULL,
-            claimed_at = NULL
-        WHERE id = $1
-        "#,
-    )
-    .bind(workflow_id)
-    .execute(pool.as_ref())
-    .await
-    .context("Failed to resume workflow")?;
-
-    Ok(())
-}
-
 /// Cancel an execution
 pub async fn cancel_execution(execution_id: &str) -> Result<()> {
     let pool = get_pool().await?;

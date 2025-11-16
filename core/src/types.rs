@@ -42,7 +42,6 @@ pub struct Execution {
     pub max_retries: i32,
 
     pub parent_workflow_id: Option<String>,
-    pub checkpoint: Option<JsonValue>,
 
     pub created_at: DateTime<Utc>,
     pub claimed_at: Option<DateTime<Utc>>,

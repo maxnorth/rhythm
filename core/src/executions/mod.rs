@@ -19,6 +19,5 @@ pub use claim::{claim_execution, claim_executions_batch};
 pub use create::create_execution;
 pub use lifecycle::{
     cancel_execution, complete_execution, complete_executions_batch, fail_execution,
-    resume_workflow, suspend_workflow,
 };
 pub use query::{get_execution, get_workflow_tasks, list_executions};

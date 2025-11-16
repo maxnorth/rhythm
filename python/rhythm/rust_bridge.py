@@ -100,16 +100,6 @@ class RustBridge:
         rust.fail_execution_sync(execution_id=execution_id, error=json.dumps(error), retry=retry)
 
     @staticmethod
-    def suspend_workflow(workflow_id: str, checkpoint: Dict[str, Any]) -> None:
-        """Suspend a workflow"""
-        rust.suspend_workflow_sync(workflow_id=workflow_id, checkpoint=json.dumps(checkpoint))
-
-    @staticmethod
-    def resume_workflow(workflow_id: str) -> None:
-        """Resume a workflow"""
-        rust.resume_workflow_sync(workflow_id=workflow_id)
-
-    @staticmethod
     def get_execution(execution_id: str) -> Optional[Dict[str, Any]]:
         """Get execution by ID"""
         result = rust.get_execution_sync(execution_id=execution_id)

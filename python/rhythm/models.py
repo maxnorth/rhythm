@@ -52,7 +52,6 @@ class Execution(BaseModel):
     max_retries: int = 3
 
     parent_workflow_id: Optional[str] = None
-    checkpoint: Optional[dict[str, Any]] = None
 
     created_at: datetime
     claimed_at: Optional[datetime] = None
@@ -66,7 +65,7 @@ class Execution(BaseModel):
         """Create from database record"""
         data = dict(record)
         # Parse JSONB fields
-        for field in ["args", "kwargs", "options", "result", "error", "checkpoint"]:
+        for field in ["args", "kwargs", "options", "result", "error"]:
             if field in data and data[field] is not None:
                 if isinstance(data[field], str):
                     data[field] = json.loads(data[field])
