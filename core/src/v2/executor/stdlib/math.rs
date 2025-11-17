@@ -1,8 +1,8 @@
 //! Math stdlib functions
 
-use crate::interpreter::executor_v2::errors::{self, ErrorInfo};
-use crate::interpreter::executor_v2::expressions::EvalResult;
-use crate::interpreter::executor_v2::types::Val;
+use crate::v2::executor::errors::{self, ErrorInfo};
+use crate::v2::executor::expressions::EvalResult;
+use crate::v2::executor::types::Val;
 
 /// Math.floor(x) - Returns the largest integer less than or equal to x
 pub fn floor(args: &[Val]) -> EvalResult {

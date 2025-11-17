@@ -1,9 +1,9 @@
 //! Task stdlib functions
 
-use crate::interpreter::executor_v2::errors::{self, ErrorInfo};
-use crate::interpreter::executor_v2::expressions::EvalResult;
-use crate::interpreter::executor_v2::outbox::{Outbox, TaskCreation};
-use crate::interpreter::executor_v2::types::Val;
+use crate::v2::executor::errors::{self, ErrorInfo};
+use crate::v2::executor::expressions::EvalResult;
+use crate::v2::executor::outbox::{Outbox, TaskCreation};
+use crate::v2::executor::types::Val;
 use uuid::Uuid;
 
 /// Task.run(task_name, inputs) - Create a new task

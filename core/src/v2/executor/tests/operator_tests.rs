@@ -1,7 +1,7 @@
 //! Tests for binary operators (&&, ||, ==, !=, <, <=, >, >=, +, -, *, /)
 
 use super::helpers::parse_workflow_and_build_vm;
-use crate::interpreter::executor_v2::{run_until_done, Control, Val};
+use crate::v2::executor::{run_until_done, Control, Val};
 use std::collections::HashMap;
 
 /* ===================== Arithmetic Operators ===================== */

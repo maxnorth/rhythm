@@ -1,7 +1,7 @@
 //! Tests for variable declarations (let/const)
 
-use crate::interpreter::executor_v2::tests::helpers::parse_workflow_and_build_vm;
-use crate::interpreter::executor_v2::{run_until_done, Control, Val};
+use crate::v2::executor::tests::helpers::parse_workflow_and_build_vm;
+use crate::v2::executor::{run_until_done, Control, Val};
 use maplit::hashmap;
 use std::collections::HashMap;
 

@@ -2,8 +2,8 @@
 //!
 //! Common utilities for parsing workflows and building VMs
 
-use crate::interpreter::executor_v2::{Val, VM};
-use crate::interpreter::parser_v2::{self, WorkflowDef};
+use crate::v2::executor::{Val, VM};
+use crate::v2::parser::{self, WorkflowDef};
 use std::collections::HashMap;
 
 /// Parse workflow source, validate, serialize/deserialize, and create VM
@@ -21,8 +21,8 @@ use std::collections::HashMap;
 /// # Returns
 /// A VM ready to execute with `run_until_done()` or `step()`
 pub fn parse_workflow_and_build_vm(source: &str, inputs: HashMap<String, Val>) -> VM {
-    let workflow = parser_v2::parse_workflow(source).expect("Parse workflow failed");
-    parser_v2::semantic_validator::validate_workflow(&workflow)
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Parse workflow failed");
+    crate::v2::parser::semantic_validator::validate_workflow(&workflow)
         .expect("Workflow validation failed");
     let json = serde_json::to_string(&workflow).expect("Workflow serialization failed");
     let workflow: WorkflowDef =

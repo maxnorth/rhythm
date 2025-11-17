@@ -3,8 +3,8 @@
 //! These tests verify that the parser correctly converts source code into AST structures.
 //! They do NOT execute the code - that's tested in executor_v2 tests.
 
-use crate::interpreter::executor_v2::types::ast::{Expr, MemberAccess, Stmt};
-use crate::interpreter::parser_v2::{self, WorkflowDef};
+use crate::v2::executor::types::ast::{Expr, MemberAccess, Stmt};
+use crate::v2::parser::{self, WorkflowDef};
 
 /* ===================== Test Helpers ===================== */
 
@@ -23,7 +23,7 @@ fn unwrap_block(stmt: Stmt) -> Stmt {
 
 #[test]
 fn test_parse_return_number() {
-    let ast = parser_v2::parse("return 42").expect("Should parse");
+    let ast = crate::v2::parser::parse("return 42").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     // Verify AST structure
@@ -37,7 +37,7 @@ fn test_parse_return_number() {
 
 #[test]
 fn test_parse_return_negative_number() {
-    let ast = parser_v2::parse("return -3.14").expect("Should parse");
+    let ast = crate::v2::parser::parse("return -3.14").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -50,7 +50,7 @@ fn test_parse_return_negative_number() {
 
 #[test]
 fn test_parse_return_boolean_true() {
-    let ast = parser_v2::parse("return true").expect("Should parse");
+    let ast = crate::v2::parser::parse("return true").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -63,7 +63,7 @@ fn test_parse_return_boolean_true() {
 
 #[test]
 fn test_parse_return_boolean_false() {
-    let ast = parser_v2::parse("return false").expect("Should parse");
+    let ast = crate::v2::parser::parse("return false").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -76,7 +76,7 @@ fn test_parse_return_boolean_false() {
 
 #[test]
 fn test_parse_return_string() {
-    let ast = parser_v2::parse(r#"return "hello world""#).expect("Should parse");
+    let ast = crate::v2::parser::parse(r#"return "hello world""#).expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -89,7 +89,7 @@ fn test_parse_return_string() {
 
 #[test]
 fn test_parse_return_empty_string() {
-    let ast = parser_v2::parse(r#"return """#).expect("Should parse");
+    let ast = crate::v2::parser::parse(r#"return """#).expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -104,7 +104,7 @@ fn test_parse_return_empty_string() {
 
 #[test]
 fn test_parse_with_whitespace() {
-    let ast = parser_v2::parse("   return   42   ").expect("Should parse");
+    let ast = crate::v2::parser::parse("   return   42   ").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -117,7 +117,7 @@ fn test_parse_with_whitespace() {
 
 #[test]
 fn test_parse_with_line_comment() {
-    let ast = parser_v2::parse("// This is a comment\nreturn 42").expect("Should parse");
+    let ast = crate::v2::parser::parse("// This is a comment\nreturn 42").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -130,7 +130,7 @@ fn test_parse_with_line_comment() {
 
 #[test]
 fn test_parse_with_block_comment() {
-    let ast = parser_v2::parse("/* Block comment */ return 42").expect("Should parse");
+    let ast = crate::v2::parser::parse("/* Block comment */ return 42").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -145,7 +145,7 @@ fn test_parse_with_block_comment() {
 
 #[test]
 fn test_parse_zero() {
-    let ast = parser_v2::parse("return 0").expect("Should parse");
+    let ast = crate::v2::parser::parse("return 0").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -158,7 +158,7 @@ fn test_parse_zero() {
 
 #[test]
 fn test_parse_decimal_number() {
-    let ast = parser_v2::parse("return 123.456").expect("Should parse");
+    let ast = crate::v2::parser::parse("return 123.456").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -171,7 +171,7 @@ fn test_parse_decimal_number() {
 
 #[test]
 fn test_parse_string_with_spaces() {
-    let ast = parser_v2::parse(r#"return "hello   world   with   spaces""#).expect("Should parse");
+    let ast = crate::v2::parser::parse(r#"return "hello   world   with   spaces""#).expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -186,7 +186,7 @@ fn test_parse_string_with_spaces() {
 
 #[test]
 fn test_parse_identifier() {
-    let ast = parser_v2::parse("return x").expect("Should parse");
+    let ast = crate::v2::parser::parse("return x").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -199,7 +199,7 @@ fn test_parse_identifier() {
 
 #[test]
 fn test_parse_identifier_inputs() {
-    let ast = parser_v2::parse("return inputs").expect("Should parse");
+    let ast = crate::v2::parser::parse("return inputs").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -214,7 +214,7 @@ fn test_parse_identifier_inputs() {
 
 #[test]
 fn test_parse_member_access_simple() {
-    let ast = parser_v2::parse("return inputs.userId").expect("Should parse");
+    let ast = crate::v2::parser::parse("return inputs.userId").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -232,7 +232,7 @@ fn test_parse_member_access_simple() {
 
 #[test]
 fn test_parse_member_access_nested() {
-    let ast = parser_v2::parse("return ctx.user.id").expect("Should parse");
+    let ast = crate::v2::parser::parse("return ctx.user.id").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
@@ -259,7 +259,7 @@ fn test_parse_member_access_nested() {
 
 #[test]
 fn test_parse_member_access_deeply_nested() {
-    let ast = parser_v2::parse("return ctx.user.address.city").expect("Should parse");
+    let ast = crate::v2::parser::parse("return ctx.user.address.city").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     // Verify it's a return statement with nested member access
@@ -280,7 +280,7 @@ fn test_parse_workflow_minimal() {
         return 42
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify body is a block
     match workflow.body {
@@ -304,7 +304,7 @@ fn test_parse_workflow_no_params() {
         return 42
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify no params
 }
@@ -315,7 +315,7 @@ fn test_parse_workflow_with_ctx_and_inputs() {
         return 123
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify body
     match workflow.body {
@@ -340,7 +340,7 @@ fn test_parse_workflow_multiline_body() {
         return 3
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify body has 3 statements
     match workflow.body {
@@ -366,7 +366,7 @@ fn test_parse_workflow_custom_param_names() {
         return data.value
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify custom param names
 }
@@ -377,7 +377,7 @@ fn test_parse_workflow_with_member_access() {
         return inputs.userId
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify body contains member access
     match workflow.body {
@@ -406,7 +406,7 @@ fn test_workflow_serialization_roundtrip() {
         return inputs.userId
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Serialize to JSON
     let json = serde_json::to_string(&workflow).expect("Serialization should succeed");
@@ -425,7 +425,7 @@ fn test_workflow_serialization_roundtrip() {
 
 #[test]
 fn test_statement_serialization_roundtrip() {
-    let program = parser_v2::parse("return 42").expect("Should parse");
+    let program = crate::v2::parser::parse("return 42").expect("Should parse");
 
     // parse() already wraps in Block
 
@@ -457,7 +457,7 @@ fn test_parser_accepts_bare_statement() {
     // parse_workflow() now accepts bare statements - no wrapper needed
     let source = "return 42";
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse bare statement");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse bare statement");
 
     // Verify it's wrapped in a Block
     match workflow.body {
@@ -476,7 +476,7 @@ fn test_parser_accepts_workflow_wrapper() {
         return 42
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 }
 
 /* ===================== Optional Main Function Wrapper Tests ===================== */
@@ -490,7 +490,7 @@ fn test_main_function_wrapper_simple() {
         }
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify body is a block with return statement
     match workflow.body {
@@ -513,7 +513,7 @@ fn test_main_function_wrapper_multiple_statements() {
         }
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify body is a block with three statements
     match workflow.body {
@@ -540,7 +540,7 @@ fn test_main_function_wrapper_with_control_flow() {
         }
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify body is a block with if statement
     match workflow.body {
@@ -565,8 +565,8 @@ fn test_main_function_produces_same_ast_as_bare() {
         return 42
     "#;
 
-    let workflow_wrapped = parser_v2::parse_workflow(with_wrapper).expect("Should parse");
-    let workflow_bare = parser_v2::parse_workflow(bare).expect("Should parse");
+    let workflow_wrapped = crate::v2::parser::parse_workflow(with_wrapper).expect("Should parse");
+    let workflow_bare = crate::v2::parser::parse_workflow(bare).expect("Should parse");
 
     // Both should produce identical AST
     match (&workflow_wrapped.body, &workflow_bare.body) {
@@ -590,7 +590,7 @@ fn test_parse_function_allows_main_wrapper() {
         }
     "#;
 
-    let stmt = parser_v2::parse(source).expect("Should parse");
+    let stmt = crate::v2::parser::parse(source).expect("Should parse");
 
     // Should produce a Block with return statement
     match stmt {
@@ -607,7 +607,7 @@ fn test_parse_for_testing_allows_bare_statements() {
     // The parse() function (for testing) allows bare statements and wraps in Block
     let source = "return 42";
 
-    let stmt = parser_v2::parse(source).expect("Should parse for testing");
+    let stmt = crate::v2::parser::parse(source).expect("Should parse for testing");
 
     // Verify it's wrapped in a Block
     match stmt {
@@ -625,7 +625,7 @@ fn test_parse_invalid_syntax() {
     // Use genuinely invalid syntax that can't be parsed
     let source = "return ===";
 
-    let result = parser_v2::parse(source);
+    let result = crate::v2::parser::parse(source);
     assert!(result.is_err());
 }
 
@@ -639,7 +639,7 @@ fn test_parse_while_loop() {
         }
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify body is a block with one while statement
     match workflow.body {
@@ -676,7 +676,7 @@ fn test_parse_while_with_break() {
         }
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify body contains while with break
     match workflow.body {
@@ -707,7 +707,7 @@ fn test_parse_while_with_continue() {
         }
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify body contains while with continue
     match workflow.body {
@@ -740,7 +740,7 @@ fn test_parse_nested_while() {
         }
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify nested while structure
     match workflow.body {
@@ -767,7 +767,7 @@ fn test_parse_nested_while() {
 #[test]
 fn test_parse_break_standalone() {
     // Test that break can be parsed as a statement (using test API)
-    let ast = parser_v2::parse("break").expect("Should parse");
+    let ast = crate::v2::parser::parse("break").expect("Should parse");
     let stmt = unwrap_block(ast);
     assert!(matches!(stmt, Stmt::Break));
 }
@@ -775,7 +775,7 @@ fn test_parse_break_standalone() {
 #[test]
 fn test_parse_continue_standalone() {
     // Test that continue can be parsed as a statement (using test API)
-    let ast = parser_v2::parse("continue").expect("Should parse");
+    let ast = crate::v2::parser::parse("continue").expect("Should parse");
     let stmt = unwrap_block(ast);
     assert!(matches!(stmt, Stmt::Continue));
 }
@@ -788,7 +788,7 @@ fn test_parse_simple_assignment() {
         x = 42
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify body is a block with one assignment
     match workflow.body {
@@ -813,7 +813,7 @@ fn test_parse_property_assignment() {
         obj.prop = 99
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify property assignment
     match workflow.body {
@@ -842,7 +842,7 @@ fn test_parse_nested_property_assignment() {
         obj.a.b = "test"
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify nested property assignment
     match workflow.body {
@@ -875,7 +875,7 @@ fn test_parse_assignment_with_expression() {
         x = Math.floor(3.7)
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify assignment with function call
     match workflow.body {
@@ -897,7 +897,7 @@ fn test_parse_assignment_with_expression() {
 #[test]
 fn test_parse_assignment_standalone() {
     // Test that assignment can be parsed as a statement (using test API)
-    let ast = parser_v2::parse("x = 42").expect("Should parse");
+    let ast = crate::v2::parser::parse("x = 42").expect("Should parse");
     let stmt = unwrap_block(ast);
     match stmt {
         Stmt::Assign { var, path, value } => {
@@ -917,7 +917,7 @@ fn test_parse_empty_object_literal() {
         return {}
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify body is a block with return statement containing empty object
     match workflow.body {
@@ -943,7 +943,7 @@ fn test_parse_object_literal_single_property() {
         return {code: "E"}
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify object with single property
     match workflow.body {
@@ -971,7 +971,7 @@ fn test_parse_object_literal_multiple_properties() {
         return {code: "E", message: "msg", value: 42}
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify object with multiple properties
     match workflow.body {
@@ -1004,7 +1004,7 @@ fn test_parse_object_literal_shorthand() {
         return {name, age}
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify shorthand properties expand to { name: name, age: age }
     match workflow.body {
@@ -1039,7 +1039,7 @@ fn test_parse_object_literal_mixed_shorthand() {
         return {name, value: 42, age}
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     match workflow.body {
         Stmt::Block { body } => {
@@ -1076,7 +1076,7 @@ fn test_parse_object_literal_with_trailing_comma() {
         return {code: "E", message: "msg",}
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify object parses correctly with trailing comma
     match workflow.body {
@@ -1102,7 +1102,7 @@ fn test_parse_object_literal_nested() {
         return {outer: {inner: 42}}
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify nested object literal
     match workflow.body {
@@ -1137,7 +1137,7 @@ fn test_parse_object_literal_in_assignment() {
         obj = {x: 1, y: 2}
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify object literal in assignment
     match workflow.body {
@@ -1169,7 +1169,7 @@ fn test_parse_object_literal_with_expression_values() {
         return {x: add(1, 2), y: ctx.value}
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify object with expression values
     match workflow.body {
@@ -1204,7 +1204,7 @@ fn test_parse_object_literal_multiline() {
         }
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify multiline object literal parses correctly
     match workflow.body {
@@ -1237,7 +1237,7 @@ fn test_parse_function_call_multiline() {
         )
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify multiline function call parses correctly
     match workflow.body {
@@ -1273,7 +1273,7 @@ fn test_parse_function_call_with_multiline_object() {
         })
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify function call with multiline object parses correctly
     match workflow.body {
@@ -1321,7 +1321,7 @@ fn test_parse_empty_array_literal() {
         return []
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify body is a block with return statement containing empty array
     match workflow.body {
@@ -1347,7 +1347,7 @@ fn test_parse_array_literal_single_element() {
         return [42]
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify array with single element
     match workflow.body {
@@ -1374,7 +1374,7 @@ fn test_parse_array_literal_multiple_elements() {
         return [1, 2, 3, 4, 5]
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify array with multiple elements
     match workflow.body {
@@ -1403,7 +1403,7 @@ fn test_parse_array_literal_mixed_types() {
         return [1, "hello", true, null]
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify array with mixed types
     match workflow.body {
@@ -1433,7 +1433,7 @@ fn test_parse_array_literal_with_trailing_comma() {
         return [1, 2, 3,]
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify array parses correctly with trailing comma
     match workflow.body {
@@ -1459,7 +1459,7 @@ fn test_parse_array_literal_nested() {
         return [[1, 2], [3, 4]]
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify nested array literal
     match workflow.body {
@@ -1503,7 +1503,7 @@ fn test_parse_array_literal_in_assignment() {
         arr = [1, 2, 3]
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify array literal in assignment
     match workflow.body {
@@ -1533,7 +1533,7 @@ fn test_parse_array_literal_with_expression_elements() {
         return [add(1, 2), ctx.value, Math.floor(3.7)]
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify array with expression elements
     match workflow.body {
@@ -1562,7 +1562,7 @@ fn test_parse_array_with_object_elements() {
         return [{x: 1}, {x: 2}]
     "#;
 
-    let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+    let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
 
     // Verify array with object elements
     match workflow.body {

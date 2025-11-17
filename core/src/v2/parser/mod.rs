@@ -6,7 +6,7 @@ use pest::Parser;
 use pest_derive::Parser;
 use serde::{Deserialize, Serialize};
 
-use super::executor_v2::types::ast::{BinaryOp, Expr, MemberAccess, Stmt, VarKind};
+use super::executor::types::ast::{BinaryOp, Expr, MemberAccess, Stmt, VarKind};
 
 pub mod semantic_validator;
 
@@ -39,7 +39,7 @@ pub struct WorkflowDef {
 /* ===================== PEST Parser ===================== */
 
 #[derive(Parser)]
-#[grammar = "interpreter/parser_v2/flow_v2.pest"]
+#[grammar = "v2/parser/flow.pest"]
 struct FlowParser;
 
 /* ===================== Error Types ===================== */

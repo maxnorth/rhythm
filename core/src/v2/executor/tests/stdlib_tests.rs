@@ -3,7 +3,7 @@
 //! Tests function calls and Math stdlib
 
 use super::helpers::parse_workflow_and_build_vm;
-use crate::interpreter::executor_v2::{errors, run_until_done, Control, Stmt, Val, VM};
+use crate::v2::executor::{errors, run_until_done, Control, Stmt, Val, VM};
 use maplit::hashmap;
 use std::collections::HashMap;
 

@@ -3,8 +3,8 @@
 //! Tests that errors in expressions properly escalate to Control::Throw
 
 use super::helpers::parse_workflow_and_build_vm;
-use crate::interpreter::executor_v2::errors;
-use crate::interpreter::executor_v2::{run_until_done, Control, Val, VM};
+use crate::v2::executor::errors;
+use crate::v2::executor::{run_until_done, Control, Val, VM};
 use std::collections::HashMap;
 
 #[test]

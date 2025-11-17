@@ -1,7 +1,7 @@
 //! Tests for Task.run() and outbox functionality
 
 use super::helpers::parse_workflow_and_build_vm;
-use crate::interpreter::executor_v2::{errors, run_until_done, Control, Val};
+use crate::v2::executor::{errors, run_until_done, Control, Val};
 use std::collections::HashMap;
 
 /* ===================== Task.run() Tests ===================== */

@@ -2,8 +2,8 @@
 //!
 //! Tests for Milestone 1: Return statement with literal expressions
 
-use crate::interpreter::executor_v2::tests::helpers::parse_workflow_and_build_vm;
-use crate::interpreter::executor_v2::{errors, run_until_done, Control, Val};
+use crate::v2::executor::tests::helpers::parse_workflow_and_build_vm;
+use crate::v2::executor::{errors, run_until_done, Control, Val};
 use maplit::hashmap;
 use std::collections::HashMap;
 

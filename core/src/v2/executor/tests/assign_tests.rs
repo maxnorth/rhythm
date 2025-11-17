@@ -1,7 +1,7 @@
 //! Tests for assignment statements
 
 use super::helpers::parse_workflow_and_build_vm;
-use crate::interpreter::executor_v2::{run_until_done, Control, Stmt, Val, VM};
+use crate::v2::executor::{run_until_done, Control, Stmt, Val, VM};
 use maplit::hashmap;
 use std::collections::HashMap;
 

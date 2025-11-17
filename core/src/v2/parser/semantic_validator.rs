@@ -60,7 +60,7 @@ pub fn validate_workflow(_workflow: &WorkflowDef) -> ValidationResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::interpreter::parser_v2;
+    use crate::v2::parser;
 
     #[test]
     fn test_validate_workflow_simple() {
@@ -69,7 +69,7 @@ mod tests {
             return 42
         "#;
 
-        let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+        let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
         assert!(validate_workflow(&workflow).is_ok());
     }
 
@@ -84,7 +84,7 @@ let x = 42
 return x
         "#;
 
-        let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+        let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
         assert!(validate_workflow(&workflow).is_ok());
         assert!(workflow.front_matter.is_some());
     }
@@ -98,7 +98,7 @@ return x
             return y
         "#;
 
-        let workflow = parser_v2::parse_workflow(source).expect("Should parse");
+        let workflow = crate::v2::parser::parse_workflow(source).expect("Should parse");
         assert!(validate_workflow(&workflow).is_ok());
     }
 }
