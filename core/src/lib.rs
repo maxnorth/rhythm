@@ -1,3 +1,4 @@
+pub mod adapter;
 pub mod benchmark;
 pub mod cli;
 pub mod config;

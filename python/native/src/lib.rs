@@ -1,4 +1,9 @@
-use ::rhythm_core::{benchmark, cli, db, executions, init, signals, worker, workflows, CreateExecutionParams, ExecutionType};
+//! Python FFI bindings for Rhythm Core
+//!
+//! This module provides thin PyO3 wrappers around the core adapter interface.
+//! All functions delegate to `rhythm_core::adapter` for a stable, language-agnostic API.
+
+use ::rhythm_core::{adapter, benchmark, cli, workflows, ExecutionType};
 use pyo3::prelude::*;
 use serde_json::Value as JsonValue;
 use std::sync::OnceLock;
@@ -24,6 +29,8 @@ fn init_runtime() -> PyResult<()> {
     Ok(())
 }
 
+/* ===================== System ===================== */
+
 /// Initialize Rhythm with configuration options
 #[pyfunction]
 #[pyo3(signature = (database_url=None, config_path=None, auto_migrate=true, require_initialized=true, workflows_json=None))]
@@ -36,24 +43,12 @@ fn initialize_sync(
 ) -> PyResult<()> {
     let runtime = get_runtime();
 
-    let mut builder = init::InitBuilder::new()
-        .auto_migrate(auto_migrate)
-        .require_initialized(require_initialized);
-
-    if let Some(url) = database_url {
-        builder = builder.database_url(url);
-    }
-
-    if let Some(path) = config_path {
-        builder = builder.config_path(path);
-    }
-
     // Parse workflows if provided
-    if let Some(json) = workflows_json {
+    let workflows = if let Some(json) = workflows_json {
         let workflows_data: Vec<serde_json::Value> = serde_json::from_str(&json)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid workflows JSON: {}", e)))?;
 
-        let mut workflows = Vec::new();
+        let mut wf_list = Vec::new();
         for workflow_data in workflows_data {
             let name = workflow_data["name"]
                 .as_str()
@@ -68,16 +63,28 @@ fn initialize_sync(
                 .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("Workflow missing 'file_path' field"))?
                 .to_string();
 
-            workflows.push(workflows::WorkflowFile { name, source, file_path });
+            wf_list.push(workflows::WorkflowFile { name, source, file_path });
         }
-
-        builder = builder.workflows(workflows);
-    }
+        Some(wf_list)
+    } else {
+        None
+    };
 
     runtime
-        .block_on(builder.init())
+        .block_on(adapter::initialize(database_url, config_path, auto_migrate, require_initialized, workflows))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
+
+/// Run migrations
+#[pyfunction]
+fn migrate_sync() -> PyResult<()> {
+    let runtime = get_runtime();
+    runtime
+        .block_on(adapter::migrate())
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+}
+
+/* ===================== Execution Lifecycle ===================== */
 
 /// Create an execution
 #[pyfunction]
@@ -99,11 +106,7 @@ fn create_execution_sync(
     let exec_type = match exec_type.as_str() {
         "task" => ExecutionType::Task,
         "workflow" => ExecutionType::Workflow,
-        _ => {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                "Invalid execution type",
-            ))
-        }
+        _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid execution type")),
     };
 
     let args: JsonValue = serde_json::from_str(&args)
@@ -111,21 +114,19 @@ fn create_execution_sync(
     let kwargs: JsonValue = serde_json::from_str(&kwargs)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
 
-    let params = CreateExecutionParams {
-        id,
-        exec_type,
-        function_name,
-        queue,
-        priority,
-        args,
-        kwargs,
-        max_retries,
-        timeout_seconds,
-        parent_workflow_id,
-    };
-
     runtime
-        .block_on(executions::create_execution(params))
+        .block_on(adapter::create_execution(
+            exec_type,
+            function_name,
+            queue,
+            priority,
+            args,
+            kwargs,
+            max_retries,
+            timeout_seconds,
+            parent_workflow_id,
+            id,
+        ))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
@@ -135,16 +136,10 @@ fn claim_execution_sync(worker_id: String, queues: Vec<String>) -> PyResult<Opti
     let runtime = get_runtime();
 
     let result = runtime
-        .block_on(executions::claim_execution(&worker_id, &queues))
+        .block_on(adapter::claim_execution(worker_id, queues))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
-    if let Some(exec) = result {
-        let json = serde_json::to_string(&exec)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        Ok(Some(json))
-    } else {
-        Ok(None)
-    }
+    Ok(result.map(|json| json.to_string()))
 }
 
 /// Claim multiple executions (batch claiming)
@@ -153,17 +148,10 @@ fn claim_executions_batch_sync(worker_id: String, queues: Vec<String>, limit: i3
     let runtime = get_runtime();
 
     let result = runtime
-        .block_on(executions::claim_executions_batch(&worker_id, &queues, limit))
+        .block_on(adapter::claim_executions_batch(worker_id, queues, limit))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
-    let mut json_executions = Vec::new();
-    for exec in result {
-        let json = serde_json::to_string(&exec)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        json_executions.push(json);
-    }
-
-    Ok(json_executions)
+    Ok(result.into_iter().map(|json| json.to_string()).collect())
 }
 
 /// Complete an execution
@@ -175,7 +163,7 @@ fn complete_execution_sync(execution_id: String, result: String) -> PyResult<()>
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
 
     runtime
-        .block_on(executions::complete_execution(&execution_id, result))
+        .block_on(adapter::complete_execution(execution_id, result))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
@@ -193,7 +181,7 @@ fn complete_executions_batch_sync(completions: Vec<(String, String)>) -> PyResul
     }
 
     runtime
-        .block_on(executions::complete_executions_batch(parsed_completions))
+        .block_on(adapter::complete_executions_batch(parsed_completions))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
@@ -206,7 +194,7 @@ fn fail_execution_sync(execution_id: String, error: String, retry: bool) -> PyRe
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
 
     runtime
-        .block_on(executions::fail_execution(&execution_id, error, retry))
+        .block_on(adapter::fail_execution(execution_id, error, retry))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
@@ -216,16 +204,35 @@ fn get_execution_sync(execution_id: String) -> PyResult<Option<String>> {
     let runtime = get_runtime();
 
     let result = runtime
-        .block_on(executions::get_execution(&execution_id))
+        .block_on(adapter::get_execution(execution_id))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
-    if let Some(exec) = result {
-        let json = serde_json::to_string(&exec)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        Ok(Some(json))
-    } else {
-        Ok(None)
-    }
+    Ok(result.map(|json| json.to_string()))
+}
+
+/* ===================== Workflow Operations ===================== */
+
+/// Start a workflow execution
+#[pyfunction]
+fn start_workflow_sync(workflow_name: String, inputs_json: String) -> PyResult<String> {
+    let runtime = get_runtime();
+
+    let inputs: serde_json::Value = serde_json::from_str(&inputs_json)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid inputs JSON: {}", e)))?;
+
+    runtime
+        .block_on(adapter::start_workflow(workflow_name, inputs))
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+}
+
+/// Execute a single workflow step
+#[pyfunction]
+fn execute_workflow_step_sync(execution_id: String) -> PyResult<String> {
+    let runtime = get_runtime();
+
+    runtime
+        .block_on(adapter::execute_workflow_step(execution_id))
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
 /// Get workflow child tasks
@@ -233,13 +240,15 @@ fn get_execution_sync(execution_id: String) -> PyResult<Option<String>> {
 fn get_workflow_tasks_sync(workflow_id: String) -> PyResult<String> {
     let runtime = get_runtime();
 
-    let child_tasks = runtime
-        .block_on(executions::get_workflow_tasks(&workflow_id))
+    let tasks = runtime
+        .block_on(adapter::get_workflow_tasks(workflow_id))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
-    serde_json::to_string(&child_tasks)
+    serde_json::to_string(&tasks)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
+
+/* ===================== Worker Management ===================== */
 
 /// Update worker heartbeat
 #[pyfunction]
@@ -247,7 +256,7 @@ fn update_heartbeat_sync(worker_id: String, queues: Vec<String>) -> PyResult<()>
     let runtime = get_runtime();
 
     runtime
-        .block_on(worker::update_heartbeat(&worker_id, &queues))
+        .block_on(adapter::update_heartbeat(worker_id, queues))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
@@ -257,19 +266,21 @@ fn stop_worker_sync(worker_id: String) -> PyResult<()> {
     let runtime = get_runtime();
 
     runtime
-        .block_on(worker::stop_worker(&worker_id))
+        .block_on(adapter::stop_worker(worker_id))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
 /// Recover dead workers
 #[pyfunction]
-fn recover_dead_workers_sync(timeout_seconds: i64) -> PyResult<usize> {
+fn recover_dead_workers_sync(timeout_seconds: i32) -> PyResult<i32> {
     let runtime = get_runtime();
 
     runtime
-        .block_on(worker::recover_dead_workers(timeout_seconds))
+        .block_on(adapter::recover_dead_workers(timeout_seconds))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
+
+/* ===================== Signals ===================== */
 
 /// Send a signal to a workflow
 #[pyfunction]
@@ -280,7 +291,7 @@ fn send_signal_sync(workflow_id: String, signal_name: String, payload: String) -
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
 
     runtime
-        .block_on(signals::send_signal(&workflow_id, &signal_name, payload))
+        .block_on(adapter::send_signal(workflow_id, signal_name, payload))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
@@ -290,7 +301,7 @@ fn get_signals_sync(workflow_id: String, signal_name: String) -> PyResult<String
     let runtime = get_runtime();
 
     let signals = runtime
-        .block_on(signals::get_signals(&workflow_id, &signal_name))
+        .block_on(adapter::get_signals(workflow_id, signal_name))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     serde_json::to_string(&signals)
@@ -303,24 +314,13 @@ fn consume_signal_sync(signal_id: String) -> PyResult<()> {
     let runtime = get_runtime();
 
     runtime
-        .block_on(signals::consume_signal(&signal_id))
+        .block_on(adapter::consume_signal(signal_id))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
-/// Run migrations
-#[pyfunction]
-fn migrate_sync() -> PyResult<()> {
-    let runtime = get_runtime();
-
-    runtime
-        .block_on(db::migrate())
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
+/* ===================== Utilities ===================== */
 
 /// Run the CLI
-///
-/// This function takes Python's sys.argv to parse commands and handle all CLI logic.
-/// It's called from Python's __main__.py after any necessary module imports.
 #[pyfunction]
 fn run_cli_sync(args: Vec<String>) -> PyResult<()> {
     let runtime = get_runtime();
@@ -374,38 +374,17 @@ fn run_benchmark_sync(
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
-/// Start a workflow execution
-#[pyfunction]
-fn start_workflow_sync(workflow_name: String, inputs_json: String) -> PyResult<String> {
-    let runtime = get_runtime();
+/* ===================== Python Module ===================== */
 
-    let inputs: serde_json::Value = serde_json::from_str(&inputs_json)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid inputs JSON: {}", e)))?;
-
-    runtime
-        .block_on(workflows::start_workflow(&workflow_name, inputs))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
-
-/// Execute a single workflow step
-#[pyfunction]
-fn execute_workflow_step_sync(execution_id: String) -> PyResult<String> {
-    let runtime = get_runtime();
-
-    let result = runtime
-        .block_on(workflows::execute_workflow_step(&execution_id))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-
-    // Return the result as a string for simplicity
-    let result_str = format!("{:?}", result);
-    Ok(result_str)
-}
-
-/// Python module
+/// Python module definition
 #[pymodule]
 fn rhythm_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // System
     m.add_function(wrap_pyfunction!(init_runtime, m)?)?;
     m.add_function(wrap_pyfunction!(initialize_sync, m)?)?;
+    m.add_function(wrap_pyfunction!(migrate_sync, m)?)?;
+
+    // Execution lifecycle
     m.add_function(wrap_pyfunction!(create_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(claim_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(claim_executions_batch_sync, m)?)?;
@@ -413,17 +392,25 @@ fn rhythm_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(complete_executions_batch_sync, m)?)?;
     m.add_function(wrap_pyfunction!(fail_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(get_execution_sync, m)?)?;
+
+    // Workflow operations
+    m.add_function(wrap_pyfunction!(start_workflow_sync, m)?)?;
+    m.add_function(wrap_pyfunction!(execute_workflow_step_sync, m)?)?;
     m.add_function(wrap_pyfunction!(get_workflow_tasks_sync, m)?)?;
+
+    // Worker management
     m.add_function(wrap_pyfunction!(update_heartbeat_sync, m)?)?;
     m.add_function(wrap_pyfunction!(stop_worker_sync, m)?)?;
     m.add_function(wrap_pyfunction!(recover_dead_workers_sync, m)?)?;
+
+    // Signals
     m.add_function(wrap_pyfunction!(send_signal_sync, m)?)?;
     m.add_function(wrap_pyfunction!(get_signals_sync, m)?)?;
     m.add_function(wrap_pyfunction!(consume_signal_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(migrate_sync, m)?)?;
+
+    // Utilities
     m.add_function(wrap_pyfunction!(run_cli_sync, m)?)?;
     m.add_function(wrap_pyfunction!(run_benchmark_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(start_workflow_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(execute_workflow_step_sync, m)?)?;
+
     Ok(())
 }
