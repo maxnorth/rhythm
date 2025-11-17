@@ -105,7 +105,7 @@ impl From<pest::error::Error<Rule>> for ParseError {
 /// Input example:
 /// ```
 /// Task.run("do-something", { "hey": "hello" })
-/// Task.delay(10)
+/// await Task.run("wait-for-result", {})
 /// Task.run("do-another")
 /// ```
 ///
@@ -1074,7 +1074,7 @@ mod tests {
         let source = r#"
 workflow(ctx, inputs) {
   Task.run("do-something", { "hey": "hello" })
-  await Task.delay(10)
+  await Task.run("await-task", { "value": 10 })
   Task.run("do-another", {})
 }
                 "#;
@@ -1090,11 +1090,12 @@ workflow(ctx, inputs) {
         assert_eq!(result[0]["expression"]["args"][0], "do-something");
         assert_eq!(result[0]["expression"]["args"][1]["hey"], "hello");
 
-        // Second statement: await Task.delay (await statement)
+        // Second statement: await Task.run (await statement)
         assert_eq!(result[1]["type"], "await");
         assert_eq!(result[1]["expression"]["type"], "function_call");
-        assert_eq!(result[1]["expression"]["name"], json!(["Task", "delay"]));
-        assert_eq!(result[1]["expression"]["args"][0], 10);
+        assert_eq!(result[1]["expression"]["name"], json!(["Task", "run"]));
+        assert_eq!(result[1]["expression"]["args"][0], "await-task");
+        assert_eq!(result[1]["expression"]["args"][1]["value"], 10);
 
         // Third statement: Task.run with empty object
         assert_eq!(result[2]["type"], "expression_statement");
@@ -1184,19 +1185,6 @@ workflow(ctx, inputs) {
     }
 
     #[test]
-    fn test_parse_sleep_non_numeric() {
-        // With generic function system, parser allows any argument type
-        // Runtime validation happens in the executor
-        let source = r#"workflow(ctx, inputs) { await Task.delay("not a number") }"#;
-        let result = parse_workflow(source);
-        assert!(result.is_ok(), "Parser should accept any argument type");
-        let parsed = result.unwrap();
-        assert_eq!(parsed[0]["type"], "await");
-        assert_eq!(parsed[0]["expression"]["name"], json!(["Task", "delay"]));
-        assert_eq!(parsed[0]["expression"]["args"][0], "not a number");
-    }
-
-    #[test]
     fn test_parse_single_quotes() {
         let source = r#"workflow(ctx, inputs) { Task.run('my-task', {}) }"#;
         let result = parse_workflow(source).unwrap();
@@ -1211,7 +1199,7 @@ workflow(ctx, inputs) {
   // This is a comment
   Task.run("first", {})
   // Another comment
-  await Task.delay(5)
+  await Task.run("second", {})
 }
                 "#;
         let result = parse_workflow(source).unwrap();
@@ -1914,33 +1902,6 @@ workflow(ctx, inputs) {
     }
 
     #[test]
-    fn test_await_sleep() {
-        // Test await Task.delay() syntax
-        let source = r#"
-workflow(ctx, inputs) {
-  await Task.run("start", {})
-  await Task.delay(5)
-  await Task.run("finish", {})
-}
-        "#;
-        let result = parse_workflow(source).unwrap();
-        assert_eq!(result.len(), 3);
-
-        // First task
-        assert_eq!(result[0]["type"], "await");
-        assert_eq!(result[0]["expression"]["name"], json!(["Task", "run"]));
-
-        // Sleep with await
-        assert_eq!(result[1]["type"], "await");
-        assert_eq!(result[1]["expression"]["name"], json!(["Task", "delay"]));
-        assert_eq!(result[1]["expression"]["args"][0], 5);
-
-        // Last task
-        assert_eq!(result[2]["type"], "await");
-        assert_eq!(result[2]["expression"]["name"], json!(["Task", "run"]));
-    }
-
-    #[test]
     fn test_dollar_sign_escape() {
         // Test that $$ in literal strings becomes a single $
         let source = r#"workflow(ctx, inputs) {
@@ -1953,23 +1914,6 @@ workflow(ctx, inputs) {
         let args = &result[0]["expression"]["args"][1];
         assert_eq!(args["price"], "$99.99");
         assert_eq!(args["note"], "Only $50!");
-    }
-
-    #[test]
-    fn test_sleep_without_await() {
-        // Test that Task.delay() without await creates expression_statement
-        let source = r#"
-workflow(ctx, inputs) {
-  Task.delay(10)
-}
-        "#;
-        let result = parse_workflow(source).unwrap();
-        assert_eq!(result.len(), 1);
-
-        assert_eq!(result[0]["type"], "expression_statement");
-        assert_eq!(result[0]["expression"]["type"], "function_call");
-        assert_eq!(result[0]["expression"]["name"], json!(["Task", "delay"]));
-        assert_eq!(result[0]["expression"]["args"][0], 10);
     }
 
     // === IF/ELSE CONDITIONAL TESTS ===

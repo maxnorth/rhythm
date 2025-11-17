@@ -185,23 +185,6 @@ fn create_scope_stack(locals: &mut JsonValue) {
     }
 }
 
-/// Execute a function call by resolving from stdlib
-async fn execute_function_call(
-    name_parts: &[String],
-    args: &[JsonValue],
-    locals: &JsonValue,
-    execution_id: &str,
-    pool: &sqlx::PgPool,
-) -> Result<JsonValue> {
-    // Resolve arguments
-    let resolved_args: Vec<JsonValue> = args.iter()
-        .map(|arg| resolve_variables(arg, locals))
-        .collect();
-
-    // Call the stdlib function
-    StdlibRegistry::call(name_parts, &resolved_args, pool, execution_id).await
-}
-
 /// Bulk create all pending tasks
 ///
 /// This function creates all tasks that were accumulated during expression evaluation.

@@ -1,7 +1,6 @@
 pub mod benchmark;
 pub mod cli;
 pub mod config;
-pub mod continuation_test;
 pub mod db;
 pub mod executions;
 pub mod init;

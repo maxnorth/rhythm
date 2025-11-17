@@ -386,7 +386,7 @@ fn validate_task_run(args: &[JsonValue], ctx: &ValidationContext) -> Result<()> 
 
 /// Validate Task.delay() function call
 fn validate_task_delay(args: &[JsonValue], ctx: &ValidationContext) -> Result<()> {
-    // Task.delay(duration: number)
+    // Task.delay(delay_ms: number)
     if args.len() != 1 {
         return Err(ValidationError::WrongArgumentCount {
             function: "Task.delay".to_string(),
@@ -397,28 +397,28 @@ fn validate_task_delay(args: &[JsonValue], ctx: &ValidationContext) -> Result<()
         }.into());
     }
 
-    // Argument must be a number
-    if !args[0].is_number() && !is_variable_or_expression(&args[0]) {
+    // First argument must be a number (delay in milliseconds)
+    // Note: Could be a variable, so we check if it's a literal
+    if args[0].is_string() {
+        // String literals are not valid for delay
         return Err(ValidationError::InvalidArgumentType {
             function: "Task.delay".to_string(),
             argument_index: 0,
-            expected: "number (milliseconds)".to_string(),
+            expected: "number (delay in milliseconds)".to_string(),
+            got: "string".to_string(),
+            line: None,
+        }.into());
+    } else if !args[0].is_number() && !is_variable_or_expression(&args[0]) {
+        return Err(ValidationError::InvalidArgumentType {
+            function: "Task.delay".to_string(),
+            argument_index: 0,
+            expected: "number (delay in milliseconds)".to_string(),
             got: format!("{:?}", args[0]),
             line: None,
         }.into());
     }
 
-    // If it's a literal number, check it's positive
-    if let Some(duration) = args[0].as_i64() {
-        if duration < 0 {
-            return Err(ValidationError::Other {
-                message: "Task.delay() duration must be non-negative".to_string(),
-                line: None,
-            }.into());
-        }
-    }
-
-    // Validate the expression
+    // Validate argument as expression
     validate_expression(&args[0], ctx)?;
 
     Ok(())

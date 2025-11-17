@@ -152,15 +152,14 @@ pub async fn start_workflow(
         r#"
         INSERT INTO workflow_execution_context (
             execution_id, workflow_definition_id,
-            ast_path, locals, awaiting_task_id
-        ) VALUES ($1, $2, $3, $4, $5)
+            ast_path, locals
+        ) VALUES ($1, $2, $3, $4)
         "#,
     )
     .bind(&execution_id)
     .bind(workflow_def_id)
     .bind(serde_json::json!([0])) // Start at path [0]
     .bind(serde_json::json!({})) // Empty locals initially
-    .bind(None::<String>) // Not awaiting any task
     .execute(pool.as_ref())
     .await
     .context("Failed to create workflow execution context")?;
@@ -509,24 +508,6 @@ mod tests {
     // === SEMANTIC VALIDATION TESTS ===
 
     #[test]
-    fn test_semantic_validation_delay_wrong_type() {
-        use crate::interpreter::{parse_workflow, validate_workflow};
-
-        let source = r#"
-workflow(ctx, inputs) {
-    await Task.delay("not a number")
-}
-        "#;
-        let ast = parse_workflow(source).unwrap();
-        let ast_json = serde_json::to_value(&ast).unwrap();
-
-        let result = validate_workflow(&ast_json);
-        assert!(result.is_err(), "Expected validation to fail for Task.delay with string argument");
-        let err = result.unwrap_err();
-        assert!(err.to_string().contains("expects number"), "Error should mention type mismatch");
-    }
-
-    #[test]
     fn test_semantic_validation_task_run_missing_args() {
         use crate::interpreter::{parse_workflow, validate_workflow};
 
@@ -587,7 +568,7 @@ workflow(ctx, inputs) {
         let source = r#"
 workflow(ctx, inputs) {
     let result = await Task.run("my-task", {})
-    await Task.delay(1000)
+    await Task.run("another-task", {})
 }
         "#;
         let ast = parse_workflow(source).unwrap();
