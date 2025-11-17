@@ -24,13 +24,11 @@ class Worker:
         self.queues = queues
         self.running = False
         self.current_executions = 0
-        self.listener_task: Optional[asyncio.Task] = None
+        self.executor_task: Optional[asyncio.Task] = None
         self.heartbeat_task: Optional[asyncio.Task] = None
-        self.claimer_task: Optional[asyncio.Task] = None
         self.recovery_task: Optional[asyncio.Task] = None
 
-        # Local task queue for prefetching
-        self.local_queue: asyncio.Queue = asyncio.Queue(maxsize=settings.worker_max_concurrent * 2)
+        # Concurrency control
         self.semaphore: asyncio.Semaphore = asyncio.Semaphore(settings.worker_max_concurrent)
 
         # Completion batching
@@ -50,8 +48,7 @@ class Worker:
 
         # Start background tasks
         self.heartbeat_task = asyncio.create_task(self._heartbeat_loop())
-        self.listener_task = asyncio.create_task(self._listener_loop())
-        self.claimer_task = asyncio.create_task(self._claimer_loop())
+        self.executor_task = asyncio.create_task(self._executor_loop())
         self.recovery_task = asyncio.create_task(self._recovery_loop())
         self.completer_task = asyncio.create_task(self._completer_loop())
 
@@ -59,8 +56,7 @@ class Worker:
         try:
             await asyncio.gather(
                 self.heartbeat_task,
-                self.listener_task,
-                self.claimer_task,
+                self.executor_task,
                 self.recovery_task,
                 self.completer_task,
             )
@@ -73,7 +69,7 @@ class Worker:
         self.running = False
 
         # Cancel background tasks
-        for task in [self.heartbeat_task, self.listener_task, self.claimer_task, self.recovery_task, self.completer_task]:
+        for task in [self.heartbeat_task, self.executor_task, self.recovery_task, self.completer_task]:
             if task and not task.done():
                 task.cancel()
 
@@ -120,54 +116,30 @@ class Worker:
         """Update worker heartbeat in database via Rust"""
         RustBridge.update_heartbeat(self.worker_id, self.queues)
 
-    async def _listener_loop(self):
-        """Pull tasks from local queue and execute them"""
-        logger.info(f"Worker {self.worker_id} executing from local queue")
+    async def _executor_loop(self):
+        """Continuously claim and execute tasks"""
+        logger.info(f"Worker {self.worker_id} starting executor loop")
 
         while self.running:
             try:
-                # Wait for a task from the local queue (with timeout)
-                execution = await asyncio.wait_for(self.local_queue.get(), timeout=1.0)
+                # Claim a single execution
+                exec_dict = RustBridge.claim_execution(self.worker_id, self.queues)
 
-                # Execute with semaphore for concurrency control
-                asyncio.create_task(self._execute_with_semaphore(execution))
+                if exec_dict:
+                    execution = Execution.from_dict(exec_dict)
+                    logger.info(
+                        f"Claimed {execution.type} execution {execution.id}: {execution.function_name}"
+                    )
+                    # Execute with semaphore for concurrency control
+                    asyncio.create_task(self._execute_with_semaphore(execution))
+                else:
+                    # No work available, wait before trying again
+                    await asyncio.sleep(settings.worker_poll_interval)
 
-            except asyncio.TimeoutError:
-                # No tasks in queue, just loop again
-                continue
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Error in executor loop: {e}")
-                await asyncio.sleep(1)
-
-    async def _claimer_loop(self):
-        """Continuously claim tasks and fill the local queue"""
-        logger.info(f"Worker {self.worker_id} starting claimer loop")
-
-        while self.running:
-            try:
-                # Check queue space first
-                queue_space = self.local_queue.maxsize - self.local_queue.qsize()
-
-                if queue_space > 0:
-                    # Claim up to the available space
-                    claimed = await self._claim_executions_batch(queue_space)
-                    for execution in claimed:
-                        await self.local_queue.put(execution)
-
-                    # If we claimed fewer than requested, no more tasks available
-                    # Wait before trying again (configured poll interval)
-                    if len(claimed) < queue_space:
-                        await asyncio.sleep(settings.worker_poll_interval)
-                else:
-                    # Queue full, wait for space
-                    await asyncio.sleep(0.1)
-
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Error in claimer loop: {e}")
                 await asyncio.sleep(1)
 
     async def _recovery_loop(self):
@@ -218,18 +190,6 @@ class Worker:
             # Re-add to queue on failure
             async with self.completion_lock:
                 self.completion_queue.extend(batch)
-
-    async def _claim_executions_batch(self, limit: int) -> List[Execution]:
-        """Claim multiple pending executions from the queue via Rust (batch claiming)"""
-        exec_dicts = RustBridge.claim_executions_batch(self.worker_id, self.queues, limit)
-        executions = []
-        for exec_dict in exec_dicts:
-            execution = Execution.from_dict(exec_dict)
-            logger.info(
-                f"Claimed {execution.type} execution {execution.id}: {execution.function_name}"
-            )
-            executions.append(execution)
-        return executions
 
     async def _execute_with_semaphore(self, execution: Execution):
         """Execute with semaphore-based concurrency control"""

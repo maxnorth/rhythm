@@ -78,19 +78,6 @@ pub async fn claim_execution(worker_id: String, queues: Vec<String>) -> Result<O
     Ok(execution.map(|e| serde_json::to_value(e).unwrap()))
 }
 
-/// Claim multiple executions for a worker (batch)
-pub async fn claim_executions_batch(
-    worker_id: String,
-    queues: Vec<String>,
-    limit: i32,
-) -> Result<Vec<JsonValue>> {
-    let executions = executions::claim_executions_batch(&worker_id, &queues, limit).await?;
-    Ok(executions
-        .into_iter()
-        .map(|e| serde_json::to_value(e).unwrap())
-        .collect())
-}
-
 /// Complete an execution with a result
 pub async fn complete_execution(execution_id: String, result: JsonValue) -> Result<()> {
     executions::complete_execution(&execution_id, result).await

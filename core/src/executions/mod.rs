@@ -15,7 +15,7 @@ mod query;
 mod tests;
 
 // Re-export public API
-pub use claim::{claim_execution, claim_executions_batch};
+pub use claim::claim_execution;
 pub use create::create_execution;
 pub use lifecycle::{
     cancel_execution, complete_execution, complete_executions_batch, fail_execution,

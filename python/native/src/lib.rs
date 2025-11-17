@@ -142,18 +142,6 @@ fn claim_execution_sync(worker_id: String, queues: Vec<String>) -> PyResult<Opti
     Ok(result.map(|json| json.to_string()))
 }
 
-/// Claim multiple executions (batch claiming)
-#[pyfunction]
-fn claim_executions_batch_sync(worker_id: String, queues: Vec<String>, limit: i32) -> PyResult<Vec<String>> {
-    let runtime = get_runtime();
-
-    let result = runtime
-        .block_on(adapter::claim_executions_batch(worker_id, queues, limit))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-
-    Ok(result.into_iter().map(|json| json.to_string()).collect())
-}
-
 /// Complete an execution
 #[pyfunction]
 fn complete_execution_sync(execution_id: String, result: String) -> PyResult<()> {
@@ -387,7 +375,6 @@ fn rhythm_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Execution lifecycle
     m.add_function(wrap_pyfunction!(create_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(claim_execution_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(claim_executions_batch_sync, m)?)?;
     m.add_function(wrap_pyfunction!(complete_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(complete_executions_batch_sync, m)?)?;
     m.add_function(wrap_pyfunction!(fail_execution_sync, m)?)?;
