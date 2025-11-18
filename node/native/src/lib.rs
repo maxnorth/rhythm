@@ -11,8 +11,7 @@ pub async fn create_execution(
     exec_type: String,
     function_name: String,
     queue: String,
-    args: String,
-    kwargs: String,
+    inputs: String,
     max_retries: i32,
     parent_workflow_id: Option<String>,
 ) -> Result<String> {
@@ -22,19 +21,15 @@ pub async fn create_execution(
         _ => return Err(Error::from_reason("Invalid execution type")),
     };
 
-    let args: JsonValue = serde_json::from_str(&args)
-        .map_err(|e| Error::from_reason(format!("Invalid args JSON: {}", e)))?;
-
-    let kwargs: JsonValue = serde_json::from_str(&kwargs)
-        .map_err(|e| Error::from_reason(format!("Invalid kwargs JSON: {}", e)))?;
+    let inputs: JsonValue = serde_json::from_str(&inputs)
+        .map_err(|e| Error::from_reason(format!("Invalid inputs JSON: {}", e)))?;
 
     let params = CreateExecutionParams {
         id: None,
         exec_type,
         function_name,
         queue,
-        args,
-        kwargs,
+        inputs,
         max_retries,
         parent_workflow_id,
     };

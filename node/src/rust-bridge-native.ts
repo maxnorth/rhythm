@@ -26,8 +26,7 @@ export interface CreateExecutionParams {
   execType: string;
   functionName: string;
   queue: string;
-  args: any[];
-  kwargs: Record<string, any>;
+  inputs: Record<string, any>;
   maxRetries: number;
   parentWorkflowId?: string;
 }
@@ -45,8 +44,7 @@ class RustBridgeImpl {
       params.execType,
       params.functionName,
       params.queue,
-      JSON.stringify(params.args),
-      JSON.stringify(params.kwargs),
+      JSON.stringify(params.inputs),
       params.maxRetries,
       params.parentWorkflowId ?? null
     );

@@ -88,13 +88,12 @@ fn migrate_sync() -> PyResult<()> {
 
 /// Create an execution
 #[pyfunction]
-#[pyo3(signature = (exec_type, function_name, queue, args, kwargs, max_retries, parent_workflow_id=None, id=None))]
+#[pyo3(signature = (exec_type, function_name, queue, inputs, max_retries, parent_workflow_id=None, id=None))]
 fn create_execution_sync(
     exec_type: String,
     function_name: String,
     queue: String,
-    args: String,
-    kwargs: String,
+    inputs: String,
     max_retries: i32,
     parent_workflow_id: Option<String>,
     id: Option<String>,
@@ -107,9 +106,7 @@ fn create_execution_sync(
         _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid execution type")),
     };
 
-    let args: JsonValue = serde_json::from_str(&args)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-    let kwargs: JsonValue = serde_json::from_str(&kwargs)
+    let inputs: JsonValue = serde_json::from_str(&inputs)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
 
     runtime
@@ -117,8 +114,7 @@ fn create_execution_sync(
             exec_type,
             function_name,
             queue,
-            args,
-            kwargs,
+            inputs,
             max_retries,
             parent_workflow_id,
             id,

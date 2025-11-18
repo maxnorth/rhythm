@@ -48,18 +48,15 @@ class ExecutableProxy:
             **new_config,
         )
 
-    async def queue(self, *args, **kwargs) -> str:
-        """Enqueue this execution"""
+    async def queue(self, **inputs) -> str:
+        """Enqueue this execution with keyword arguments as inputs"""
 
         return await queue_execution(
             exec_type=self.exec_type,
             function_name=self.function_name,
-            args=args,
-            kwargs=kwargs,
+            inputs=inputs,
             queue=self.config["queue"],
-            priority=self.config["priority"],
             max_retries=self.config["retries"],
-            timeout_seconds=self.config["timeout"],
         )
 
     def __call__(self, *args, **kwargs):

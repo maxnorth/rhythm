@@ -17,8 +17,8 @@ pub async fn create_execution(params: CreateExecutionParams) -> Result<String> {
         r#"
         INSERT INTO executions (
             id, type, function_name, queue, status,
-            args, kwargs, max_retries, parent_workflow_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            inputs, max_retries, parent_workflow_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (id) DO NOTHING
         RETURNING id, (xmax = 0) AS inserted
         "#,
@@ -28,8 +28,7 @@ pub async fn create_execution(params: CreateExecutionParams) -> Result<String> {
     .bind(&params.function_name)
     .bind(&params.queue)
     .bind(ExecutionStatus::Pending)
-    .bind(&params.args)
-    .bind(&params.kwargs)
+    .bind(&params.inputs)
     .bind(&params.max_retries)
     .bind(&params.parent_workflow_id)
     .fetch_optional(pool.as_ref())

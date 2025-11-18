@@ -409,12 +409,12 @@ async fn enqueue_tasks(
         _ => return Err(anyhow!("Unknown tasktype")),
     };
 
-    let mut kwargs = serde_json::Map::new();
+    let mut inputs_map = serde_json::Map::new();
     if params.payload_size > 0 {
-        kwargs.insert("payload_size".to_string(), json!(params.payload_size));
+        inputs_map.insert("payload_size".to_string(), json!(params.payload_size));
     }
     if params.task_type == "compute" {
-        kwargs.insert("iterations".to_string(), json!(params.compute_iterations));
+        inputs_map.insert("iterations".to_string(), json!(params.compute_iterations));
     }
 
     for i in 0..params.tasks {
@@ -425,8 +425,7 @@ async fn enqueue_tasks(
             exec_type: ExecutionType::Task,
             function_name: function_name.to_string(),
             queue: queue.to_string(),
-            args: json!([]),
-            kwargs: serde_json::Value::Object(kwargs.clone()),
+            inputs: serde_json::Value::Object(inputs_map.clone()),
             max_retries: 3,
             parent_workflow_id: None,
         })

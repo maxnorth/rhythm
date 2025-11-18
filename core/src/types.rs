@@ -30,8 +30,7 @@ pub struct Execution {
     pub queue: String,
     pub status: ExecutionStatus,
 
-    pub args: JsonValue,
-    pub kwargs: JsonValue,
+    pub inputs: JsonValue,
 
     pub result: Option<JsonValue>,
     pub error: Option<JsonValue>,
@@ -51,8 +50,7 @@ pub struct CreateExecutionParams {
     pub exec_type: ExecutionType,
     pub function_name: String,
     pub queue: String,
-    pub args: JsonValue,
-    pub kwargs: JsonValue,
+    pub inputs: JsonValue,
     pub max_retries: i32,
     pub parent_workflow_id: Option<String>,
 }

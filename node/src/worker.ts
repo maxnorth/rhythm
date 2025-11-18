@@ -144,9 +144,9 @@ export class Worker {
       const timeout = execution.timeout_seconds || settings.defaultTimeout;
       const timeoutMs = timeout * 1000;
 
-      // Execute with timeout
+      // Execute with timeout - pass inputs as object
       const result = await Promise.race([
-        fn(...execution.args, ...Object.values(execution.kwargs)),
+        fn(execution.inputs),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error(`Execution timed out after ${timeout}s`)), timeoutMs)
         ),

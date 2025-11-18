@@ -8,23 +8,17 @@ import type { ExecutionStatus } from './types.js';
 export async function queueExecution(params: {
   execType: string;
   functionName: string;
-  args: any[];
-  kwargs?: Record<string, any>;
+  inputs: Record<string, any>;
   queue: string;
-  priority?: number;
   maxRetries?: number;
-  timeoutSeconds?: number;
   parentWorkflowId?: string;
 }): Promise<string> {
   const executionId = RustBridge.createExecution({
     execType: params.execType,
     functionName: params.functionName,
     queue: params.queue,
-    priority: params.priority ?? 5,
-    args: params.args,
-    kwargs: params.kwargs || {},
+    inputs: params.inputs,
     maxRetries: params.maxRetries ?? 3,
-    timeoutSeconds: params.timeoutSeconds,
     parentWorkflowId: params.parentWorkflowId,
   });
 

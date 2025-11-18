@@ -213,15 +213,15 @@ async fn bulk_create_pending_tasks(
             _ => anyhow::bail!("Unknown task type: {}", pending_task.task_type),
         };
 
-        // For Task.run, the second argument is kwargs
-        let kwargs = if pending_task.task_type == "run" {
+        // For Task.run, the second argument is the inputs object
+        let inputs = if pending_task.task_type == "run" {
             pending_task.args.get(1).cloned().unwrap_or_else(|| json!({}))
         } else {
             json!({})
         };
 
         // For Task.delay, the first argument is the delay duration
-        let args = if pending_task.task_type == "delay" {
+        let _args = if pending_task.task_type == "delay" {
             pending_task.args.clone()
         } else {
             vec![]
@@ -232,8 +232,7 @@ async fn bulk_create_pending_tasks(
             exec_type: ExecutionType::Task,
             function_name,
             queue: "default".to_string(),
-            args: json!(args),
-            kwargs,
+            inputs,
             max_retries: 3,
             parent_workflow_id: Some(parent_workflow_id.to_string()),
         };
@@ -370,19 +369,19 @@ pub async fn execute_workflow_step(execution_id: &str) -> Result<StepResult> {
         vec![PathSegment::Index(0)]
     };
 
-    // On first execution, initialize inputs from the execution's kwargs
+    // On first execution, initialize inputs from the execution's inputs
     if ast_path.is_empty() && !locals.get("inputs").is_some() {
         let exec_info: Option<(JsonValue,)> = sqlx::query_as(
-            "SELECT kwargs FROM executions WHERE id = $1"
+            "SELECT inputs FROM executions WHERE id = $1"
         )
         .bind(execution_id)
         .fetch_optional(pool.as_ref())
         .await
         .context("Failed to load execution info")?;
 
-        if let Some((kwargs,)) = exec_info {
+        if let Some((inputs,)) = exec_info {
             if let Some(obj) = locals.as_object_mut() {
-                obj.insert("inputs".to_string(), kwargs);
+                obj.insert("inputs".to_string(), inputs);
             }
         }
 

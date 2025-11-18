@@ -125,8 +125,8 @@ pub async fn start_workflow(
         r#"
         INSERT INTO executions (
             id, type, function_name, queue, status,
-            args, kwargs, max_retries
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            inputs, max_retries
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
         "#,
     )
     .bind(&execution_id)
@@ -134,8 +134,7 @@ pub async fn start_workflow(
     .bind(workflow_name)
     .bind("default") // Use default queue
     .bind(&ExecutionStatus::Pending)
-    .bind(serde_json::json!([])) // Empty args
-    .bind(&inputs) // inputs go in kwargs
+    .bind(&inputs)
     .bind(0) // No retries for workflows
     .execute(pool.as_ref())
     .await;

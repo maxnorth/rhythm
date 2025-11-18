@@ -33,8 +33,7 @@ class Execution(BaseModel):
     queue: str
     status: ExecutionStatus
 
-    args: list[Any] = Field(default_factory=list)
-    kwargs: dict[str, Any] = Field(default_factory=dict)
+    inputs: dict[str, Any] = Field(default_factory=dict)
 
     result: Optional[Any] = None
     error: Optional[dict[str, Any]] = None
@@ -52,7 +51,7 @@ class Execution(BaseModel):
         """Create from database record"""
         data = dict(record)
         # Parse JSONB fields
-        for field in ["args", "kwargs", "result", "error"]:
+        for field in ["inputs", "result", "error"]:
             if field in data and data[field] is not None:
                 if isinstance(data[field], str):
                     data[field] = json.loads(data[field])

@@ -11,12 +11,9 @@ logger = logging.getLogger(__name__)
 async def queue_execution(
     exec_type: str,
     function_name: str,
-    args: tuple,
-    kwargs: dict,
+    inputs: dict,
     queue: str,
-    priority: int = 5,
     max_retries: int = 3,
-    timeout_seconds: Optional[int] = None,
     parent_workflow_id: Optional[str] = None,
 ) -> str:
     """
@@ -25,12 +22,9 @@ async def queue_execution(
     Args:
         exec_type: Type of execution ('task', 'workflow')
         function_name: Fully qualified function name
-        args: Positional arguments
-        kwargs: Keyword arguments
+        inputs: Input parameters as a dictionary
         queue: Queue name
-        priority: Priority (0-10, higher = more urgent)
         max_retries: Maximum retry attempts
-        timeout_seconds: Timeout in seconds
         parent_workflow_id: Parent workflow ID (for workflow tasks)
 
     Returns:
@@ -40,11 +34,8 @@ async def queue_execution(
         exec_type=exec_type,
         function_name=function_name,
         queue=queue,
-        priority=priority,
-        args=list(args),
-        kwargs=kwargs,
+        inputs=inputs,
         max_retries=max_retries,
-        timeout_seconds=timeout_seconds,
         parent_workflow_id=parent_workflow_id,
     )
 

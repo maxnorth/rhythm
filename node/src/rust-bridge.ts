@@ -9,11 +9,8 @@ export interface CreateExecutionParams {
   execType: string;
   functionName: string;
   queue: string;
-  priority: number;
-  args: any[];
-  kwargs: Record<string, any>;
+  inputs: Record<string, any>;
   maxRetries: number;
-  timeoutSeconds?: number;
   parentWorkflowId?: string;
 }
 

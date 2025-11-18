@@ -139,9 +139,9 @@ class Worker:
             # Set timeout
             timeout = execution.timeout_seconds or settings.default_timeout
 
-            # Execute with timeout
+            # Execute with timeout - unpack inputs as keyword arguments
             result = await asyncio.wait_for(
-                fn(*execution.args, **execution.kwargs), timeout=timeout
+                fn(**execution.inputs), timeout=timeout
             )
 
             # Mark as completed
@@ -154,11 +154,11 @@ class Worker:
         """Execute builtin.resume_workflow - resume a suspended workflow"""
         logger.info(f"Executing builtin.resume_workflow for execution {execution.id}")
 
-        # Extract workflow_id from args (first element)
-        if not execution.args or len(execution.args) == 0:
-            raise ValueError("builtin.resume_workflow requires workflow_id in args[0]")
+        # Extract workflow_id from inputs
+        workflow_id = execution.inputs.get("workflow_id")
+        if not workflow_id:
+            raise ValueError("builtin.resume_workflow requires workflow_id in inputs")
 
-        workflow_id = execution.args[0]
         logger.info(f"Resuming workflow {workflow_id}")
 
         # Call Rust execute_workflow_step to resume the workflow

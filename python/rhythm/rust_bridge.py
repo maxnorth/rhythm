@@ -49,8 +49,7 @@ class RustBridge:
         exec_type: str,
         function_name: str,
         queue: str,
-        args: List[Any],
-        kwargs: Dict[str, Any],
+        inputs: Dict[str, Any],
         max_retries: int,
         parent_workflow_id: Optional[str] = None,
     ) -> str:
@@ -59,8 +58,7 @@ class RustBridge:
             exec_type=exec_type,
             function_name=function_name,
             queue=queue,
-            args=json.dumps(args),
-            kwargs=json.dumps(kwargs),
+            inputs=json.dumps(inputs),
             max_retries=max_retries,
             parent_workflow_id=parent_workflow_id,
         )
