@@ -24,13 +24,6 @@ class ExecutionStatus(str, Enum):
     FAILED = "failed"
 
 
-class WorkerStatus(str, Enum):
-    """Status of a worker"""
-
-    RUNNING = "running"
-    STOPPED = "stopped"
-
-
 class Execution(BaseModel):
     """An execution (task or workflow)"""
 
@@ -77,22 +70,4 @@ class Execution(BaseModel):
         # Rust returns exec_type as "type", rename it
         if "exec_type" in data:
             data["type"] = data.pop("exec_type")
-        return cls(**data)
-
-
-class WorkerHeartbeat(BaseModel):
-    """Worker heartbeat record"""
-
-    worker_id: str
-    last_heartbeat: datetime
-    queues: list[str]
-    status: WorkerStatus
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-    @classmethod
-    def from_record(cls, record) -> "WorkerHeartbeat":
-        """Create from database record"""
-        data = dict(record)
-        if isinstance(data.get("metadata"), str):
-            data["metadata"] = json.loads(data["metadata"])
         return cls(**data)

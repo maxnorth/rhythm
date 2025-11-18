@@ -94,33 +94,6 @@ class RustBridgeImpl {
     return result ? JSON.parse(result) : null;
   }
 
-  async updateHeartbeat(workerId: string, queues: string[]): Promise<void> {
-    if (!bindings) {
-      console.warn('RustBridge.updateHeartbeat is a stub - using native bindings');
-      return;
-    }
-
-    await bindings.updateHeartbeat(workerId, queues);
-  }
-
-  async stopWorker(workerId: string): Promise<void> {
-    if (!bindings) {
-      console.warn('RustBridge.stopWorker is a stub - using native bindings');
-      return;
-    }
-
-    await bindings.stopWorker(workerId);
-  }
-
-  async recoverDeadWorkers(timeoutSeconds: number): Promise<number> {
-    if (!bindings) {
-      console.warn('RustBridge.recoverDeadWorkers is a stub - using native bindings');
-      return 0;
-    }
-
-    return await bindings.recoverDeadWorkers(timeoutSeconds);
-  }
-
   async migrate(): Promise<void> {
     if (!bindings) {
       throw new Error('Native bindings required for migrations. Build with: cd ../node-bindings && npm run build');

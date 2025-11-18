@@ -65,22 +65,6 @@ pub struct CreateExecutionParams {
     pub parent_workflow_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
-#[sqlx(type_name = "text", rename_all = "lowercase")]
-pub enum WorkerStatus {
-    Running,
-    Stopped,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkerHeartbeat {
-    pub worker_id: String,
-    pub last_heartbeat: DateTime<Utc>,
-    pub queues: Vec<String>,
-    pub status: WorkerStatus,
-    pub metadata: JsonValue,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionListFilter {
     pub queue: Option<String>,

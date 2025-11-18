@@ -8,7 +8,7 @@ import traceback
 
 from rhythm.config import settings
 from rhythm.rust_bridge import RustBridge
-from rhythm.models import Execution, ExecutionType, WorkerStatus
+from rhythm.models import Execution, ExecutionType
 from rhythm.registry import get_function
 from rhythm.utils import generate_id, calculate_retry_delay
 from rhythm import rhythm_core
@@ -25,8 +25,6 @@ class Worker:
         self.running = False
         self.current_executions = 0
         self.executor_task: Optional[asyncio.Task] = None
-        self.heartbeat_task: Optional[asyncio.Task] = None
-        self.recovery_task: Optional[asyncio.Task] = None
 
         # Concurrency control
         self.semaphore: asyncio.Semaphore = asyncio.Semaphore(settings.worker_max_concurrent)
@@ -42,17 +40,11 @@ class Worker:
         self._setup_signal_handlers()
 
         # Start background tasks
-        self.heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         self.executor_task = asyncio.create_task(self._executor_loop())
-        self.recovery_task = asyncio.create_task(self._recovery_loop())
 
         # Wait for shutdown
         try:
-            await asyncio.gather(
-                self.heartbeat_task,
-                self.executor_task,
-                self.recovery_task,
-            )
+            await self.executor_task
         except asyncio.CancelledError:
             logger.info("Worker tasks cancelled")
 
@@ -62,12 +54,8 @@ class Worker:
         self.running = False
 
         # Cancel background tasks
-        for task in [self.heartbeat_task, self.executor_task, self.recovery_task]:
-            if task and not task.done():
-                task.cancel()
-
-        # Update worker status via Rust
-        RustBridge.stop_worker(self.worker_id)
+        if self.executor_task and not self.executor_task.done():
+            self.executor_task.cancel()
 
         # Wait for current executions to complete (with timeout)
         timeout = 30
@@ -89,22 +77,6 @@ class Worker:
 
         signal.signal(signal.SIGINT, handle_signal)
         signal.signal(signal.SIGTERM, handle_signal)
-
-    async def _heartbeat_loop(self):
-        """Continuously update worker heartbeat"""
-        while self.running:
-            try:
-                await self._update_heartbeat(status=WorkerStatus.RUNNING)
-                await asyncio.sleep(settings.worker_heartbeat_interval)
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Error in heartbeat loop: {e}")
-                await asyncio.sleep(settings.worker_heartbeat_interval)
-
-    async def _update_heartbeat(self, status: WorkerStatus = WorkerStatus.RUNNING):
-        """Update worker heartbeat in database via Rust"""
-        RustBridge.update_heartbeat(self.worker_id, self.queues)
 
     async def _executor_loop(self):
         """Continuously claim and execute tasks"""
@@ -131,24 +103,6 @@ class Worker:
             except Exception as e:
                 logger.error(f"Error in executor loop: {e}")
                 await asyncio.sleep(1)
-
-    async def _recovery_loop(self):
-        """Periodically check for dead workers and recover their work"""
-        while self.running:
-            try:
-                await asyncio.sleep(settings.worker_heartbeat_timeout)
-                await self._recover_dead_worker_executions()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Error in recovery loop: {e}")
-                await asyncio.sleep(settings.worker_heartbeat_timeout)
-
-    async def _recover_dead_worker_executions(self):
-        """Find and recover executions from dead workers via Rust"""
-        recovered_count = RustBridge.recover_dead_workers(settings.worker_heartbeat_timeout)
-        if recovered_count > 0:
-            logger.info(f"Recovered {recovered_count} executions from dead workers")
 
     async def _execute_with_semaphore(self, execution: Execution):
         """Execute with semaphore-based concurrency control"""

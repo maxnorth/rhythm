@@ -3,7 +3,7 @@ use napi_derive::napi;
 use serde_json::Value as JsonValue;
 
 use rhythm_core::types::*;
-use rhythm_core::{db, executions, worker};
+use rhythm_core::{db, executions};
 
 /// Create an execution
 #[napi]
@@ -108,32 +108,6 @@ pub async fn get_workflow_tasks(workflow_id: String) -> Result<String> {
         .map_err(|e| Error::from_reason(e.to_string()))?;
 
     serde_json::to_string(&child_tasks).map_err(|e| Error::from_reason(e.to_string()))
-}
-
-/// Update worker heartbeat
-#[napi]
-pub async fn update_heartbeat(worker_id: String, queues: Vec<String>) -> Result<()> {
-    worker::update_heartbeat(&worker_id, &queues)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))
-}
-
-/// Stop worker
-#[napi]
-pub async fn stop_worker(worker_id: String) -> Result<()> {
-    worker::stop_worker(&worker_id)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))
-}
-
-/// Recover dead workers
-#[napi]
-pub async fn recover_dead_workers(timeout_seconds: i64) -> Result<u32> {
-    let count = worker::recover_dead_workers(timeout_seconds)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))?;
-
-    Ok(count as u32)
 }
 
 /// Run database migrations

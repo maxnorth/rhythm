@@ -29,9 +29,6 @@ try {
     'failExecution',
     'getExecution',
     'getWorkflowTasks',
-    'updateHeartbeat',
-    'stopWorker',
-    'recoverDeadWorkers',
     'migrate'
   ];
 

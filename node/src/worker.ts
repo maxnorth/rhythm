@@ -11,7 +11,6 @@ export interface WorkerOptions {
   queues: string[];
   workerId?: string;
   maxConcurrent?: number;
-  heartbeatInterval?: number;
   pollInterval?: number;
 }
 
@@ -21,18 +20,14 @@ export class Worker {
   private running: boolean = false;
   private currentExecutions: number = 0;
   private maxConcurrent: number;
-  private heartbeatInterval: number;
   private pollInterval: number;
 
-  private heartbeatTimer?: NodeJS.Timeout;
   private pollTimer?: NodeJS.Timeout;
-  private recoveryTimer?: NodeJS.Timeout;
 
   constructor(options: WorkerOptions) {
     this.workerId = options.workerId || generateId('worker');
     this.queues = options.queues;
     this.maxConcurrent = options.maxConcurrent || 10;
-    this.heartbeatInterval = options.heartbeatInterval || 5000;
     this.pollInterval = options.pollInterval || 1000;
 
     console.log(`Worker ${this.workerId} initialized for queues: ${this.queues.join(', ')}`);
@@ -52,9 +47,7 @@ export class Worker {
     this.setupSignalHandlers();
 
     // Start background tasks
-    this.startHeartbeat();
     this.startPolling();
-    this.startRecovery();
 
     console.log(`Worker ${this.workerId} running`);
   }
@@ -64,12 +57,7 @@ export class Worker {
     this.running = false;
 
     // Clear timers
-    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     if (this.pollTimer) clearInterval(this.pollTimer);
-    if (this.recoveryTimer) clearInterval(this.recoveryTimer);
-
-    // Update worker status
-    await RustBridge.stopWorker(this.workerId);
 
     // Wait for current executions to complete (with timeout)
     const timeout = 30000;
@@ -95,36 +83,11 @@ export class Worker {
     process.on('SIGTERM', shutdown);
   }
 
-  private startHeartbeat(): void {
-    this.heartbeatTimer = setInterval(async () => {
-      try {
-        await RustBridge.updateHeartbeat(this.workerId, this.queues);
-      } catch (error) {
-        console.error('Error updating heartbeat:', error);
-      }
-    }, this.heartbeatInterval);
-  }
-
   private startPolling(): void {
     this.pollTimer = setInterval(async () => {
       if (!this.running) return;
       await this.tryClaimAndExecute();
     }, this.pollInterval);
-  }
-
-  private startRecovery(): void {
-    const recoveryInterval = 60000; // 1 minute
-    this.recoveryTimer = setInterval(async () => {
-      try {
-        const timeoutSeconds = 120; // 2 minutes
-        const recovered = await RustBridge.recoverDeadWorkers(timeoutSeconds);
-        if (recovered > 0) {
-          console.log(`Recovered ${recovered} executions from dead workers`);
-        }
-      } catch (error) {
-        console.error('Error in recovery loop:', error);
-      }
-    }, recoveryInterval);
   }
 
   private async tryClaimAndExecute(): Promise<void> {

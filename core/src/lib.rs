@@ -8,7 +8,6 @@ pub mod init;
 pub mod interpreter;
 pub mod types;
 pub mod v2;
-pub mod worker;
 pub mod workflows;
 
 // Re-export main types

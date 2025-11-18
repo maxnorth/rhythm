@@ -218,38 +218,6 @@ fn get_workflow_tasks_sync(workflow_id: String) -> PyResult<String> {
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
-/* ===================== Worker Management ===================== */
-
-/// Update worker heartbeat
-#[pyfunction]
-fn update_heartbeat_sync(worker_id: String, queues: Vec<String>) -> PyResult<()> {
-    let runtime = get_runtime();
-
-    runtime
-        .block_on(adapter::update_heartbeat(worker_id, queues))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
-
-/// Stop worker
-#[pyfunction]
-fn stop_worker_sync(worker_id: String) -> PyResult<()> {
-    let runtime = get_runtime();
-
-    runtime
-        .block_on(adapter::stop_worker(worker_id))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
-
-/// Recover dead workers
-#[pyfunction]
-fn recover_dead_workers_sync(timeout_seconds: i32) -> PyResult<i32> {
-    let runtime = get_runtime();
-
-    runtime
-        .block_on(adapter::recover_dead_workers(timeout_seconds))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
-
 /* ===================== Utilities ===================== */
 
 /// Run the CLI
@@ -327,11 +295,6 @@ fn rhythm_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(start_workflow_sync, m)?)?;
     m.add_function(wrap_pyfunction!(execute_workflow_step_sync, m)?)?;
     m.add_function(wrap_pyfunction!(get_workflow_tasks_sync, m)?)?;
-
-    // Worker management
-    m.add_function(wrap_pyfunction!(update_heartbeat_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(stop_worker_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(recover_dead_workers_sync, m)?)?;
 
     // Utilities
     m.add_function(wrap_pyfunction!(run_cli_sync, m)?)?;

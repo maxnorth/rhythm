@@ -14,7 +14,7 @@ use anyhow::Result;
 use serde_json::Value as JsonValue;
 
 use crate::{
-    db, executions, init, worker, workflows, CreateExecutionParams, ExecutionType,
+    db, executions, init, workflows, CreateExecutionParams, ExecutionType,
 };
 
 /* ===================== System ===================== */
@@ -121,21 +121,4 @@ pub async fn get_workflow_tasks(workflow_id: String) -> Result<Vec<JsonValue>> {
         .collect())
 }
 
-/* ===================== Worker Management ===================== */
-
-/// Update worker heartbeat
-pub async fn update_heartbeat(worker_id: String, queues: Vec<String>) -> Result<()> {
-    worker::update_heartbeat(&worker_id, &queues).await
-}
-
-/// Stop a worker
-pub async fn stop_worker(worker_id: String) -> Result<()> {
-    worker::stop_worker(&worker_id).await
-}
-
-/// Recover executions from dead workers
-pub async fn recover_dead_workers(timeout_seconds: i32) -> Result<i32> {
-    let count = worker::recover_dead_workers(timeout_seconds as i64).await?;
-    Ok(count as i32)
-}
 

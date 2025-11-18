@@ -12,8 +12,6 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://localhost/workflows"
 
     # Worker settings
-    worker_heartbeat_interval: int = 5  # seconds
-    worker_heartbeat_timeout: int = 30  # seconds
     worker_poll_interval: float = 1.0  # seconds (can be fractional for fast polling in tests)
     worker_max_concurrent: int = 10  # max concurrent executions per worker
 

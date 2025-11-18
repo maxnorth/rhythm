@@ -102,21 +102,6 @@ class RustBridge:
         return json.loads(result)
 
     @staticmethod
-    def update_heartbeat(worker_id: str, queues: List[str]) -> None:
-        """Update worker heartbeat"""
-        rust.update_heartbeat_sync(worker_id=worker_id, queues=queues)
-
-    @staticmethod
-    def stop_worker(worker_id: str) -> None:
-        """Stop a worker"""
-        rust.stop_worker_sync(worker_id=worker_id)
-
-    @staticmethod
-    def recover_dead_workers(timeout_seconds: int) -> int:
-        """Recover dead workers"""
-        return rust.recover_dead_workers_sync(timeout_seconds=timeout_seconds)
-
-    @staticmethod
     def migrate() -> None:
         """Run database migrations"""
         rust.migrate_sync()
