@@ -275,7 +275,7 @@ async fn resolve_suspended_task(
 
     // Query task status from database
     let task_info: Option<(ExecutionStatus, Option<JsonValue>)> = sqlx::query_as(
-        "SELECT status, result FROM executions WHERE id = $1"
+        "SELECT status, output FROM executions WHERE id = $1"
     )
     .bind(&task_id)
     .fetch_optional(pool)
@@ -283,9 +283,9 @@ async fn resolve_suspended_task(
     .context("Failed to check task status")?;
 
     match task_info {
-        Some((ExecutionStatus::Completed, Some(result))) => {
+        Some((ExecutionStatus::Completed, Some(output))) => {
             // Task completed successfully - inject result and clear suspended_task
-            locals["__suspended_task_result"] = result;
+            locals["__suspended_task_result"] = output;
 
             // Remove __suspended_task from locals
             if let Some(obj) = locals.as_object_mut() {
@@ -295,7 +295,7 @@ async fn resolve_suspended_task(
             Ok(true)
         }
         Some((ExecutionStatus::Completed, None)) => {
-            // Task completed but has no result - treat as null
+            // Task completed but has no output - treat as null
             locals["__suspended_task_result"] = JsonValue::Null;
 
             // Remove __suspended_task from locals

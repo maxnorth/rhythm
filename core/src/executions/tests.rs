@@ -154,7 +154,7 @@ async fn test_duplicate_id_completed_fails() {
 
     let execution = get_execution(&id1).await.unwrap().unwrap();
     assert_eq!(execution.status, ExecutionStatus::Completed);
-    assert!(execution.result.is_some());
+    assert!(execution.output.is_some());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -247,6 +247,6 @@ async fn test_result_is_stored_on_completion() {
     complete_execution(&id, result.clone()).await.unwrap();
 
     let execution = get_execution(&id).await.unwrap().unwrap();
-    assert_eq!(execution.result, Some(result));
+    assert_eq!(execution.output, Some(result));
     assert_eq!(execution.status, ExecutionStatus::Completed);
 }

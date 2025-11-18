@@ -34,9 +34,7 @@ class Execution(BaseModel):
     status: ExecutionStatus
 
     inputs: dict[str, Any] = Field(default_factory=dict)
-
-    result: Optional[Any] = None
-    error: Optional[dict[str, Any]] = None
+    output: Optional[Any] = None
 
     attempt: int = 0
     max_retries: int = 3
@@ -51,7 +49,7 @@ class Execution(BaseModel):
         """Create from database record"""
         data = dict(record)
         # Parse JSONB fields
-        for field in ["inputs", "result", "error"]:
+        for field in ["inputs", "output"]:
             if field in data and data[field] is not None:
                 if isinstance(data[field], str):
                     data[field] = json.loads(data[field])

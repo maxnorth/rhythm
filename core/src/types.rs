@@ -31,9 +31,7 @@ pub struct Execution {
     pub status: ExecutionStatus,
 
     pub inputs: JsonValue,
-
-    pub result: Option<JsonValue>,
-    pub error: Option<JsonValue>,
+    pub output: Option<JsonValue>,
 
     pub attempt: i32,
     pub max_retries: i32,

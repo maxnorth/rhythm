@@ -158,14 +158,21 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
                         println!("Completed: {}", completed_at);
                     }
 
-                    if let Some(result) = exec.result {
-                        println!("\nResult:");
-                        println!("  {}", result);
-                    }
-
-                    if let Some(error) = exec.error {
-                        println!("\nError:");
-                        println!("  {}", error);
+                    if let Some(output) = exec.output {
+                        match exec.status {
+                            crate::types::ExecutionStatus::Completed => {
+                                println!("\nResult:");
+                                println!("  {}", output);
+                            }
+                            crate::types::ExecutionStatus::Failed => {
+                                println!("\nError:");
+                                println!("  {}", output);
+                            }
+                            _ => {
+                                println!("\nOutput:");
+                                println!("  {}", output);
+                            }
+                        }
                     }
                 }
                 None => {

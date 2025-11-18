@@ -8,7 +8,7 @@ use crate::db::get_pool;
 /// Atomically marks the execution as completed and enqueues a resume task
 /// for the parent workflow (if any). Uses a CTE to perform both operations
 /// in a single round-trip to the database.
-pub async fn complete_execution(execution_id: &str, result: JsonValue) -> Result<()> {
+pub async fn complete_execution(execution_id: &str, output: JsonValue) -> Result<()> {
     let pool = get_pool().await?;
 
     sqlx::query(
@@ -16,7 +16,7 @@ pub async fn complete_execution(execution_id: &str, result: JsonValue) -> Result
         WITH completed_task AS (
             UPDATE executions
             SET status = 'completed',
-                result = $1,
+                output = $1,
                 completed_at = NOW()
             WHERE id = $2
             RETURNING parent_workflow_id
@@ -34,7 +34,7 @@ pub async fn complete_execution(execution_id: &str, result: JsonValue) -> Result
         WHERE parent_workflow_id IS NOT NULL
         "#,
     )
-    .bind(result)
+    .bind(output)
     .bind(execution_id)
     .execute(pool.as_ref())
     .await
@@ -44,7 +44,7 @@ pub async fn complete_execution(execution_id: &str, result: JsonValue) -> Result
 }
 
 /// Fail an execution with JSON error
-pub async fn fail_execution(execution_id: &str, error: JsonValue, retry: bool) -> Result<()> {
+pub async fn fail_execution(execution_id: &str, output: JsonValue, retry: bool) -> Result<()> {
     let pool = get_pool().await?;
 
     if retry {
@@ -53,11 +53,11 @@ pub async fn fail_execution(execution_id: &str, error: JsonValue, retry: bool) -
             r#"
             UPDATE executions
             SET status = 'pending',
-                error = $1
+                output = $1
             WHERE id = $2
             "#,
         )
-        .bind(&error)
+        .bind(&output)
         .bind(execution_id)
         .execute(pool.as_ref())
         .await
@@ -69,7 +69,7 @@ pub async fn fail_execution(execution_id: &str, error: JsonValue, retry: bool) -
             WITH failed_task AS (
                 UPDATE executions
                 SET status = 'failed',
-                    error = $1,
+                    output = $1,
                     completed_at = NOW()
                 WHERE id = $2
                 RETURNING parent_workflow_id
@@ -87,7 +87,7 @@ pub async fn fail_execution(execution_id: &str, error: JsonValue, retry: bool) -
             WHERE parent_workflow_id IS NOT NULL
             "#,
         )
-        .bind(&error)
+        .bind(&output)
         .bind(execution_id)
         .execute(pool.as_ref())
         .await
@@ -105,7 +105,7 @@ pub async fn cancel_execution(execution_id: &str) -> Result<()> {
         r#"
         UPDATE executions
         SET status = 'failed',
-            error = '{"error": "Cancelled by user"}',
+            output = '{"error": "Cancelled by user"}',
             completed_at = NOW()
         WHERE id = $1
           AND status IN ('pending', 'running', 'suspended')
