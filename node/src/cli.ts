@@ -4,7 +4,7 @@
  */
 
 import { Command } from 'commander';
-import { sendSignal, getExecutionStatus } from './client.js';
+import { getExecutionStatus } from './client.js';
 import { RustBridge } from './rust-bridge-native.js';
 
 const program = new Command();
@@ -43,23 +43,6 @@ program
       await runWorker({ queues, workerId });
     } catch (error) {
       console.error('Worker error:', error);
-      process.exit(1);
-    }
-  });
-
-program
-  .command('signal')
-  .description('Send a signal to a workflow')
-  .argument('<workflow-id>', 'Workflow execution ID')
-  .argument('<signal-name>', 'Signal name')
-  .argument('[payload]', 'Signal payload (JSON string)', '{}')
-  .action(async (workflowId, signalName, payloadStr) => {
-    try {
-      const payload = JSON.parse(payloadStr);
-      const signalId = await sendSignal(workflowId, signalName, payload);
-      console.log(`✓ Signal sent: ${signalId}`);
-    } catch (error) {
-      console.error(`✗ Failed to send signal:`, error);
       process.exit(1);
     }
   });

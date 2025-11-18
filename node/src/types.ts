@@ -23,10 +23,6 @@ export interface TaskConfig extends ExecutionConfig {
   queue: string;
 }
 
-export interface SignalPayload {
-  [key: string]: any;
-}
-
 export interface ExecutionStatus {
   id: string;
   type: 'task' | 'workflow';
@@ -44,7 +40,7 @@ export interface ExecutionStatus {
 }
 
 export interface HistoryEvent {
-  type: 'task' | 'signal' | 'version';
+  type: 'task' | 'version';
   [key: string]: any;
 }
 

@@ -82,16 +82,6 @@ pub struct WorkerHeartbeat {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkflowSignal {
-    pub id: String,
-    pub workflow_id: String,
-    pub signal_name: String,
-    pub payload: JsonValue,
-    pub created_at: DateTime<Utc>,
-    pub consumed: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionListFilter {
     pub queue: Option<String>,
     pub status: Option<ExecutionStatus>,

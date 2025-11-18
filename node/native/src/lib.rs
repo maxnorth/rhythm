@@ -3,7 +3,7 @@ use napi_derive::napi;
 use serde_json::Value as JsonValue;
 
 use rhythm_core::types::*;
-use rhythm_core::{db, executions, signals, worker};
+use rhythm_core::{db, executions, worker};
 
 /// Create an execution
 #[napi]
@@ -31,6 +31,7 @@ pub async fn create_execution(
         .map_err(|e| Error::from_reason(format!("Invalid kwargs JSON: {}", e)))?;
 
     let params = CreateExecutionParams {
+        id: None,
         exec_type,
         function_name,
         queue,
@@ -84,25 +85,6 @@ pub async fn fail_execution(execution_id: String, error: String, retry: bool) ->
         .map_err(|e| Error::from_reason(e.to_string()))
 }
 
-/// Suspend a workflow
-#[napi]
-pub async fn suspend_workflow(workflow_id: String, checkpoint: String) -> Result<()> {
-    let checkpoint: JsonValue = serde_json::from_str(&checkpoint)
-        .map_err(|e| Error::from_reason(format!("Invalid checkpoint JSON: {}", e)))?;
-
-    executions::suspend_workflow(&workflow_id, checkpoint)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))
-}
-
-/// Resume a workflow
-#[napi]
-pub async fn resume_workflow(workflow_id: String) -> Result<()> {
-    executions::resume_workflow(&workflow_id)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))
-}
-
 /// Get execution by ID
 #[napi]
 pub async fn get_execution(execution_id: String) -> Result<Option<String>> {
@@ -152,39 +134,6 @@ pub async fn recover_dead_workers(timeout_seconds: i64) -> Result<u32> {
         .map_err(|e| Error::from_reason(e.to_string()))?;
 
     Ok(count as u32)
-}
-
-/// Send a signal to a workflow
-#[napi]
-pub async fn send_signal(
-    workflow_id: String,
-    signal_name: String,
-    payload: String,
-) -> Result<String> {
-    let payload: JsonValue = serde_json::from_str(&payload)
-        .map_err(|e| Error::from_reason(format!("Invalid payload JSON: {}", e)))?;
-
-    signals::send_signal(&workflow_id, &signal_name, payload)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))
-}
-
-/// Get signals for a workflow
-#[napi]
-pub async fn get_signals(workflow_id: String, signal_name: String) -> Result<String> {
-    let signals_list = signals::get_signals(&workflow_id, &signal_name)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))?;
-
-    serde_json::to_string(&signals_list).map_err(|e| Error::from_reason(e.to_string()))
-}
-
-/// Consume a signal
-#[napi]
-pub async fn consume_signal(signal_id: String) -> Result<()> {
-    signals::consume_signal(&signal_id)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))
 }
 
 /// Run database migrations

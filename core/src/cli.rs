@@ -50,19 +50,6 @@ pub enum Commands {
         yes: bool,
     },
 
-    /// Send a signal to a workflow
-    Signal {
-        /// Workflow execution ID
-        workflow_id: String,
-
-        /// Signal name
-        signal_name: String,
-
-        /// Signal payload (JSON string)
-        #[arg(default_value = "{}")]
-        payload: String,
-    },
-
     /// Run baseline benchmark (pure Rust, no external workers)
     Bench {
         /// Number of concurrent tokio tasks
@@ -137,7 +124,6 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
     use crate::config::Config;
     use crate::db;
     use crate::executions;
-    use crate::signals;
     use std::env;
 
     // Apply CLI overrides to environment before any database operations
@@ -255,20 +241,6 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
 
             executions::cancel_execution(&execution_id).await?;
             println!("✓ Execution {} cancelled", execution_id);
-        }
-
-        Commands::Signal {
-            workflow_id,
-            signal_name,
-            payload,
-        } => {
-            // Parse JSON payload
-            let payload_value: serde_json::Value = serde_json::from_str(&payload)?;
-
-            let signal_id =
-                signals::send_signal(&workflow_id, &signal_name, payload_value).await?;
-
-            println!("✓ Signal sent: {}", signal_id);
         }
 
         Commands::Bench {

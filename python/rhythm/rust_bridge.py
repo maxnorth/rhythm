@@ -123,26 +123,6 @@ class RustBridge:
         return rust.recover_dead_workers_sync(timeout_seconds=timeout_seconds)
 
     @staticmethod
-    def send_signal(workflow_id: str, signal_name: str, payload: Dict[str, Any]) -> str:
-        """Send a signal to a workflow"""
-        return rust.send_signal_sync(
-            workflow_id=workflow_id,
-            signal_name=signal_name,
-            payload=json.dumps(payload),
-        )
-
-    @staticmethod
-    def get_signals(workflow_id: str, signal_name: str) -> List[Dict[str, Any]]:
-        """Get signals for a workflow"""
-        result = rust.get_signals_sync(workflow_id=workflow_id, signal_name=signal_name)
-        return json.loads(result)
-
-    @staticmethod
-    def consume_signal(signal_id: str) -> None:
-        """Consume a signal"""
-        rust.consume_signal_sync(signal_id=signal_id)
-
-    @staticmethod
     def migrate() -> None:
         """Run database migrations"""
         rust.migrate_sync()

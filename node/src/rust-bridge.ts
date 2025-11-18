@@ -31,20 +31,6 @@ class RustBridgeImpl {
     return executionId;
   }
 
-  sendSignal(workflowId: string, signalName: string, payload: Record<string, any>): string {
-    // TODO: Replace with actual Rust FFI call
-    const signalId = generateId('sig');
-
-    // eslint-disable-next-line no-console
-    console.warn('RustBridge.sendSignal is a stub - needs Rust FFI implementation');
-    // Prevent unused variable warnings
-    void workflowId;
-    void signalName;
-    void payload;
-
-    return signalId;
-  }
-
   getExecution(executionId: string): any {
     // TODO: Replace with actual Rust FFI call
     // eslint-disable-next-line no-console

@@ -56,20 +56,6 @@ class RustBridgeImpl {
     );
   }
 
-  async sendSignal(
-    workflowId: string,
-    signalName: string,
-    payload: Record<string, any>
-  ): Promise<string> {
-    if (!bindings) {
-      const signalId = generateId('sig');
-      console.warn('RustBridge.sendSignal is a stub - using native bindings');
-      return signalId;
-    }
-
-    return await bindings.sendSignal(workflowId, signalName, JSON.stringify(payload));
-  }
-
   async getExecution(executionId: string): Promise<any> {
     if (!bindings) {
       console.warn('RustBridge.getExecution is a stub - using native bindings');
@@ -96,24 +82,6 @@ class RustBridgeImpl {
     }
 
     await bindings.completeExecution(executionId, JSON.stringify(result));
-  }
-
-  async suspendWorkflow(workflowId: string, checkpoint: any): Promise<void> {
-    if (!bindings) {
-      console.warn('RustBridge.suspendWorkflow is a stub - using native bindings');
-      return;
-    }
-
-    await bindings.suspendWorkflow(workflowId, JSON.stringify(checkpoint));
-  }
-
-  async resumeWorkflow(workflowId: string): Promise<void> {
-    if (!bindings) {
-      console.warn('RustBridge.resumeWorkflow is a stub - using native bindings');
-      return;
-    }
-
-    await bindings.resumeWorkflow(workflowId);
   }
 
   async claimExecution(workerId: string, queues: string[]): Promise<any> {
@@ -151,25 +119,6 @@ class RustBridgeImpl {
     }
 
     return await bindings.recoverDeadWorkers(timeoutSeconds);
-  }
-
-  async getSignals(workflowId: string, signalName: string): Promise<any[]> {
-    if (!bindings) {
-      console.warn('RustBridge.getSignals is a stub - using native bindings');
-      return [];
-    }
-
-    const result = await bindings.getSignals(workflowId, signalName);
-    return JSON.parse(result);
-  }
-
-  async consumeSignal(signalId: string): Promise<void> {
-    if (!bindings) {
-      console.warn('RustBridge.consumeSignal is a stub - using native bindings');
-      return;
-    }
-
-    await bindings.consumeSignal(signalId);
   }
 
   async migrate(): Promise<void> {

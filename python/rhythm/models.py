@@ -80,25 +80,6 @@ class Execution(BaseModel):
         return cls(**data)
 
 
-class WorkflowSignal(BaseModel):
-    """A signal sent to a workflow"""
-
-    id: str
-    workflow_id: str
-    signal_name: str
-    payload: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime
-    consumed: bool = False
-
-    @classmethod
-    def from_record(cls, record) -> "WorkflowSignal":
-        """Create from database record"""
-        data = dict(record)
-        if isinstance(data.get("payload"), str):
-            data["payload"] = json.loads(data["payload"])
-        return cls(**data)
-
-
 class WorkerHeartbeat(BaseModel):
     """Worker heartbeat record"""
 

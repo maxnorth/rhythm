@@ -14,7 +14,7 @@ use anyhow::Result;
 use serde_json::Value as JsonValue;
 
 use crate::{
-    db, executions, init, signals, worker, workflows, CreateExecutionParams, ExecutionType,
+    db, executions, init, worker, workflows, CreateExecutionParams, ExecutionType,
 };
 
 /* ===================== System ===================== */
@@ -144,27 +144,3 @@ pub async fn recover_dead_workers(timeout_seconds: i32) -> Result<i32> {
     Ok(count as i32)
 }
 
-/* ===================== Signals ===================== */
-
-/// Send a signal to a workflow
-pub async fn send_signal(
-    workflow_id: String,
-    signal_name: String,
-    payload: JsonValue,
-) -> Result<String> {
-    signals::send_signal(&workflow_id, &signal_name, payload).await
-}
-
-/// Get signals for a workflow
-pub async fn get_signals(workflow_id: String, signal_name: String) -> Result<Vec<JsonValue>> {
-    let signals = signals::get_signals(&workflow_id, &signal_name).await?;
-    Ok(signals
-        .into_iter()
-        .map(|s| serde_json::to_value(s).unwrap())
-        .collect())
-}
-
-/// Consume a signal
-pub async fn consume_signal(signal_id: String) -> Result<()> {
-    signals::consume_signal(&signal_id).await
-}

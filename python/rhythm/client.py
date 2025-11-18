@@ -52,30 +52,6 @@ async def queue_execution(
     return execution_id
 
 
-async def send_signal(workflow_id: str, signal_name: str, payload: dict[str, Any] = None) -> str:
-    """
-    Send a signal to a workflow.
-
-    NOTE: Currently only supported for future workflow features.
-    DSL workflows do not yet support signals.
-
-    Args:
-        workflow_id: The workflow execution ID
-        signal_name: Name of the signal
-        payload: Signal payload data
-
-    Returns:
-        Signal ID
-
-    Example:
-        await send_signal(workflow_id, "approved", {"approved": True})
-    """
-    payload = payload or {}
-    signal_id = RustBridge.send_signal(workflow_id, signal_name, payload)
-    logger.info(f"Signal {signal_name} sent to workflow {workflow_id}")
-    return signal_id
-
-
 async def get_execution_status(execution_id: str) -> Optional[dict]:
     """
     Get the status of an execution.

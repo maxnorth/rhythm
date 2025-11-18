@@ -1,9 +1,9 @@
 /**
- * Client API for enqueuing work and sending signals
+ * Client API for enqueuing work
  */
 
 import { RustBridge } from './rust-bridge-native.js';
-import type { SignalPayload, ExecutionStatus } from './types.js';
+import type { ExecutionStatus } from './types.js';
 
 export async function queueExecution(params: {
   execType: string;
@@ -33,16 +33,6 @@ export async function queueExecution(params: {
   );
 
   return executionId;
-}
-
-export async function sendSignal(
-  workflowId: string,
-  signalName: string,
-  payload?: SignalPayload
-): Promise<string> {
-  const signalId = RustBridge.sendSignal(workflowId, signalName, payload || {});
-  console.info(`Signal ${signalName} sent to workflow ${workflowId}`);
-  return signalId;
 }
 
 export async function getExecutionStatus(executionId: string): Promise<ExecutionStatus | null> {

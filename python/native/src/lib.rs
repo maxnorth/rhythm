@@ -268,44 +268,6 @@ fn recover_dead_workers_sync(timeout_seconds: i32) -> PyResult<i32> {
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
-/* ===================== Signals ===================== */
-
-/// Send a signal to a workflow
-#[pyfunction]
-fn send_signal_sync(workflow_id: String, signal_name: String, payload: String) -> PyResult<String> {
-    let runtime = get_runtime();
-
-    let payload: JsonValue = serde_json::from_str(&payload)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-
-    runtime
-        .block_on(adapter::send_signal(workflow_id, signal_name, payload))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
-
-/// Get signals for a workflow
-#[pyfunction]
-fn get_signals_sync(workflow_id: String, signal_name: String) -> PyResult<String> {
-    let runtime = get_runtime();
-
-    let signals = runtime
-        .block_on(adapter::get_signals(workflow_id, signal_name))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-
-    serde_json::to_string(&signals)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
-
-/// Consume a signal
-#[pyfunction]
-fn consume_signal_sync(signal_id: String) -> PyResult<()> {
-    let runtime = get_runtime();
-
-    runtime
-        .block_on(adapter::consume_signal(signal_id))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
-
 /* ===================== Utilities ===================== */
 
 /// Run the CLI
@@ -389,11 +351,6 @@ fn rhythm_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(update_heartbeat_sync, m)?)?;
     m.add_function(wrap_pyfunction!(stop_worker_sync, m)?)?;
     m.add_function(wrap_pyfunction!(recover_dead_workers_sync, m)?)?;
-
-    // Signals
-    m.add_function(wrap_pyfunction!(send_signal_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(get_signals_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(consume_signal_sync, m)?)?;
 
     // Utilities
     m.add_function(wrap_pyfunction!(run_cli_sync, m)?)?;

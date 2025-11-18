@@ -27,16 +27,11 @@ try {
     'claimExecution',
     'completeExecution',
     'failExecution',
-    'suspendWorkflow',
-    'resumeWorkflow',
     'getExecution',
-    'getWorkflowActivities',
+    'getWorkflowTasks',
     'updateHeartbeat',
     'stopWorker',
     'recoverDeadWorkers',
-    'sendSignal',
-    'getSignals',
-    'consumeSignal',
     'migrate'
   ];
 
