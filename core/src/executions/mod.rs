@@ -17,7 +17,5 @@ mod tests;
 // Re-export public API
 pub use claim::claim_execution;
 pub use create::create_execution;
-pub use lifecycle::{
-    cancel_execution, complete_execution, complete_executions_batch, fail_execution,
-};
+pub use lifecycle::{cancel_execution, complete_execution, fail_execution};
 pub use query::{get_execution, get_workflow_tasks, list_executions};

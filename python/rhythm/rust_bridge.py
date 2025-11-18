@@ -83,12 +83,6 @@ class RustBridge:
         rust.complete_execution_sync(execution_id=execution_id, result=json.dumps(result))
 
     @staticmethod
-    def complete_executions_batch(completions: List[tuple[str, Any]]) -> None:
-        """Complete multiple executions in batch"""
-        serialized = [(id, json.dumps(result)) for id, result in completions]
-        rust.complete_executions_batch_sync(completions=serialized)
-
-    @staticmethod
     def fail_execution(execution_id: str, error: Dict[str, Any], retry: bool) -> None:
         """Fail an execution"""
         rust.fail_execution_sync(execution_id=execution_id, error=json.dumps(error), retry=retry)

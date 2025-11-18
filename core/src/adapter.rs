@@ -83,11 +83,6 @@ pub async fn complete_execution(execution_id: String, result: JsonValue) -> Resu
     executions::complete_execution(&execution_id, result).await
 }
 
-/// Complete multiple executions in batch
-pub async fn complete_executions_batch(completions: Vec<(String, JsonValue)>) -> Result<()> {
-    executions::complete_executions_batch(completions).await
-}
-
 /// Fail an execution with an error
 pub async fn fail_execution(execution_id: String, error: JsonValue, retry: bool) -> Result<()> {
     executions::fail_execution(&execution_id, error, retry).await

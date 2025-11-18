@@ -46,55 +46,6 @@ pub async fn complete_execution(execution_id: &str, result: JsonValue) -> Result
     Ok(())
 }
 
-/// Complete multiple executions in a single batch operation
-pub async fn complete_executions_batch(completions: Vec<(String, JsonValue)>) -> Result<()> {
-    if completions.is_empty() {
-        return Ok(());
-    }
-
-    let pool = get_pool().await?;
-
-    // Build dynamic query with UNNEST for batch update
-    let ids: Vec<String> = completions.iter().map(|(id, _)| id.clone()).collect();
-    let results: Vec<JsonValue> = completions.iter().map(|(_, result)| result.clone()).collect();
-
-    sqlx::query(
-        r#"
-        WITH completed_tasks AS (
-            UPDATE executions
-            SET status = 'completed',
-                result = data.result,
-                completed_at = NOW()
-            FROM (
-                SELECT UNNEST($1::text[]) as id, UNNEST($2::jsonb[]) as result
-            ) data
-            WHERE executions.id = data.id
-            RETURNING parent_workflow_id
-        )
-        INSERT INTO executions (id, type, function_name, queue, status, args, kwargs, priority, max_retries)
-        SELECT
-            gen_random_uuid()::text,
-            'task',
-            'builtin.resume_workflow',
-            'system',
-            'pending',
-            jsonb_build_array(parent_workflow_id),
-            '{}'::jsonb,
-            10,
-            0
-        FROM completed_tasks
-        WHERE parent_workflow_id IS NOT NULL
-        "#,
-    )
-    .bind(&ids)
-    .bind(&results)
-    .execute(pool.as_ref())
-    .await
-    .context("Failed to batch complete executions")?;
-
-    Ok(())
-}
-
 /// Fail an execution with JSON error
 pub async fn fail_execution(execution_id: &str, error: JsonValue, retry: bool) -> Result<()> {
     let pool = get_pool().await?;

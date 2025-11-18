@@ -31,11 +31,6 @@ class Worker:
         # Concurrency control
         self.semaphore: asyncio.Semaphore = asyncio.Semaphore(settings.worker_max_concurrent)
 
-        # Completion batching
-        self.completion_queue: List[tuple[str, any]] = []
-        self.completion_lock: asyncio.Lock = asyncio.Lock()
-        self.completer_task: Optional[asyncio.Task] = None
-
         logger.info(f"Worker {self.worker_id} initialized for queues: {queues}")
 
     async def start(self):
@@ -50,7 +45,6 @@ class Worker:
         self.heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         self.executor_task = asyncio.create_task(self._executor_loop())
         self.recovery_task = asyncio.create_task(self._recovery_loop())
-        self.completer_task = asyncio.create_task(self._completer_loop())
 
         # Wait for shutdown
         try:
@@ -58,7 +52,6 @@ class Worker:
                 self.heartbeat_task,
                 self.executor_task,
                 self.recovery_task,
-                self.completer_task,
             )
         except asyncio.CancelledError:
             logger.info("Worker tasks cancelled")
@@ -69,12 +62,9 @@ class Worker:
         self.running = False
 
         # Cancel background tasks
-        for task in [self.heartbeat_task, self.executor_task, self.recovery_task, self.completer_task]:
+        for task in [self.heartbeat_task, self.executor_task, self.recovery_task]:
             if task and not task.done():
                 task.cancel()
-
-        # Flush any pending completions
-        await self._flush_completions()
 
         # Update worker status via Rust
         RustBridge.stop_worker(self.worker_id)
@@ -154,42 +144,11 @@ class Worker:
                 logger.error(f"Error in recovery loop: {e}")
                 await asyncio.sleep(settings.worker_heartbeat_timeout)
 
-    async def _completer_loop(self):
-        """Periodically batch and flush completion updates"""
-        while self.running:
-            try:
-                # Flush every 1ms for low latency
-                await asyncio.sleep(0.001)
-                await self._flush_completions()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Error in completer loop: {e}")
-                await asyncio.sleep(0.1)
-
     async def _recover_dead_worker_executions(self):
         """Find and recover executions from dead workers via Rust"""
         recovered_count = RustBridge.recover_dead_workers(settings.worker_heartbeat_timeout)
         if recovered_count > 0:
             logger.info(f"Recovered {recovered_count} executions from dead workers")
-
-    async def _flush_completions(self):
-        """Flush pending completions to database in batch"""
-        async with self.completion_lock:
-            if not self.completion_queue:
-                return
-
-            batch = self.completion_queue[:]
-            self.completion_queue.clear()
-
-        try:
-            RustBridge.complete_executions_batch(batch)
-            logger.debug(f"Flushed {len(batch)} completions")
-        except Exception as e:
-            logger.error(f"Error flushing completions: {e}")
-            # Re-add to queue on failure
-            async with self.completion_lock:
-                self.completion_queue.extend(batch)
 
     async def _execute_with_semaphore(self, execution: Execution):
         """Execute with semaphore-based concurrency control"""
@@ -294,10 +253,7 @@ class Worker:
     async def _complete_execution(self, execution: Execution, result: any):
         """Mark execution as completed via Rust"""
         logger.info(f"Execution {execution.id} completed successfully")
-
-        # Add to completion queue for batch processing
-        async with self.completion_lock:
-            self.completion_queue.append((execution.id, result))
+        RustBridge.complete_execution(execution.id, result)
 
     async def _handle_execution_failure(self, execution: Execution, error: Exception):
         """Handle execution failure with retry logic via Rust"""

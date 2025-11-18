@@ -155,24 +155,6 @@ fn complete_execution_sync(execution_id: String, result: String) -> PyResult<()>
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
-/// Complete multiple executions in batch
-#[pyfunction]
-fn complete_executions_batch_sync(completions: Vec<(String, String)>) -> PyResult<()> {
-    let runtime = get_runtime();
-
-    // Parse JSON results
-    let mut parsed_completions = Vec::new();
-    for (id, result_str) in completions {
-        let result: JsonValue = serde_json::from_str(&result_str)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-        parsed_completions.push((id, result));
-    }
-
-    runtime
-        .block_on(adapter::complete_executions_batch(parsed_completions))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
-
 /// Fail an execution
 #[pyfunction]
 fn fail_execution_sync(execution_id: String, error: String, retry: bool) -> PyResult<()> {
@@ -338,7 +320,6 @@ fn rhythm_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(claim_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(complete_execution_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(complete_executions_batch_sync, m)?)?;
     m.add_function(wrap_pyfunction!(fail_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(get_execution_sync, m)?)?;
 
