@@ -29,11 +29,9 @@ pub struct Execution {
     pub function_name: String,
     pub queue: String,
     pub status: ExecutionStatus,
-    pub priority: i32,
 
     pub args: JsonValue,
     pub kwargs: JsonValue,
-    pub options: JsonValue,
 
     pub result: Option<JsonValue>,
     pub error: Option<JsonValue>,
@@ -44,11 +42,7 @@ pub struct Execution {
     pub parent_workflow_id: Option<String>,
 
     pub created_at: DateTime<Utc>,
-    pub claimed_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
-    pub timeout_seconds: Option<i32>,
-
-    pub worker_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,11 +51,9 @@ pub struct CreateExecutionParams {
     pub exec_type: ExecutionType,
     pub function_name: String,
     pub queue: String,
-    pub priority: i32,
     pub args: JsonValue,
     pub kwargs: JsonValue,
     pub max_retries: i32,
-    pub timeout_seconds: Option<i32>,
     pub parent_workflow_id: Option<String>,
 }
 

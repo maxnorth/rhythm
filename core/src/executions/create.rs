@@ -16,9 +16,9 @@ pub async fn create_execution(params: CreateExecutionParams) -> Result<String> {
     let result: Option<(String, bool)> = sqlx::query_as(
         r#"
         INSERT INTO executions (
-            id, type, function_name, queue, status, priority,
-            args, kwargs, options, max_retries, timeout_seconds, parent_workflow_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            id, type, function_name, queue, status,
+            args, kwargs, max_retries, parent_workflow_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (id) DO NOTHING
         RETURNING id, (xmax = 0) AS inserted
         "#,
@@ -28,12 +28,9 @@ pub async fn create_execution(params: CreateExecutionParams) -> Result<String> {
     .bind(&params.function_name)
     .bind(&params.queue)
     .bind(ExecutionStatus::Pending)
-    .bind(&params.priority)
     .bind(&params.args)
     .bind(&params.kwargs)
-    .bind(serde_json::json!({}))
     .bind(&params.max_retries)
-    .bind(&params.timeout_seconds)
     .bind(&params.parent_workflow_id)
     .fetch_optional(pool.as_ref())
     .await

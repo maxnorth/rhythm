@@ -156,7 +156,7 @@ pub mod test_helpers {
                     tokio::runtime::Handle::current().block_on(async {
                         // Truncate all tables before closing
                         if let Ok(pool) = get_pool().await {
-                            let _ = sqlx::query("TRUNCATE TABLE worker_heartbeats, executions, workflow_definitions, workflow_execution_context, dead_letter_queue CASCADE")
+                            let _ = sqlx::query("TRUNCATE TABLE executions, workflow_definitions, workflow_execution_context CASCADE")
                                 .execute(pool.as_ref())
                                 .await;
                         }

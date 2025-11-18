@@ -124,9 +124,9 @@ pub async fn start_workflow(
     let exec_result = sqlx::query(
         r#"
         INSERT INTO executions (
-            id, type, function_name, queue, status, priority,
-            args, kwargs, options, max_retries, timeout_seconds
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            id, type, function_name, queue, status,
+            args, kwargs, max_retries
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         "#,
     )
     .bind(&execution_id)
@@ -134,12 +134,9 @@ pub async fn start_workflow(
     .bind(workflow_name)
     .bind("default") // Use default queue
     .bind(&ExecutionStatus::Pending)
-    .bind(5) // Default priority
     .bind(serde_json::json!([])) // Empty args
     .bind(&inputs) // inputs go in kwargs
-    .bind(serde_json::json!({})) // Empty options
     .bind(0) // No retries for workflows
-    .bind(None::<i32>) // No timeout
     .execute(pool.as_ref())
     .await;
 

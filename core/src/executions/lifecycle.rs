@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use serde_json::Value as JsonValue;
-use uuid::Uuid;
 
 use crate::db::get_pool;
 
@@ -22,7 +21,7 @@ pub async fn complete_execution(execution_id: &str, result: JsonValue) -> Result
             WHERE id = $2
             RETURNING parent_workflow_id
         )
-        INSERT INTO executions (id, type, function_name, queue, status, args, kwargs, priority, max_retries)
+        INSERT INTO executions (id, type, function_name, queue, status, args, kwargs, max_retries)
         SELECT
             gen_random_uuid()::text,
             'task',
@@ -31,7 +30,6 @@ pub async fn complete_execution(execution_id: &str, result: JsonValue) -> Result
             'pending',
             jsonb_build_array(parent_workflow_id),
             '{}'::jsonb,
-            10,
             0
         FROM completed_task
         WHERE parent_workflow_id IS NOT NULL
@@ -56,9 +54,7 @@ pub async fn fail_execution(execution_id: &str, error: JsonValue, retry: bool) -
             r#"
             UPDATE executions
             SET status = 'pending',
-                error = $1,
-                worker_id = NULL,
-                claimed_at = NULL
+                error = $1
             WHERE id = $2
             "#,
         )
@@ -79,7 +75,7 @@ pub async fn fail_execution(execution_id: &str, error: JsonValue, retry: bool) -
                 WHERE id = $2
                 RETURNING parent_workflow_id
             )
-            INSERT INTO executions (id, type, function_name, queue, status, args, kwargs, priority, max_retries)
+            INSERT INTO executions (id, type, function_name, queue, status, args, kwargs, max_retries)
             SELECT
                 gen_random_uuid()::text,
                 'task',
@@ -88,7 +84,6 @@ pub async fn fail_execution(execution_id: &str, error: JsonValue, retry: bool) -
                 'pending',
                 jsonb_build_array(parent_workflow_id),
                 '{}'::jsonb,
-                10,
                 0
             FROM failed_task
             WHERE parent_workflow_id IS NOT NULL
@@ -99,22 +94,6 @@ pub async fn fail_execution(execution_id: &str, error: JsonValue, retry: bool) -
         .execute(pool.as_ref())
         .await
         .context("Failed to mark execution as failed")?;
-
-        // Insert into dead letter queue
-        sqlx::query(
-            r#"
-            INSERT INTO dead_letter_queue (id, execution_id, execution_data, failure_reason)
-            SELECT $1, id, row_to_json(executions.*)::jsonb, $2
-            FROM executions
-            WHERE id = $3
-            "#,
-        )
-        .bind(Uuid::new_v4().to_string())
-        .bind(error.to_string())
-        .bind(execution_id)
-        .execute(pool.as_ref())
-        .await
-        .ok(); // Don't fail if DLQ insert fails
     }
 
     Ok(())

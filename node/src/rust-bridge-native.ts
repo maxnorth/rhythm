@@ -26,11 +26,9 @@ export interface CreateExecutionParams {
   execType: string;
   functionName: string;
   queue: string;
-  priority: number;
   args: any[];
   kwargs: Record<string, any>;
   maxRetries: number;
-  timeoutSeconds?: number;
   parentWorkflowId?: string;
 }
 
@@ -47,11 +45,9 @@ class RustBridgeImpl {
       params.execType,
       params.functionName,
       params.queue,
-      params.priority,
       JSON.stringify(params.args),
       JSON.stringify(params.kwargs),
       params.maxRetries,
-      params.timeoutSeconds ?? null,
       params.parentWorkflowId ?? null
     );
   }

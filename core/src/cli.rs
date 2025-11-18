@@ -151,13 +151,9 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
                     println!("Function: {}", exec.function_name);
                     println!("Queue: {}", exec.queue);
                     println!("Status: {:?}", exec.status);
-                    println!("Priority: {}", exec.priority);
                     println!("Attempts: {}/{}", exec.attempt, exec.max_retries);
                     println!("Created: {}", exec.created_at);
 
-                    if let Some(claimed_at) = exec.claimed_at {
-                        println!("Claimed: {}", claimed_at);
-                    }
                     if let Some(completed_at) = exec.completed_at {
                         println!("Completed: {}", completed_at);
                     }

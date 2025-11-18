@@ -232,11 +232,9 @@ async fn bulk_create_pending_tasks(
             exec_type: ExecutionType::Task,
             function_name,
             queue: "default".to_string(),
-            priority: 5,
             args: json!(args),
             kwargs,
             max_retries: 3,
-            timeout_seconds: None,
             parent_workflow_id: Some(parent_workflow_id.to_string()),
         };
 

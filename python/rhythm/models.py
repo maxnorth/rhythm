@@ -32,11 +32,9 @@ class Execution(BaseModel):
     function_name: str
     queue: str
     status: ExecutionStatus
-    priority: int = 5
 
     args: list[Any] = Field(default_factory=list)
     kwargs: dict[str, Any] = Field(default_factory=dict)
-    options: dict[str, Any] = Field(default_factory=dict)
 
     result: Optional[Any] = None
     error: Optional[dict[str, Any]] = None
@@ -47,18 +45,14 @@ class Execution(BaseModel):
     parent_workflow_id: Optional[str] = None
 
     created_at: datetime
-    claimed_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    timeout_seconds: Optional[int] = None
-
-    worker_id: Optional[str] = None
 
     @classmethod
     def from_record(cls, record) -> "Execution":
         """Create from database record"""
         data = dict(record)
         # Parse JSONB fields
-        for field in ["args", "kwargs", "options", "result", "error"]:
+        for field in ["args", "kwargs", "result", "error"]:
             if field in data and data[field] is not None:
                 if isinstance(data[field], str):
                     data[field] = json.loads(data[field])

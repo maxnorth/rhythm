@@ -25,20 +25,15 @@ pub async fn get_execution(execution_id: &str) -> Result<Option<Execution>> {
             function_name: row.get("function_name"),
             queue: row.get("queue"),
             status: row.get("status"),
-            priority: row.get("priority"),
             args: row.get("args"),
             kwargs: row.get("kwargs"),
-            options: row.get("options"),
             result: row.get("result"),
             error: row.get("error"),
             attempt: row.get("attempt"),
             max_retries: row.get("max_retries"),
             parent_workflow_id: row.get("parent_workflow_id"),
             created_at: row.get("created_at"),
-            claimed_at: row.get("claimed_at"),
             completed_at: row.get("completed_at"),
-            timeout_seconds: row.get("timeout_seconds"),
-            worker_id: row.get("worker_id"),
         };
         return Ok(Some(exec));
     }
@@ -98,20 +93,15 @@ pub async fn list_executions(filter: ExecutionListFilter) -> Result<Vec<Executio
             function_name: row.get("function_name"),
             queue: row.get("queue"),
             status: row.get("status"),
-            priority: row.get("priority"),
             args: row.get("args"),
             kwargs: row.get("kwargs"),
-            options: row.get("options"),
             result: row.get("result"),
             error: row.get("error"),
             attempt: row.get("attempt"),
             max_retries: row.get("max_retries"),
             parent_workflow_id: row.get("parent_workflow_id"),
             created_at: row.get("created_at"),
-            claimed_at: row.get("claimed_at"),
             completed_at: row.get("completed_at"),
-            timeout_seconds: row.get("timeout_seconds"),
-            worker_id: row.get("worker_id"),
         });
     }
 
@@ -142,20 +132,15 @@ pub async fn get_workflow_tasks(workflow_id: &str) -> Result<Vec<Execution>> {
             function_name: row.get("function_name"),
             queue: row.get("queue"),
             status: row.get("status"),
-            priority: row.get("priority"),
             args: row.get("args"),
             kwargs: row.get("kwargs"),
-            options: row.get("options"),
             result: row.get("result"),
             error: row.get("error"),
             attempt: row.get("attempt"),
             max_retries: row.get("max_retries"),
             parent_workflow_id: row.get("parent_workflow_id"),
             created_at: row.get("created_at"),
-            claimed_at: row.get("claimed_at"),
             completed_at: row.get("completed_at"),
-            timeout_seconds: row.get("timeout_seconds"),
-            worker_id: row.get("worker_id"),
         });
     }
 

@@ -49,11 +49,9 @@ class RustBridge:
         exec_type: str,
         function_name: str,
         queue: str,
-        priority: int,
         args: List[Any],
         kwargs: Dict[str, Any],
         max_retries: int,
-        timeout_seconds: Optional[int],
         parent_workflow_id: Optional[str] = None,
     ) -> str:
         """Create a new execution"""
@@ -61,11 +59,9 @@ class RustBridge:
             exec_type=exec_type,
             function_name=function_name,
             queue=queue,
-            priority=priority,
             args=json.dumps(args),
             kwargs=json.dumps(kwargs),
             max_retries=max_retries,
-            timeout_seconds=timeout_seconds,
             parent_workflow_id=parent_workflow_id,
         )
 

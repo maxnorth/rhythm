@@ -49,11 +49,9 @@ pub async fn create_execution(
     exec_type: ExecutionType,
     function_name: String,
     queue: String,
-    priority: i32,
     args: JsonValue,
     kwargs: JsonValue,
     max_retries: i32,
-    timeout_seconds: Option<i32>,
     parent_workflow_id: Option<String>,
     id: Option<String>,
 ) -> Result<String> {
@@ -62,11 +60,9 @@ pub async fn create_execution(
         exec_type,
         function_name,
         queue,
-        priority,
         args,
         kwargs,
         max_retries,
-        timeout_seconds,
         parent_workflow_id,
     };
     executions::create_execution(params).await
