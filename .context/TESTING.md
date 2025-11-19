@@ -1,5 +1,153 @@
 # Testing Guide
 
+## Overview
+
+This guide covers testing practices for Rhythm, a multi-language durable execution framework with a Rust core and Python/Node.js adapters.
+
+---
+
+## Core Testing Principle: FFI Interfaces Drive Design
+
+**The adapter interface (FFI) takes priority over test convenience.**
+
+Tests must adapt to the interface required by language adapters (Python, Node.js), even if it results in less idiomatic or slightly verbose Rust test code.
+
+### Why This Matters
+
+Rhythm's architecture has three layers:
+1. **Rust Core** - Performance-critical operations
+2. **FFI Boundary** - Bridge between Rust and language adapters
+3. **Language Adapters** - Python, Node.js, etc.
+
+The FFI boundary is the **contract** between layers. Breaking it to make tests cleaner creates technical debt and confuses the architecture.
+
+---
+
+## FFI Testing Patterns
+
+### ✅ Correct Pattern: Tests Adapt to Interface
+
+```rust
+// Keep the FFI interface as the primary function
+pub async fn fail_execution(execution_id: &str, error: JsonValue, retry: bool) -> Result<()> {
+    // ... implementation
+}
+
+// Tests use the real interface, even if slightly verbose
+#[test]
+async fn test_fail() {
+    fail_execution(
+        &id,
+        serde_json::json!({"error": "Network error"}),
+        false
+    ).await.unwrap();
+}
+```
+
+**Benefits:**
+- ✅ FFI interface is clean and obvious
+- ✅ Single source of truth for the function
+- ✅ Tests validate the actual API consumers use
+- ✅ No confusion about which function to call
+
+### ❌ Anti-Pattern: Adapting Interface to Tests
+
+```rust
+// ❌ WRONG: Changed signature for test convenience
+pub async fn fail_execution(execution_id: &str, error: &str, retry: bool) -> Result<()> {
+    let error_json = serde_json::json!({"error": error});
+    fail_execution_json(execution_id, error_json, retry).await
+}
+
+// Now need a separate function for the real interface
+pub async fn fail_execution_json(execution_id: &str, error: JsonValue, retry: bool) -> Result<()> {
+    // ... actual implementation
+}
+```
+
+**Problems:**
+- FFI now calls `fail_execution_json` instead of `fail_execution`
+- The "real" function has an ugly name
+- Creates confusion about which function is the canonical API
+- Tests dictate production code design (tail wagging the dog)
+
+### Guidelines
+
+#### 1. FFI-First Design
+
+When adding or modifying functions used across the FFI boundary:
+
+1. **Start with the FFI requirements** - What do Python/Node.js need?
+2. **Design the Rust signature** - Match FFI needs (e.g., `String`, `JsonValue`)
+3. **Write tests using that signature** - Even if verbose
+
+#### 2. When Test Convenience Conflicts with FFI
+
+If a test would be cleaner with a different signature:
+
+**Option A: Accept slightly verbose tests**
+```rust
+// Test uses the real interface
+fail_execution(&id, serde_json::json!({"message": msg}), false).await
+```
+
+**Option B: Helper functions in tests (not production code)**
+```rust
+#[cfg(test)]
+mod test_helpers {
+    use super::*;
+
+    pub async fn fail_execution_str(id: &str, error: &str, retry: bool) -> Result<()> {
+        fail_execution(id, serde_json::json!({"message": error}), retry).await
+    }
+}
+
+#[test]
+async fn test_fail() {
+    test_helpers::fail_execution_str(&id, "Network error", false).await.unwrap();
+}
+```
+
+**Never do:**
+- ❌ Change the public API signature for test convenience
+- ❌ Create a `_json` variant when the main function should accept JSON
+- ❌ Make the FFI call a secondary function
+
+#### 3. Acceptable Test-Only Functions
+
+Test helpers are fine when they:
+- Live in `#[cfg(test)]` blocks or `tests.rs`
+- Don't change the public API
+- Provide convenience without altering contracts
+
+```rust
+#[cfg(test)]
+mod test_utils {
+    pub fn make_test_params(id: Option<String>) -> CreateExecutionParams {
+        CreateExecutionParams {
+            id,
+            exec_type: ExecutionType::Task,
+            function_name: "test.task".to_string(),
+            queue: "test".to_string(),
+            inputs: serde_json::json!({}),
+            parent_workflow_id: None,
+        }
+    }
+}
+```
+
+### Red Flags in Code Review
+
+Watch for these patterns that suggest tests are driving interface design:
+
+- ❌ Function suffixes like `_json`, `_raw`, `_internal` on the "real" implementation
+- ❌ FFI calling anything other than the main public function
+- ❌ Comments like "for tests" or "convenience wrapper" on public APIs
+- ❌ Multiple functions doing the same thing with different signatures
+- ❌ Tests using a simpler interface than FFI uses
+
+---
+
 ## Prerequisites
 
 1. **Rust** (latest stable)
@@ -10,73 +158,61 @@
 
 2. **Python 3.8+** with pip
 
-3. **PostgreSQL 14+**
+3. **Node.js 18+** with npm
+
+4. **PostgreSQL 14+**
    ```bash
-   docker-compose up -d
+   make db
    ```
 
-4. **Maturin** (for building Python extensions from Rust)
-   ```bash
-   pip install maturin
-   ```
+---
 
 ## Quick Start
 
-### 1. Build the Project
+### 1. Setup Database
 
 ```bash
-./build.sh
+make db          # Start PostgreSQL
+make migrate     # Run migrations
 ```
 
-This will:
-- Build the Rust core with maturin
-- Install the Python package in development mode
-- Create the `workflows_core` Python extension module
+### 2. Run Tests
 
-### 2. Run Migrations
-
+**Rust Core:**
 ```bash
-export WORKFLOWS_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
-python -m workflows migrate
+make core-test
 ```
 
-### 3. Run End-to-End Test
-
+**Python:**
 ```bash
-./test_e2e.sh
+cd python && pytest
 ```
+
+**Node.js:**
+```bash
+cd node && npm test
+```
+
+---
 
 ## Manual Testing
 
 ### Step 1: Start PostgreSQL
 
 ```bash
-docker-compose up -d
+make db
 ```
 
-### Step 2: Build Rust Core
+### Step 2: Run Migrations
 
 ```bash
-cd core
-maturin develop --release
-cd ..
+make migrate
 ```
 
-### Step 3: Set Database URL
+### Step 3: Enqueue Work (Python Example)
 
 ```bash
-export WORKFLOWS_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
-```
-
-### Step 4: Run Migrations
-
-```bash
-python -m workflows migrate
-```
-
-### Step 5: Enqueue Work
-
-```bash
+cd python
 python examples/enqueue_example.py
 ```
 
@@ -86,24 +222,22 @@ Expected output:
 Enqueuing example tasks and workflows
 ============================================================
 
-✓ Notification task enqueued: job_xxxxx
+✓ Notification task enqueued: <execution-id>
 
-✓ Order workflow enqueued: wor_xxxxx
-
-✓ High-priority order workflow enqueued: wor_xxxxx
+✓ Order workflow enqueued: <workflow-id>
 
 ============================================================
 Tasks enqueued! Start workers to process them:
-  rhythm worker -q notifications -q orders -m examples.simple_example
+  python -m rhythm worker -q notifications -q orders -m examples.simple_example
 ============================================================
 ```
 
-### Step 6: Start Worker
+### Step 4: Start Worker
 
 In a separate terminal:
 
 ```bash
-export WORKFLOWS_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
+cd python
 python -m rhythm worker -q notifications -q orders -m examples.simple_example
 ```
 
@@ -111,14 +245,14 @@ Expected output:
 ```
 Imported module: examples.simple_example
 Starting worker for queues: notifications, orders
-2025-10-05 XX:XX:XX [INFO] workflows.worker: Worker worker_xxxxx initialized for queues: ['notifications', 'orders']
-2025-10-05 XX:XX:XX [INFO] workflows.worker: Worker worker_xxxxx starting...
-2025-10-05 XX:XX:XX [INFO] workflows.worker: Worker worker_xxxxx listening on queues: ['notifications', 'orders']
-2025-10-05 XX:XX:XX [INFO] workflows.worker: Claimed task execution job_xxxxx: examples.simple_example.send_notification
+2025-XX-XX XX:XX:XX [INFO] rhythm.worker: Worker <worker-id> initialized for queues: ['notifications', 'orders']
+2025-XX-XX XX:XX:XX [INFO] rhythm.worker: Claimed task execution <execution-id>: send_notification
 [NOTIFICATION] Sending to user user_123: Your order has been confirmed!
-2025-10-05 XX:XX:XX [INFO] workflows.worker: Execution job_xxxxx completed successfully
+2025-XX-XX XX:XX:XX [INFO] rhythm.worker: Execution <execution-id> completed successfully
 ...
 ```
+
+---
 
 ## Testing Components
 
@@ -129,6 +263,13 @@ cd core
 cargo test
 ```
 
+The Rust tests cover:
+- Execution creation and lifecycle
+- Workflow suspension and resumption
+- Database operations
+- Error handling
+- Idempotency (duplicate execution IDs)
+
 ### Unit Tests (Python)
 
 ```bash
@@ -136,19 +277,45 @@ cd python
 pytest
 ```
 
-### Integration Tests
+### Unit Tests (Node.js)
 
-The E2E test covers:
-1. ✓ Rust core builds successfully via maturin
-2. ✓ Database migrations run via Rust
-3. ✓ Python can import and use Rust extension (`workflows_core`)
-4. ✓ Tasks can be enqueued via `RustBridge.create_execution()`
-5. ✓ Worker can claim tasks via `RustBridge.claim_execution()`
-6. ✓ Functions execute correctly
-7. ✓ Results are stored via `RustBridge.complete_execution()`
-8. ✓ Workflows suspend and resume correctly
-9. ✓ Tasks are created and executed
-10. ✓ Worker heartbeats function via `RustBridge.update_heartbeat()`
+```bash
+cd node
+npm test
+```
+
+---
+
+## Integration Testing
+
+### What Gets Tested
+
+1. ✓ Rust core builds successfully
+2. ✓ Database migrations run successfully
+3. ✓ Python can import and use Rust extension
+4. ✓ Node.js can use native module
+5. ✓ Tasks can be enqueued
+6. ✓ Workers can claim executions
+7. ✓ Functions execute correctly
+8. ✓ Results are stored
+9. ✓ Workflows suspend and resume correctly
+10. ✓ Child tasks are created and executed
+
+### Running Integration Tests
+
+Full end-to-end test:
+```bash
+# Start database
+make db
+
+# Run migration
+make migrate
+
+# Run Rust tests (includes DB integration)
+make core-test
+```
+
+---
 
 ## Debugging
 
@@ -164,27 +331,16 @@ If this fails, check:
 - Dependencies in `Cargo.toml`
 - Compilation errors
 
-### Check Python Extension
-
-```bash
-python -c "import workflows_core; print('OK')"
-```
-
-If this fails:
-- Make sure maturin built successfully
-- Check Python version compatibility (3.8+)
-- Try rebuilding: `cd core && maturin develop --release`
-
 ### Check Database Connection
 
 ```bash
-python -c "from workflows.rust_bridge import RustBridge; print('OK')"
+psql -h localhost -U rhythm -d rhythm -c "SELECT 1"
 ```
 
 If this fails:
-- Check `WORKFLOWS_DATABASE_URL` is set
+- Check `RHYTHM_DATABASE_URL` is set
 - Verify PostgreSQL is running: `docker ps`
-- Test connection: `psql $WORKFLOWS_DATABASE_URL`
+- Check database exists: `psql -h localhost -U rhythm -l`
 
 ### Enable Rust Logging
 
@@ -200,23 +356,16 @@ export PYTHONUNBUFFERED=1
 python -m rhythm worker ...
 ```
 
+---
+
 ## Common Issues
 
-### Issue: `ImportError: No module named 'workflows_core'`
+### Issue: Cannot connect to database
 
-**Solution:** Build the Rust extension
+**Solution:** Start PostgreSQL and set the environment variable
 ```bash
-cd core
-maturin develop
-cd ..
-```
-
-### Issue: `cannot connect to database`
-
-**Solution:** Start PostgreSQL
-```bash
-docker-compose up -d
-export WORKFLOWS_DATABASE_URL="postgresql://workflows:workflows@localhost/workflows"
+make db
+export RHYTHM_DATABASE_URL="postgresql://rhythm@localhost/rhythm"
 ```
 
 ### Issue: `Function 'xxx' not found in registry`
@@ -235,6 +384,16 @@ cd core
 cargo update
 cargo build
 ```
+
+### Issue: Migration already applied
+
+**Solution:** Reset the database
+```bash
+make db-reset
+make migrate
+```
+
+---
 
 ## Performance Testing
 
@@ -263,46 +422,41 @@ Monitor:
 - Database CPU usage
 - Worker memory usage
 
-## Continuous Integration
+---
 
-Example GitHub Actions workflow:
+## Current Test Coverage
 
-```yaml
-name: Test
+### What We Test
 
-on: [push, pull_request]
+- ✅ Execution creation with custom IDs (idempotency)
+- ✅ Execution lifecycle (pending → running → completed/failed)
+- ✅ Workflow suspension and resumption
+- ✅ Task retry logic (hardcoded 3 retries)
+- ✅ Error handling and storage
+- ✅ Database pool management
+- ✅ Worker claiming logic
+- ✅ Parent-child workflow relationships
 
-tasks:
-  test:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: workflows
-          POSTGRES_PASSWORD: workflows
-          POSTGRES_DB: workflows
-        ports:
-          - 5432:5432
+### What We Don't Test (Removed Features)
 
-    steps:
-      - uses: actions/checkout@v3
+- ❌ Priority queuing (removed)
+- ❌ Heartbeats (removed)
+- ❌ Signals (removed)
+- ❌ Batch operations (removed)
+- ❌ Per-execution retry configuration (removed, now hardcoded to 3)
+- ❌ Timeout enforcement (removed)
+- ❌ Worker tracking (removed)
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
+---
 
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+## Summary
 
-      - name: Install dependencies
-        run: |
-          pip install maturin
-          ./build.sh
+**Core Rule:** The FFI interface is the contract. Tests validate the contract, not convenience variants.
 
-      - name: Run tests
-        env:
-          WORKFLOWS_DATABASE_URL: postgresql://workflows:workflows@localhost/workflows
-        run: ./test_e2e.sh
-```
+**When in doubt:**
+1. What does the language adapter (Python/Node) need?
+2. Design the Rust function for that use case
+3. Tests use that same interface
+4. If tests are verbose, that's okay - they're testing the real thing
+
+**Remember:** A slightly verbose test that validates the real interface is better than a clean test that validates a fake interface.
