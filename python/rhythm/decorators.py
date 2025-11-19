@@ -3,7 +3,6 @@
 from typing import Callable, Optional
 import inspect
 
-from rhythm.config import settings
 from rhythm.registry import register_function
 from rhythm.client import queue_execution
 
@@ -16,9 +15,6 @@ class ExecutableProxy:
         fn: Callable,
         exec_type: str,
         queue: Optional[str] = None,
-        retries: Optional[int] = None,
-        timeout: Optional[int] = None,
-        priority: int = 5,
         **extra_config,
     ):
         self.fn = fn
@@ -30,9 +26,6 @@ class ExecutableProxy:
         # Store configuration
         self.config = {
             "queue": queue,
-            "retries": retries or settings.default_retries,
-            "timeout": timeout,
-            "priority": priority,
             **extra_config,
         }
 
@@ -70,28 +63,18 @@ class TaskProxy(ExecutableProxy):
         if queue is None:
             raise ValueError("@task decorator requires a 'queue' parameter")
 
-        if "timeout" not in config or config["timeout"] is None:
-            config["timeout"] = settings.default_timeout
         super().__init__(fn, exec_type="task", queue=queue, **config)
 
 
-def task(
-    queue: str,
-    retries: int = None,
-    timeout: int = None,
-    priority: int = 5,
-):
+def task(queue: str):
     """
     Decorator for defining a task (standalone async task).
 
     Args:
         queue: The queue name to execute in
-        retries: Number of retry attempts (default: 3)
-        timeout: Timeout in seconds (default: 300)
-        priority: Priority 0-10, higher = more urgent (default: 5)
 
     Example:
-        @task(queue="emails", retries=3)
+        @task(queue="emails")
         async def send_email(to: str, subject: str):
             await email_client.send(to, subject)
     """
@@ -103,9 +86,6 @@ def task(
         return TaskProxy(
             fn=fn,
             queue=queue,
-            retries=retries,
-            timeout=timeout,
-            priority=priority,
         )
 
     return decorator

@@ -10,7 +10,6 @@ export async function queueExecution(params: {
   functionName: string;
   inputs: Record<string, any>;
   queue: string;
-  maxRetries?: number;
   parentWorkflowId?: string;
 }): Promise<string> {
   const executionId = RustBridge.createExecution({
@@ -18,7 +17,6 @@ export async function queueExecution(params: {
     functionName: params.functionName,
     queue: params.queue,
     inputs: params.inputs,
-    maxRetries: params.maxRetries ?? 3,
     parentWorkflowId: params.parentWorkflowId,
   });
 

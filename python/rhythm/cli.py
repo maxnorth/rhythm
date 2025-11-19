@@ -88,12 +88,9 @@ def status(execution_id):
             click.echo(f"Function: {result['function_name']}")
             click.echo(f"Queue: {result['queue']}")
             click.echo(f"Status: {result['status']}")
-            click.echo(f"Priority: {result['priority']}")
             click.echo(f"Attempts: {result['attempt']}/3")
             click.echo(f"Created: {result['created_at']}")
 
-            if result.get("claimed_at"):
-                click.echo(f"Claimed: {result['claimed_at']}")
             if result.get("completed_at"):
                 click.echo(f"Completed: {result['completed_at']}")
 

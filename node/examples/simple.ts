@@ -8,7 +8,6 @@ import { task, workflow, isReplaying } from '../src/index.js';
 const sendNotification = task<[string, string], { sent: boolean; user_id: string }>({
   name: 'sendNotification',
   queue: 'notifications',
-  retries: 3,
 })(async (userId: string, message: string) => {
   console.log(`[NOTIFICATION] Sending to user ${userId}: ${message}`);
   await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate API call
@@ -19,8 +18,6 @@ const sendNotification = task<[string, string], { sent: boolean; user_id: string
 const validateOrder = task<[string, number], { valid: boolean; order_id: string }>({
   name: 'validateOrder',
   queue: 'orders',
-  retries: 3,
-  timeout: 60,
 })(async (orderId: string, amount: number) => {
   console.log(`[VALIDATE] Validating order ${orderId} for $${amount}`);
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -38,8 +35,6 @@ const chargePayment = task<
 >({
   name: 'chargePayment',
   queue: 'orders',
-  retries: 5,
-  timeout: 120,
 })(async (orderId: string, amount: number, paymentMethod: string) => {
   console.log(`[CHARGE] Charging $${amount} via ${paymentMethod} for order ${orderId}`);
   await new Promise((resolve) => setTimeout(resolve, 500));
@@ -85,7 +80,6 @@ const processOrderWorkflow = workflow<
   name: 'processOrderWorkflow',
   queue: 'orders',
   version: 1,
-  timeout: 600,
 })(
   async (
     orderId: string,
@@ -155,11 +149,15 @@ async function main() {
   );
   console.log(`✓ Order workflow enqueued: ${workflowId}\n`);
 
-  // Enqueue another order with high priority
-  const workflowId2 = await processOrderWorkflow
-    .options({ priority: 10 })
-    .queue('order_789', 'vip@example.com', 19999, 'credit_card', ['premium_item']);
-  console.log(`✓ High-priority order workflow enqueued: ${workflowId2}\n`);
+  // Enqueue another order
+  const workflowId2 = await processOrderWorkflow.queue(
+    'order_789',
+    'vip@example.com',
+    19999,
+    'credit_card',
+    ['premium_item']
+  );
+  console.log(`✓ VIP order workflow enqueued: ${workflowId2}\n`);
 
   console.log('='.repeat(60));
   console.log('Tasks and workflows enqueued! Start workers to process them:');

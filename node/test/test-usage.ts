@@ -14,8 +14,6 @@ console.log('-'.repeat(60));
 
 const sendEmail = task<[string, string], { sent: boolean }>({
   queue: 'emails',
-  retries: 3,
-  timeout: 30,
 })(async function sendEmail(to: string, subject: string) {
   console.log(`  Would send email to ${to}: ${subject}`);
   return { sent: true };
@@ -23,7 +21,6 @@ const sendEmail = task<[string, string], { sent: boolean }>({
 
 console.log('✓ Task defined:', sendEmail.functionName);
 console.log('  Queue:', sendEmail.config.queue);
-console.log('  Retries:', sendEmail.config.retries);
 
 // Test 2: Enqueue task
 console.log('\n[TEST 2] Enqueue Task');
@@ -35,13 +32,13 @@ console.log('-'.repeat(60));
   console.log('  Format valid:', /^task_[a-z0-9]+_[a-f0-9]+$/.test(taskId));
 
   // Test 3: Task with options
-  console.log('\n[TEST 3] Task with Custom Priority');
+  console.log('\n[TEST 3] Task with Custom Queue');
   console.log('-'.repeat(60));
 
-  const highPriorityEmail = sendEmail.options({ priority: 10 });
-  const taskId2 = await highPriorityEmail.queue('vip@example.com', 'VIP Welcome');
-  console.log('✓ High-priority task enqueued:', taskId2);
-  console.log('  Priority:', (highPriorityEmail as any).config.priority);
+  const customQueueEmail = sendEmail.options({ queue: 'vip-emails' });
+  const taskId2 = await customQueueEmail.queue('vip@example.com', 'VIP Welcome');
+  console.log('✓ Custom queue task enqueued:', taskId2);
+  console.log('  Queue:', customQueueEmail.config.queue);
 
   // Test 4: Task for workflow steps
   console.log('\n[TEST 4] Task Definition (for workflow steps)');
@@ -49,8 +46,6 @@ console.log('-'.repeat(60));
 
   const validateOrder = task<[string, number], { valid: boolean }>({
     queue: 'orders',
-    retries: 5,
-    timeout: 60,
   })(async function validateOrder(orderId: string, amount: number) {
     console.log(`  Validating order ${orderId} for $${amount}`);
     if (amount < 0) throw new Error('Invalid amount');
@@ -58,7 +53,7 @@ console.log('-'.repeat(60));
   });
 
   console.log('✓ Task defined:', validateOrder.functionName);
-  console.log('  Config:', validateOrder.config);
+  console.log('  Queue:', validateOrder.config.queue);
 
   // Test 5: Direct task call (for testing)
   console.log('\n[TEST 5] Direct Task Call');
@@ -83,7 +78,6 @@ console.log('-'.repeat(60));
   >({
     queue: 'orders',
     version: 1,
-    timeout: 600,
   })(async function processOrder(orderId: string, amount: number) {
     if (!isReplaying()) {
       console.log(`  [WORKFLOW] Processing order ${orderId}`);

@@ -4,7 +4,6 @@
 
 import { queueExecution } from './client.js';
 import { registerFunction } from './registry.js';
-import { settings } from './config.js';
 import type {
   ExecutableProxy,
   TaskConfig,
@@ -35,12 +34,7 @@ export class BaseExecutableProxy<TArgs extends any[] = any[], TReturn = any>
       );
     }
 
-    this.config = {
-      retries: config.retries ?? settings.defaultRetries,
-      timeout: config.timeout,
-      priority: config.priority ?? 5,
-      ...config,
-    };
+    this.config = { ...config };
 
     registerFunction(this.functionName, fn);
   }
@@ -54,11 +48,8 @@ export class BaseExecutableProxy<TArgs extends any[] = any[], TReturn = any>
     return queueExecution({
       execType: this.execType,
       functionName: this.functionName,
-      args: args,
+      inputs: args,
       queue: this.config.queue!,
-      priority: this.config.priority,
-      maxRetries: this.config.retries,
-      timeoutSeconds: this.config.timeout,
     });
   }
 
@@ -75,11 +66,7 @@ export class TaskProxy<TArgs extends any[] = any[], TReturn = any> extends BaseE
     if (!config.queue) {
       throw new Error('@task decorator requires a "queue" parameter');
     }
-    const fullConfig = {
-      ...config,
-      timeout: config.timeout ?? settings.defaultTimeout,
-    };
-    super(fn, 'task', fullConfig);
+    super(fn, 'task', config);
   }
 }
 

@@ -23,11 +23,15 @@ async function main() {
   );
   console.log(`✓ Order workflow enqueued: ${workflowId}\n`);
 
-  // Enqueue another order with high priority
-  const workflowId2 = await processOrderWorkflow
-    .options({ priority: 10 })
-    .queue('order_789', 'vip@example.com', 19999, 'credit_card', ['premium_item']);
-  console.log(`✓ High-priority order workflow enqueued: ${workflowId2}\n`);
+  // Enqueue another order
+  const workflowId2 = await processOrderWorkflow.queue(
+    'order_789',
+    'vip@example.com',
+    19999,
+    'credit_card',
+    ['premium_item']
+  );
+  console.log(`✓ VIP order workflow enqueued: ${workflowId2}\n`);
 
   console.log('='.repeat(60));
   console.log('Tasks and workflows enqueued! Start workers to process them:');

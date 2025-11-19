@@ -60,13 +60,9 @@ program
         console.log(`Function: ${result.function_name}`);
         console.log(`Queue: ${result.queue}`);
         console.log(`Status: ${result.status}`);
-        console.log(`Priority: ${result.priority}`);
         console.log(`Attempts: ${result.attempt}/3`);
         console.log(`Created: ${result.created_at}`);
 
-        if (result.claimed_at) {
-          console.log(`Claimed: ${result.claimed_at}`);
-        }
         if (result.completed_at) {
           console.log(`Completed: ${result.completed_at}`);
         }

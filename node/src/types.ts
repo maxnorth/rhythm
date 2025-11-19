@@ -5,9 +5,6 @@
 export interface ExecutionConfig {
   name?: string; // Function name (optional, inferred from function if not provided)
   queue?: string;
-  retries?: number;
-  timeout?: number;
-  priority?: number;
   version?: number;
 }
 
@@ -29,12 +26,10 @@ export interface ExecutionStatus {
   function_name: string;
   queue: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'suspended';
-  priority: number;
   result?: any;
   error?: any;
   attempt: number;
   created_at: Date;
-  claimed_at?: Date;
   completed_at?: Date;
 }
 

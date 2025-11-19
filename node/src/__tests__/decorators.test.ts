@@ -56,21 +56,19 @@ describe('Decorators', () => {
 
   describe('options', () => {
     it('should allow modifying options', () => {
-      const testTask = task<[string], string>({ queue: 'test', priority: 5 })(
+      const testTask = task<[string], string>({ queue: 'test' })(
         async function testTask6(msg: string) {
           return msg;
         }
       );
 
-      const highPriorityTask = testTask.options({ priority: 10 });
+      const modifiedTask = testTask.options({ queue: 'high-priority' });
 
       // Original should be unchanged
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((testTask as any).config.priority).toBe(5);
+      expect(testTask.config.queue).toBe('test');
 
-      // New instance should have new priority
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      expect((highPriorityTask as any).config.priority).toBe(10);
+      // New instance should have new queue
+      expect(modifiedTask.config.queue).toBe('high-priority');
     });
   });
 });
