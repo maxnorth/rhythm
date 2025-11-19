@@ -34,7 +34,6 @@ pub struct Execution {
     pub output: Option<JsonValue>,
 
     pub attempt: i32,
-    pub max_retries: i32,
 
     pub parent_workflow_id: Option<String>,
 
@@ -49,7 +48,6 @@ pub struct CreateExecutionParams {
     pub function_name: String,
     pub queue: String,
     pub inputs: JsonValue,
-    pub max_retries: i32,
     pub parent_workflow_id: Option<String>,
 }
 

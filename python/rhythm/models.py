@@ -37,7 +37,6 @@ class Execution(BaseModel):
     output: Optional[Any] = None
 
     attempt: int = 0
-    max_retries: int = 3
 
     parent_workflow_id: Optional[str] = None
 

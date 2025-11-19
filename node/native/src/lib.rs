@@ -12,7 +12,6 @@ pub async fn create_execution(
     function_name: String,
     queue: String,
     inputs: String,
-    max_retries: i32,
     parent_workflow_id: Option<String>,
 ) -> Result<String> {
     let exec_type = match exec_type.as_str() {
@@ -30,7 +29,6 @@ pub async fn create_execution(
         function_name,
         queue,
         inputs,
-        max_retries,
         parent_workflow_id,
     };
 

@@ -61,7 +61,7 @@ program
         console.log(`Queue: ${result.queue}`);
         console.log(`Status: ${result.status}`);
         console.log(`Priority: ${result.priority}`);
-        console.log(`Attempts: ${result.attempt}/${result.max_retries}`);
+        console.log(`Attempts: ${result.attempt}/3`);
         console.log(`Created: ${result.created_at}`);
 
         if (result.claimed_at) {

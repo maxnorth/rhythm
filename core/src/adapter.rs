@@ -50,7 +50,6 @@ pub async fn create_execution(
     function_name: String,
     queue: String,
     inputs: JsonValue,
-    max_retries: i32,
     parent_workflow_id: Option<String>,
     id: Option<String>,
 ) -> Result<String> {
@@ -60,7 +59,6 @@ pub async fn create_execution(
         function_name,
         queue,
         inputs,
-        max_retries,
         parent_workflow_id,
     };
     executions::create_execution(params).await

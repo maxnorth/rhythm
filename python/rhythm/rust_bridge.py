@@ -50,7 +50,6 @@ class RustBridge:
         function_name: str,
         queue: str,
         inputs: Dict[str, Any],
-        max_retries: int,
         parent_workflow_id: Optional[str] = None,
     ) -> str:
         """Create a new execution"""
@@ -59,7 +58,6 @@ class RustBridge:
             function_name=function_name,
             queue=queue,
             inputs=json.dumps(inputs),
-            max_retries=max_retries,
             parent_workflow_id=parent_workflow_id,
         )
 

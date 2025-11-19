@@ -89,7 +89,7 @@ def status(execution_id):
             click.echo(f"Queue: {result['queue']}")
             click.echo(f"Status: {result['status']}")
             click.echo(f"Priority: {result['priority']}")
-            click.echo(f"Attempts: {result['attempt']}/{result['max_retries']}")
+            click.echo(f"Attempts: {result['attempt']}/3")
             click.echo(f"Created: {result['created_at']}")
 
             if result.get("claimed_at"):

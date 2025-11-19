@@ -39,7 +39,6 @@ pub async fn task_run(
         function_name: task_name.to_string(),
         queue: "default".to_string(),
         inputs,
-        max_retries: 3,
         parent_workflow_id: Some(execution_id.to_string()),
     })
     .await

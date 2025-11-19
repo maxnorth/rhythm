@@ -233,7 +233,6 @@ async fn bulk_create_pending_tasks(
             function_name,
             queue: "default".to_string(),
             inputs,
-            max_retries: 3,
             parent_workflow_id: Some(parent_workflow_id.to_string()),
         };
 

@@ -165,7 +165,7 @@ export class Worker {
 
   private async handleExecutionFailure(execution: any, error: unknown): Promise<void> {
     const attempt = execution.attempt + 1;
-    const maxRetries = execution.max_retries;
+    const maxRetries = 3;  // Default retry limit
 
     const err = error as Error;
     const errorData = {

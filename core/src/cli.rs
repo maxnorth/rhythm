@@ -104,6 +104,9 @@ pub enum Commands {
         #[arg(long, default_value = "0")]
         warmup_percent: f64,
     },
+
+    /// Run database migrations
+    Migrate,
 }
 
 /// Run the CLI by parsing process arguments
@@ -140,7 +143,10 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
 
     // Check if database has been initialized (migrations run)
     // This prevents confusing errors when trying to use an uninitialized database
-    db::check_initialized().await?;
+    // Skip this check for the migrate command since we're about to run migrations
+    if !matches!(cli.command, Commands::Migrate) {
+        db::check_initialized().await?;
+    }
 
     match cli.command {
         Commands::Status { execution_id } => {
@@ -151,7 +157,7 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
                     println!("Function: {}", exec.function_name);
                     println!("Queue: {}", exec.queue);
                     println!("Status: {:?}", exec.status);
-                    println!("Attempts: {}/{}", exec.attempt, exec.max_retries);
+                    println!("Attempts: {}/3", exec.attempt);
                     println!("Created: {}", exec.created_at);
 
                     if let Some(completed_at) = exec.completed_at {
@@ -282,6 +288,13 @@ async fn run_cli_with_args(cli: Cli) -> Result<()> {
             };
 
             benchmark::run_benchmark(params).await?;
+        }
+
+        Commands::Migrate => {
+            println!("Running database migrations...");
+            db::initialize_pool().await?;
+            db::migrate().await?;
+            println!("✓ Migrations completed successfully");
         }
     }
 

@@ -33,7 +33,6 @@ export interface ExecutionStatus {
   result?: any;
   error?: any;
   attempt: number;
-  max_retries: number;
   created_at: Date;
   claimed_at?: Date;
   completed_at?: Date;

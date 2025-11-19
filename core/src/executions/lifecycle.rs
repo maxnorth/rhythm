@@ -21,15 +21,14 @@ pub async fn complete_execution(execution_id: &str, output: JsonValue) -> Result
             WHERE id = $2
             RETURNING parent_workflow_id
         )
-        INSERT INTO executions (id, type, function_name, queue, status, inputs, max_retries)
+        INSERT INTO executions (id, type, function_name, queue, status, inputs)
         SELECT
             gen_random_uuid()::text,
             'task',
             'builtin.resume_workflow',
             'system',
             'pending',
-            jsonb_build_object('workflow_id', parent_workflow_id),
-            0
+            jsonb_build_object('workflow_id', parent_workflow_id)
         FROM completed_task
         WHERE parent_workflow_id IS NOT NULL
         "#,
@@ -74,15 +73,14 @@ pub async fn fail_execution(execution_id: &str, output: JsonValue, retry: bool) 
                 WHERE id = $2
                 RETURNING parent_workflow_id
             )
-            INSERT INTO executions (id, type, function_name, queue, status, inputs, max_retries)
+            INSERT INTO executions (id, type, function_name, queue, status, inputs)
             SELECT
                 gen_random_uuid()::text,
                 'task',
                 'builtin.resume_workflow',
                 'system',
                 'pending',
-                jsonb_build_object('workflow_id', parent_workflow_id),
-                0
+                jsonb_build_object('workflow_id', parent_workflow_id)
             FROM failed_task
             WHERE parent_workflow_id IS NOT NULL
             "#,

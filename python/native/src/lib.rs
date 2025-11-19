@@ -88,13 +88,12 @@ fn migrate_sync() -> PyResult<()> {
 
 /// Create an execution
 #[pyfunction]
-#[pyo3(signature = (exec_type, function_name, queue, inputs, max_retries, parent_workflow_id=None, id=None))]
+#[pyo3(signature = (exec_type, function_name, queue, inputs, parent_workflow_id=None, id=None))]
 fn create_execution_sync(
     exec_type: String,
     function_name: String,
     queue: String,
     inputs: String,
-    max_retries: i32,
     parent_workflow_id: Option<String>,
     id: Option<String>,
 ) -> PyResult<String> {
@@ -115,7 +114,6 @@ fn create_execution_sync(
             function_name,
             queue,
             inputs,
-            max_retries,
             parent_workflow_id,
             id,
         ))

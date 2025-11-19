@@ -56,7 +56,6 @@ class ExecutableProxy:
             function_name=self.function_name,
             inputs=inputs,
             queue=self.config["queue"],
-            max_retries=self.config["retries"],
         )
 
     def __call__(self, *args, **kwargs):

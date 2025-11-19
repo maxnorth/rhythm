@@ -426,7 +426,6 @@ async fn enqueue_tasks(
             function_name: function_name.to_string(),
             queue: queue.to_string(),
             inputs: serde_json::Value::Object(inputs_map.clone()),
-            max_retries: 3,
             parent_workflow_id: None,
         })
         .await?;

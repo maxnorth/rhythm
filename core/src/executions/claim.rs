@@ -39,7 +39,6 @@ pub async fn claim_execution(_worker_id: &str, queues: &[String]) -> Result<Opti
             inputs: row.get("inputs"),
             output: row.get("output"),
             attempt: row.get("attempt"),
-            max_retries: row.get("max_retries"),
             parent_workflow_id: row.get("parent_workflow_id"),
             created_at: row.get("created_at"),
             completed_at: row.get("completed_at"),

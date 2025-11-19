@@ -220,10 +220,10 @@ class Worker:
         }
 
         logger.error(
-            f"Execution {execution.id} failed (attempt {execution.attempt}/{execution.max_retries}): {error}"
+            f"Execution {execution.id} failed (attempt {execution.attempt}/3): {error}"
         )
 
-        if execution.attempt < execution.max_retries:
+        if execution.attempt < 3:
             # Retry
             delay = calculate_retry_delay(execution.attempt)
             RustBridge.fail_execution(execution.id, error_data, retry=True)

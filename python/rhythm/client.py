@@ -13,7 +13,6 @@ async def queue_execution(
     function_name: str,
     inputs: dict,
     queue: str,
-    max_retries: int = 3,
     parent_workflow_id: Optional[str] = None,
 ) -> str:
     """
@@ -24,7 +23,6 @@ async def queue_execution(
         function_name: Fully qualified function name
         inputs: Input parameters as a dictionary
         queue: Queue name
-        max_retries: Maximum retry attempts
         parent_workflow_id: Parent workflow ID (for workflow tasks)
 
     Returns:
@@ -35,7 +33,6 @@ async def queue_execution(
         function_name=function_name,
         queue=queue,
         inputs=inputs,
-        max_retries=max_retries,
         parent_workflow_id=parent_workflow_id,
     )
 

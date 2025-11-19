@@ -13,7 +13,6 @@ async fn test_db_pool_limit() {
             function_name: "test.task".to_string(),
             queue: "test".to_string(),
             inputs: serde_json::json!({}),
-            max_retries: 3,
             parent_workflow_id: None,
         };
 
@@ -31,7 +30,6 @@ async fn test_create_execution_with_user_provided_id() {
         function_name: "test.task".to_string(),
         queue: "test".to_string(),
             inputs: serde_json::json!({}),
-        max_retries: 3,
         parent_workflow_id: None,
     };
 
@@ -52,7 +50,6 @@ async fn test_create_execution_without_id_generates_uuid() {
         function_name: "test.task".to_string(),
         queue: "test".to_string(),
             inputs: serde_json::json!({}),
-        max_retries: 3,
         parent_workflow_id: None,
         id: None,
     };
@@ -74,7 +71,6 @@ async fn test_duplicate_id_pending_fails() {
         function_name: "test.task".to_string(),
         queue: "test".to_string(),
             inputs: serde_json::json!({}),
-        max_retries: 3,
         parent_workflow_id: None,
         id: Some("payment-order-456".to_string()),
     };
@@ -100,7 +96,6 @@ async fn test_duplicate_id_running_fails() {
         function_name: "test.task".to_string(),
         queue: "test".to_string(),
             inputs: serde_json::json!({}),
-        max_retries: 3,
         parent_workflow_id: None,
         id: Some("payment-order-789".to_string()),
     };
@@ -129,7 +124,6 @@ async fn test_duplicate_id_completed_fails() {
         function_name: "test.task".to_string(),
         queue: "test".to_string(),
             inputs: serde_json::json!({}),
-        max_retries: 3,
         parent_workflow_id: None,
         id: Some("payment-order-999".to_string()),
     };
@@ -166,7 +160,6 @@ async fn test_duplicate_id_failed_allows_retry() {
         function_name: "test.task".to_string(),
         queue: "test".to_string(),
             inputs: serde_json::json!({}),
-        max_retries: 3,
         parent_workflow_id: None,
         id: Some("payment-order-failed".to_string()),
     };
@@ -197,7 +190,6 @@ async fn test_different_ids_can_coexist() {
         function_name: "test.task".to_string(),
         queue: "test".to_string(),
             inputs: serde_json::json!({}),
-        max_retries: 3,
         parent_workflow_id: None,
         id: Some("order-aaa".to_string()),
     };
@@ -228,7 +220,6 @@ async fn test_result_is_stored_on_completion() {
         function_name: "test.task".to_string(),
         queue: "test".to_string(),
             inputs: serde_json::json!({}),
-        max_retries: 3,
         parent_workflow_id: None,
         id: Some("result-test".to_string()),
     };
