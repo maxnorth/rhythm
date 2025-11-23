@@ -241,24 +241,42 @@ where
 pub async fn suspend_execution<'e, E>(
     executor: E,
     execution_id: &str,
-) -> Result<()>
+) -> Result<Option<Execution>>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
-    sqlx::query(
+    let result = sqlx::query(
         r#"
         UPDATE executions
         SET status = 'suspended',
             completed_at = NOW()
         WHERE id = $1
+        RETURNING *
         "#,
     )
     .bind(execution_id)
-    .execute(executor)
+    .fetch_optional(executor)
     .await
     .context("Failed to suspend execution")?;
 
-    Ok(())
+    if let Some(row) = result {
+        let exec = Execution {
+            id: row.get("id"),
+            exec_type: row.get("type"),
+            function_name: row.get("function_name"),
+            queue: row.get("queue"),
+            status: row.get("status"),
+            inputs: row.get("inputs"),
+            output: row.get("output"),
+            attempt: row.get("attempt"),
+            parent_workflow_id: row.get("parent_workflow_id"),
+            created_at: row.get("created_at"),
+            completed_at: row.get("completed_at"),
+        };
+        return Ok(Some(exec));
+    }
+
+    Ok(None)
 }
 
 /// Query executions with filters

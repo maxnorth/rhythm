@@ -74,9 +74,10 @@ pub struct ExecutionFilters {
     pub offset: Option<i64>,
 }
 
-/// Outcome of an execution (success or failure)
+/// Outcome of an execution (success, failure, or suspended)
 #[derive(Debug, Clone)]
 pub enum ExecutionOutcome {
     Success(JsonValue),
     Failure(JsonValue),
+    Suspended,
 }

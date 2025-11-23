@@ -7,20 +7,23 @@ use sqlx::PgPool;
 use crate::v2::db;
 use crate::v2::types::ExecutionOutcome;
 
-/// Finish an execution (complete or fail) and re-queue parent if exists
+/// Finish work (complete, fail, or suspend) and re-queue parent if exists
 ///
 /// This is a helper that:
-/// 1. Marks the execution as completed or failed
+/// 1. Marks the execution as completed, failed, or suspended
 /// 2. Completes the work queue entry
 /// 3. Re-queues the parent workflow if one exists
 ///
 /// The transaction must be used for all operations to ensure atomicity.
-pub async fn finish_execution(
+///
+/// Note: Workflow execution context management (upsert/delete) should be handled
+/// by the caller before calling this function.
+pub async fn finish_work(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     execution_id: &str,
     outcome: ExecutionOutcome,
 ) -> Result<()> {
-    // Mark execution as complete or failed based on outcome
+    // Handle execution based on outcome
     let execution = match outcome {
         ExecutionOutcome::Success(output) => {
             db::executions::complete_execution(&mut **tx, execution_id, output)
@@ -31,6 +34,11 @@ pub async fn finish_execution(
             db::executions::fail_execution(&mut **tx, execution_id, error)
                 .await
                 .context("Failed to fail execution")?
+        }
+        ExecutionOutcome::Suspended => {
+            db::executions::suspend_execution(&mut **tx, execution_id)
+                .await
+                .context("Failed to suspend execution")?
         }
     };
 
@@ -74,7 +82,7 @@ pub async fn complete_work(
         }
     };
 
-    finish_execution(&mut tx, execution_id, outcome).await?;
+    finish_work(&mut tx, execution_id, outcome).await?;
 
     tx.commit().await?;
 
