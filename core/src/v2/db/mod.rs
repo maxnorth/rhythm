@@ -4,12 +4,14 @@
 //! All SQL queries are isolated here to keep the business logic clean.
 
 pub mod executions;
+pub mod pool;
 pub mod workflow_definitions;
 pub mod workflow_execution_context;
 pub mod work_queue;
 
 // Re-export commonly used items
 pub use executions::*;
+pub use pool::*;
 pub use workflow_definitions::*;
 pub use workflow_execution_context::*;
 pub use work_queue::*;

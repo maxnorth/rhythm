@@ -14,6 +14,7 @@ use crate::v2::runner::run_workflow;
 use crate::v2::test_helpers::{
     enqueue_and_claim_execution, get_child_task_count, get_child_tasks,
     get_task_by_function_name, get_unclaimed_work_count, get_work_queue_count, setup_workflow_test,
+    setup_workflow_test_with_pool,
 };
 use crate::v2::types::ExecutionStatus;
 
@@ -29,7 +30,7 @@ async fn test_simple_workflow_completes_immediately() {
         setup_workflow_test("simple_workflow", workflow_source, json!({})).await;
 
     // Run workflow - should complete immediately
-    run_workflow(
+    run_workflow(&pool, 
         execution_id.clone(),
         "simple_workflow".to_string(),
         json!({}),
@@ -66,7 +67,7 @@ async fn test_workflow_suspends_on_task_then_completes() {
         setup_workflow_test("workflow_with_task", workflow_source, json!({})).await;
 
     // First run: workflow should suspend on task
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "workflow_with_task".to_string(),
         json!({}),
@@ -103,7 +104,7 @@ async fn test_workflow_suspends_on_task_then_completes() {
         .unwrap();
 
     // Second run: workflow should resume and complete
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "workflow_with_task".to_string(),
         json!({}),
@@ -143,7 +144,7 @@ async fn test_workflow_with_multiple_sequential_tasks() {
 
     // Run 1: Suspend on first task
 
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "multi_step_workflow".to_string(),
         json!({}),
@@ -166,7 +167,7 @@ async fn test_workflow_with_multiple_sequential_tasks() {
         .await
         .unwrap();
 
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "multi_step_workflow".to_string(),
         json!({}),
@@ -189,7 +190,7 @@ async fn test_workflow_with_multiple_sequential_tasks() {
         .await
         .unwrap();
 
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "multi_step_workflow".to_string(),
         json!({}),
@@ -212,7 +213,7 @@ async fn test_workflow_with_multiple_sequential_tasks() {
         .await
         .unwrap();
 
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "multi_step_workflow".to_string(),
         json!({}),
@@ -243,7 +244,7 @@ async fn test_workflow_with_fire_and_forget_task() {
         setup_workflow_test("mixed_task_workflow", workflow_source, json!({})).await;
 
     // First run: should suspend on main_task
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "mixed_task_workflow".to_string(),
         json!({}),
@@ -269,7 +270,7 @@ async fn test_workflow_with_fire_and_forget_task() {
         .await
         .unwrap();
 
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "mixed_task_workflow".to_string(),
         json!({}),
@@ -293,11 +294,11 @@ async fn test_workflow_with_invalid_syntax_fails() {
     // Workflow with invalid syntax that will fail during parsing
     let workflow_source = r#"this is not valid syntax!!!"#;
 
-    let (_pool, _adapter, workflow_id) =
+    let (pool, _adapter, workflow_id) =
         setup_workflow_test("invalid_workflow", workflow_source, json!({})).await;
 
     // Run workflow - should fail during parsing
-    let result = run_workflow(
+    let result = run_workflow(&pool, 
         workflow_id.clone(),
         "invalid_workflow".to_string(),
         json!({}),
@@ -320,10 +321,10 @@ async fn test_workflow_with_inputs() {
         return result
     "#;
 
-    let (_pool, adapter, workflow_id) =
+    let (pool, adapter, workflow_id) =
         setup_workflow_test("inputs_workflow", workflow_source, json!({"x": 15, "y": 27})).await;
 
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "inputs_workflow".to_string(),
         json!({"x": 15, "y": 27}),
@@ -350,7 +351,7 @@ async fn test_workflow_resumes_with_failed_task() {
         setup_workflow_test("workflow_with_failing_task", workflow_source, json!({})).await;
 
     // First run: workflow suspends on task
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "workflow_with_failing_task".to_string(),
         json!({}),
@@ -373,7 +374,7 @@ async fn test_workflow_resumes_with_failed_task() {
         .await
         .unwrap();
 
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "workflow_with_failing_task".to_string(),
         json!({}),
@@ -402,7 +403,7 @@ async fn test_resume_without_task_completion_fails() {
         setup_workflow_test("workflow_waiting", workflow_source, json!({})).await;
 
     // First run: workflow suspends
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "workflow_waiting".to_string(),
         json!({}),
@@ -416,7 +417,7 @@ async fn test_resume_without_task_completion_fails() {
         .await
         .unwrap();
 
-    let result = run_workflow(
+    let result = run_workflow(&pool, 
         workflow_id.clone(),
         "workflow_waiting".to_string(),
         json!({}),
@@ -440,7 +441,7 @@ async fn test_corrupted_vm_state_fails_gracefully() {
         setup_workflow_test("workflow_corrupted", workflow_source, json!({})).await;
 
     // First run: workflow suspends
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "workflow_corrupted".to_string(),
         json!({}),
@@ -467,7 +468,7 @@ async fn test_corrupted_vm_state_fails_gracefully() {
         .await
         .unwrap();
 
-    let result = run_workflow(
+    let result = run_workflow(&pool, 
         workflow_id.clone(),
         "workflow_corrupted".to_string(),
         json!({}),
@@ -484,10 +485,10 @@ async fn test_corrupted_vm_state_fails_gracefully() {
 async fn test_workflow_returns_different_types() {
     // Test null return
     let null_workflow = r#"return null"#;
-    let (_pool, adapter, workflow_id) =
+    let (pool, adapter, workflow_id) =
         setup_workflow_test("null_workflow", null_workflow, json!({})).await;
 
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "null_workflow".to_string(),
         json!({}),
@@ -501,10 +502,10 @@ async fn test_workflow_returns_different_types() {
 
     // Test boolean return
     let bool_workflow = r#"return true"#;
-    let (_pool2, adapter2, workflow_id2) =
-        setup_workflow_test("bool_workflow", bool_workflow, json!({})).await;
+    let (pool, adapter2, workflow_id2) =
+        setup_workflow_test_with_pool(Some(pool), "bool_workflow", bool_workflow, json!({})).await;
 
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id2.clone(),
         "bool_workflow".to_string(),
         json!({}),
@@ -518,10 +519,10 @@ async fn test_workflow_returns_different_types() {
 
     // Test array return
     let array_workflow = r#"return [1, 2, 3]"#;
-    let (_pool3, adapter3, workflow_id3) =
-        setup_workflow_test("array_workflow", array_workflow, json!({})).await;
+    let (pool, adapter3, workflow_id3) =
+        setup_workflow_test_with_pool(Some(pool), "array_workflow", array_workflow, json!({})).await;
 
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id3.clone(),
         "array_workflow".to_string(),
         json!({}),
@@ -545,7 +546,7 @@ async fn test_dual_row_work_queue_pattern() {
         setup_workflow_test("dual_row_workflow", workflow_source, json!({})).await;
 
     // Workflow runs and suspends
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "dual_row_workflow".to_string(),
         json!({}),
@@ -584,7 +585,7 @@ async fn test_workflow_creates_many_tasks() {
     let (pool, adapter, workflow_id) =
         setup_workflow_test("many_tasks_workflow", workflow_source, json!({})).await;
 
-    run_workflow(
+    run_workflow(&pool, 
         workflow_id.clone(),
         "many_tasks_workflow".to_string(),
         json!({}),
@@ -615,7 +616,7 @@ async fn test_workflow_with_varying_task_counts() {
     let (pool1, _adapter1, workflow_id1) =
         setup_workflow_test("workflow_with_tasks", workflow_with_tasks, json!({})).await;
 
-    run_workflow(
+    run_workflow(&pool1, 
         workflow_id1.clone(),
         "workflow_with_tasks".to_string(),
         json!({}),
@@ -636,7 +637,7 @@ async fn test_workflow_with_varying_task_counts() {
     let (pool2, _adapter2, workflow_id2) =
         setup_workflow_test("workflow_no_tasks", workflow_no_tasks, json!({})).await;
 
-    run_workflow(
+    run_workflow(&pool2, 
         workflow_id2.clone(),
         "workflow_no_tasks".to_string(),
         json!({}),

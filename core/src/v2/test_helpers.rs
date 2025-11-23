@@ -5,14 +5,12 @@ use serde_json::Value as JsonValue;
 use sqlx::PgPool;
 use std::ops::Deref;
 
-use crate::db::test_helpers::TestDbGuard;
 use crate::v2::client_adapter::ClientAdapter;
 use crate::v2::db;
 
 /// Test database pool that automatically cleans up on drop
 pub struct TestPool {
     pool: PgPool,
-    _guard: TestDbGuard,
 }
 
 impl Deref for TestPool {
@@ -29,20 +27,42 @@ impl AsRef<PgPool> for TestPool {
     }
 }
 
+impl Drop for TestPool {
+    fn drop(&mut self) {
+        // Clean up tables when test completes
+        let pool = self.pool.clone();
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    let _ = sqlx::query(
+                        "TRUNCATE TABLE executions, workflow_definitions, workflow_execution_context, work_queue CASCADE"
+                    )
+                    .execute(&pool)
+                    .await;
+                });
+            });
+        }));
+    }
+}
+
 /// Initialize test database and return a pool
 ///
 /// The returned pool will automatically clean up when dropped.
-/// Tests run serially to avoid conflicts.
+/// Each test gets its own independent pool.
 pub async fn with_test_db() -> TestPool {
-    let _guard = crate::db::test_helpers::with_test_db().await;
-    let pool = crate::db::get_pool()
+    let pool = db::create_pool_with_max_connections(1)
         .await
-        .expect("Failed to get test pool");
+        .expect("Failed to create test pool");
 
-    TestPool {
-        pool: (*pool).clone(),
-        _guard,
-    }
+    // Clean up any leftover data from previous runs
+    sqlx::query(
+        "TRUNCATE TABLE executions, workflow_definitions, workflow_execution_context, work_queue CASCADE"
+    )
+    .execute(&pool)
+    .await
+    .expect("Failed to clean up test database");
+
+    TestPool { pool }
 }
 
 /// Helper to set up a workflow test
@@ -54,7 +74,27 @@ pub async fn setup_workflow_test(
     workflow_source: &str,
     inputs: JsonValue,
 ) -> (TestPool, ClientAdapter, String) {
-    let pool = with_test_db().await;
+    setup_workflow_test_with_pool(None, workflow_name, workflow_source, inputs).await
+}
+
+/// Helper to set up a workflow test with an optional existing pool
+///
+/// If pool is provided, reuses it. Otherwise creates a new one.
+/// Returns (pool, adapter, execution_id) for use in tests.
+pub async fn setup_workflow_test_with_pool(
+    pool: Option<TestPool>,
+    workflow_name: &str,
+    workflow_source: &str,
+    inputs: JsonValue,
+) -> (TestPool, ClientAdapter, String) {
+    let pool = pool.unwrap_or_else(|| {
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                with_test_db().await
+            })
+        })
+    });
+
     let adapter = ClientAdapter::new(pool.clone());
 
     adapter
