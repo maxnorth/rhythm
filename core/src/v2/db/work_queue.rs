@@ -9,12 +9,15 @@ use sqlx::Row;
 ///
 /// Creates an unclaimed work queue entry. If an unclaimed entry already exists,
 /// this operation does nothing (idempotent).
-pub async fn enqueue_work(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+pub async fn enqueue_work<'e, E>(
+    executor: E,
     execution_id: &str,
     queue: &str,
     priority: i32,
-) -> Result<()> {
+) -> Result<()>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     sqlx::query(
         r#"
         INSERT INTO work_queue (execution_id, queue, priority)
@@ -26,7 +29,7 @@ pub async fn enqueue_work(
     .bind(execution_id)
     .bind(queue)
     .bind(priority)
-    .execute(&mut **tx)
+    .execute(executor)
     .await
     .context("Failed to enqueue work")?;
 
@@ -101,10 +104,13 @@ pub async fn claim_specific_execution(
 ///
 /// Deletes the claimed work queue entry. Preserves any unclaimed entry that
 /// was queued while this work was in progress.
-pub async fn complete_work(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+pub async fn complete_work<'e, E>(
+    executor: E,
     execution_id: &str,
-) -> Result<()> {
+) -> Result<()>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     sqlx::query(
         r#"
         DELETE FROM work_queue
@@ -113,7 +119,7 @@ pub async fn complete_work(
         "#,
     )
     .bind(execution_id)
-    .execute(&mut **tx)
+    .execute(executor)
     .await
     .context("Failed to complete work")?;
 

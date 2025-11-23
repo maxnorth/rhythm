@@ -68,10 +68,13 @@ pub async fn upsert_context(
 /// Delete workflow execution context
 ///
 /// Called when workflow completes or fails.
-pub async fn delete_context(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+pub async fn delete_context<'e, E>(
+    executor: E,
     execution_id: &str,
-) -> Result<()> {
+) -> Result<()>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     sqlx::query(
         r#"
         DELETE FROM workflow_execution_context
@@ -79,7 +82,7 @@ pub async fn delete_context(
         "#,
     )
     .bind(execution_id)
-    .execute(&mut **tx)
+    .execute(executor)
     .await
     .context("Failed to delete workflow execution context")?;
 

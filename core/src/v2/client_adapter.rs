@@ -55,7 +55,7 @@ impl ClientAdapter {
         .await?;
 
         // Enqueue work
-        db::work_queue::enqueue_work(&mut tx, &execution_id, queue, 0).await?;
+        db::work_queue::enqueue_work(&mut *tx, &execution_id, queue, 0).await?;
 
         tx.commit().await?;
 

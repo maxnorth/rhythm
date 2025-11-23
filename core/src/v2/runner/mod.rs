@@ -41,11 +41,11 @@ pub async fn run_workflow(
                 .await
                 .context("Failed to complete workflow execution")?;
 
-            db::workflow_execution_context::delete_context(&mut tx, &execution_id)
+            db::workflow_execution_context::delete_context(&mut *tx, &execution_id)
                 .await
                 .context("Failed to delete workflow execution context")?;
 
-            db::work_queue::complete_work(&mut tx, &execution_id)
+            db::work_queue::complete_work(&mut *tx, &execution_id)
                 .await
                 .context("Failed to complete work queue entry")?;
         }
@@ -53,7 +53,7 @@ pub async fn run_workflow(
             let vm_state = serde_json::to_value(&vm)
                 .context("Failed to serialize VM state")?;
 
-            db::executions::suspend_execution(&mut tx, &execution_id)
+            db::executions::suspend_execution(&mut *tx, &execution_id)
                 .await
                 .context("Failed to suspend execution")?;
 
@@ -61,7 +61,7 @@ pub async fn run_workflow(
                 .await
                 .context("Failed to upsert workflow execution context")?;
 
-            db::work_queue::complete_work(&mut tx, &execution_id)
+            db::work_queue::complete_work(&mut *tx, &execution_id)
                 .await
                 .context("Failed to complete work queue entry")?;
         }
@@ -72,11 +72,11 @@ pub async fn run_workflow(
                 .await
                 .context("Failed to mark workflow as failed")?;
 
-            db::workflow_execution_context::delete_context(&mut tx, &execution_id)
+            db::workflow_execution_context::delete_context(&mut *tx, &execution_id)
                 .await
                 .context("Failed to delete workflow execution context")?;
 
-            db::work_queue::complete_work(&mut tx, &execution_id)
+            db::work_queue::complete_work(&mut *tx, &execution_id)
                 .await
                 .context("Failed to complete work queue entry")?;
 
@@ -92,11 +92,11 @@ pub async fn run_workflow(
                 .await
                 .context("Failed to mark workflow as failed")?;
 
-            db::workflow_execution_context::delete_context(&mut tx, &execution_id)
+            db::workflow_execution_context::delete_context(&mut *tx, &execution_id)
                 .await
                 .context("Failed to delete workflow execution context")?;
 
-            db::work_queue::complete_work(&mut tx, &execution_id)
+            db::work_queue::complete_work(&mut *tx, &execution_id)
                 .await
                 .context("Failed to complete work queue entry")?;
 

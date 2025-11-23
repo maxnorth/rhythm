@@ -81,7 +81,7 @@ pub async fn enqueue_and_claim_execution(
     queue: &str,
 ) -> Result<()> {
     let mut tx = pool.begin().await?;
-    db::work_queue::enqueue_work(&mut tx, execution_id, queue, 0).await?;
+    db::work_queue::enqueue_work(&mut *tx, execution_id, queue, 0).await?;
 
     // Manually claim the work (simpler than using claim_work for testing)
     sqlx::query(
@@ -150,4 +150,15 @@ pub async fn get_task_by_function_name(
     .fetch_one(pool)
     .await?;
     Ok(task_id)
+}
+
+/// Helper to get unclaimed work queue entry count for an execution
+pub async fn get_unclaimed_work_count(pool: &PgPool, execution_id: &str) -> Result<i64> {
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM work_queue WHERE execution_id = $1 AND claimed_until IS NULL",
+    )
+    .bind(execution_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(count)
 }

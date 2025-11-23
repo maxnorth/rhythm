@@ -13,7 +13,7 @@ use crate::v2::db;
 use crate::v2::runner::run_workflow;
 use crate::v2::test_helpers::{
     enqueue_and_claim_execution, get_child_task_count, get_child_tasks,
-    get_task_by_function_name, get_work_queue_count, setup_workflow_test,
+    get_task_by_function_name, get_unclaimed_work_count, get_work_queue_count, setup_workflow_test,
 };
 use crate::v2::types::ExecutionStatus;
 
@@ -556,30 +556,16 @@ async fn test_dual_row_work_queue_pattern() {
 
     // Simulate a new event (child task completion) that re-queues the workflow
     // This should create an unclaimed row while the claimed row still exists
-    let mut tx = pool.begin().await.unwrap();
-    db::work_queue::enqueue_work(&mut tx, &workflow_id, "default", 0)
+    db::work_queue::enqueue_work(pool.as_ref(), &workflow_id, "default", 0)
         .await
         .unwrap();
-    tx.commit().await.unwrap();
 
     // Verify we have exactly 1 row (the unclaimed one, claimed was deleted when suspended)
-    let work_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM work_queue WHERE execution_id = $1"
-    )
-    .bind(&workflow_id)
-    .fetch_one(pool.as_ref())
-    .await
-    .unwrap();
+    let work_count = get_work_queue_count(&pool, &workflow_id).await.unwrap();
     assert_eq!(work_count, 1);
 
     // Verify it's unclaimed
-    let unclaimed_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM work_queue WHERE execution_id = $1 AND claimed_until IS NULL"
-    )
-    .bind(&workflow_id)
-    .fetch_one(pool.as_ref())
-    .await
-    .unwrap();
+    let unclaimed_count = get_unclaimed_work_count(&pool, &workflow_id).await.unwrap();
     assert_eq!(unclaimed_count, 1);
 }
 

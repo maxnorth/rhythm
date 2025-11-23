@@ -162,10 +162,13 @@ where
     Ok(())
 }
 
-pub async fn suspend_execution(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+pub async fn suspend_execution<'e, E>(
+    executor: E,
     execution_id: &str,
-) -> Result<()> {
+) -> Result<()>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     sqlx::query(
         r#"
         UPDATE executions
@@ -175,7 +178,7 @@ pub async fn suspend_execution(
         "#,
     )
     .bind(execution_id)
-    .execute(&mut **tx)
+    .execute(executor)
     .await
     .context("Failed to suspend execution")?;
 
