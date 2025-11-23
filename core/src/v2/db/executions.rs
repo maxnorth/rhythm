@@ -110,56 +110,132 @@ pub async fn create_execution(
     }
 }
 
+pub async fn start_execution<'e, E>(
+    executor: E,
+    execution_id: &str,
+) -> Result<Option<Execution>>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    let result = sqlx::query(
+        r#"
+        UPDATE executions
+        SET status = 'running'
+        WHERE id = $1
+        RETURNING *
+        "#,
+    )
+    .bind(execution_id)
+    .fetch_optional(executor)
+    .await
+    .context("Failed to start execution")?;
+
+    if let Some(row) = result {
+        let exec = Execution {
+            id: row.get("id"),
+            exec_type: row.get("type"),
+            function_name: row.get("function_name"),
+            queue: row.get("queue"),
+            status: row.get("status"),
+            inputs: row.get("inputs"),
+            output: row.get("output"),
+            attempt: row.get("attempt"),
+            parent_workflow_id: row.get("parent_workflow_id"),
+            created_at: row.get("created_at"),
+            completed_at: row.get("completed_at"),
+        };
+        return Ok(Some(exec));
+    }
+
+    Ok(None)
+}
+
 pub async fn complete_execution<'e, E>(
     executor: E,
     execution_id: &str,
     output: JsonValue,
-) -> Result<()>
+) -> Result<Option<Execution>>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
-    sqlx::query(
+    let result = sqlx::query(
         r#"
         UPDATE executions
         SET status = 'completed',
             output = $1,
             completed_at = NOW()
         WHERE id = $2
+        RETURNING *
         "#,
     )
     .bind(output)
     .bind(execution_id)
-    .execute(executor)
+    .fetch_optional(executor)
     .await
     .context("Failed to complete execution")?;
 
-    Ok(())
+    if let Some(row) = result {
+        let exec = Execution {
+            id: row.get("id"),
+            exec_type: row.get("type"),
+            function_name: row.get("function_name"),
+            queue: row.get("queue"),
+            status: row.get("status"),
+            inputs: row.get("inputs"),
+            output: row.get("output"),
+            attempt: row.get("attempt"),
+            parent_workflow_id: row.get("parent_workflow_id"),
+            created_at: row.get("created_at"),
+            completed_at: row.get("completed_at"),
+        };
+        return Ok(Some(exec));
+    }
+
+    Ok(None)
 }
 
 pub async fn fail_execution<'e, E>(
     executor: E,
     execution_id: &str,
     output: JsonValue,
-) -> Result<()>
+) -> Result<Option<Execution>>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
-    sqlx::query(
+    let result = sqlx::query(
         r#"
         UPDATE executions
         SET status = 'failed',
             output = $1,
             completed_at = NOW()
         WHERE id = $2
+        RETURNING *
         "#,
     )
     .bind(&output)
     .bind(execution_id)
-    .execute(executor)
+    .fetch_optional(executor)
     .await
     .context("Failed to mark execution as failed")?;
 
-    Ok(())
+    if let Some(row) = result {
+        let exec = Execution {
+            id: row.get("id"),
+            exec_type: row.get("type"),
+            function_name: row.get("function_name"),
+            queue: row.get("queue"),
+            status: row.get("status"),
+            inputs: row.get("inputs"),
+            output: row.get("output"),
+            attempt: row.get("attempt"),
+            parent_workflow_id: row.get("parent_workflow_id"),
+            created_at: row.get("created_at"),
+            completed_at: row.get("completed_at"),
+        };
+        return Ok(Some(exec));
+    }
+
+    Ok(None)
 }
 
 pub async fn suspend_execution<'e, E>(

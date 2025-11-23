@@ -5,34 +5,35 @@ use serde_json::Value as JsonValue;
 use sqlx::PgPool;
 
 use crate::v2::db;
-use crate::v2::types::{CreateExecutionParams, ExecutionType};
+use crate::v2::types::{CreateExecutionParams, ExecutionOutcome, ExecutionType};
 use crate::v2::executor::{
     json_to_val, json_to_val_map, run_until_done, val_map_to_json, val_to_json, Control, VM,
 };
 use crate::v2::parser::parse_workflow;
+use super::complete::finish_execution;
 
-pub async fn run_workflow(
-    pool: &PgPool,
-    execution_id: String,
-    workflow_name: String,
-    inputs: JsonValue,
-    queue: String,
-) -> Result<()> {
-    let maybe_context = db::workflow_execution_context::get_context(&pool, &execution_id).await?;
+pub async fn run_workflow(pool: &PgPool, execution: crate::v2::types::Execution) -> Result<()> {
+    let maybe_context = db::workflow_execution_context::get_context(&pool, &execution.id).await?;
 
     let (mut vm, workflow_def_id) = if let Some(context) = maybe_context {
         resume_workflow(&pool, context).await?
     } else {
-        initialize_workflow(&pool, &workflow_name, &inputs).await?
+        initialize_workflow(&pool, &execution.function_name, &execution.inputs).await?
     };
 
     run_until_done(&mut vm);
 
     let mut tx = pool.begin().await?;
 
-    create_child_tasks(&mut tx, &vm.outbox, &execution_id, &queue).await?;
+    create_child_tasks(&mut tx, &vm.outbox, &execution.id, &execution.queue).await?;
 
-    handle_workflow_result(&mut tx, &vm, &execution_id, workflow_def_id).await?;
+    handle_workflow_result(
+        &mut tx,
+        &vm,
+        &execution.id,
+        workflow_def_id,
+    )
+    .await?;
 
     tx.commit().await?;
 
@@ -122,17 +123,14 @@ async fn handle_workflow_result(
         Control::Return(val) => {
             let result_json = val_to_json(&val)?;
 
-            db::executions::complete_execution(&mut **tx, &execution_id, result_json)
-                .await
-                .context("Failed to complete workflow execution")?;
-
+            // Delete workflow execution context before finishing
             db::workflow_execution_context::delete_context(&mut **tx, &execution_id)
                 .await
                 .context("Failed to delete workflow execution context")?;
 
-            db::work_queue::complete_work(&mut **tx, &execution_id)
-                .await
-                .context("Failed to complete work queue entry")?;
+            // Use helper to complete execution, complete work, and re-queue parent
+            finish_execution(&mut *tx, &execution_id, ExecutionOutcome::Success(result_json))
+                .await?;
         }
         Control::Suspend(_) => {
             let vm_state = serde_json::to_value(&vm)
@@ -153,17 +151,14 @@ async fn handle_workflow_result(
         Control::Throw(error_val) => {
             let error_json = val_to_json(&error_val)?;
 
-            db::executions::fail_execution(&mut **tx, &execution_id, error_json)
-                .await
-                .context("Failed to mark workflow as failed")?;
-
+            // Delete workflow execution context before finishing
             db::workflow_execution_context::delete_context(&mut **tx, &execution_id)
                 .await
                 .context("Failed to delete workflow execution context")?;
 
-            db::work_queue::complete_work(&mut **tx, &execution_id)
-                .await
-                .context("Failed to complete work queue entry")?;
+            // Use helper to fail execution, complete work, and re-queue parent
+            finish_execution(&mut *tx, &execution_id, ExecutionOutcome::Failure(error_json))
+                .await?;
 
             return Err(anyhow::anyhow!("Workflow threw error: {:?}", error_val));
         }
@@ -173,17 +168,14 @@ async fn handle_workflow_result(
                 "type": "UnexpectedControlState"
             });
 
-            db::executions::fail_execution(&mut **tx, &execution_id, error_json)
-                .await
-                .context("Failed to mark workflow as failed")?;
-
+            // Delete workflow execution context before finishing
             db::workflow_execution_context::delete_context(&mut **tx, &execution_id)
                 .await
                 .context("Failed to delete workflow execution context")?;
 
-            db::work_queue::complete_work(&mut **tx, &execution_id)
-                .await
-                .context("Failed to complete work queue entry")?;
+            // Use helper to fail execution, complete work, and re-queue parent
+            finish_execution(&mut *tx, &execution_id, ExecutionOutcome::Failure(error_json))
+                .await?;
 
             return Err(anyhow::anyhow!("Unexpected control state: {:?}", vm.control));
         }
@@ -193,4 +185,5 @@ async fn handle_workflow_result(
 }
 
 #[cfg(test)]
+#[path = "runner_tests.rs"]
 mod tests;

@@ -10,6 +10,7 @@ use sqlx::PgPool;
 
 use super::db;
 use super::types::{CreateExecutionParams, Execution, ExecutionFilters, ExecutionType};
+use super::worker::{self, ClaimedTask};
 
 /// High-level client adapter for workflow operations
 ///
@@ -82,5 +83,28 @@ impl ClientAdapter {
     /// Returns the workflow definition ID.
     pub async fn create_workflow_version(&self, name: &str, source: &str) -> Result<i32> {
         db::workflow_definitions::create_workflow_definition(&self.pool, name, source).await
+    }
+
+    /// Claim work from the queue
+    ///
+    /// This method blocks/retries until work is available. When it finds work:
+    /// - If it's a workflow: executes it internally and loops again
+    /// - If it's a task: returns the task details to the host for execution
+    pub async fn claim_work(&self) -> Result<ClaimedTask> {
+        worker::claim_work(&self.pool).await
+    }
+
+    /// Complete work after task execution
+    ///
+    /// Either result OR error should be Some, not both.
+    /// If result is Some, marks the task as completed.
+    /// If error is Some, marks the task as failed.
+    pub async fn complete_work(
+        &self,
+        execution_id: &str,
+        result: Option<JsonValue>,
+        error: Option<JsonValue>,
+    ) -> Result<()> {
+        worker::complete_work(&self.pool, execution_id, result, error).await
     }
 }

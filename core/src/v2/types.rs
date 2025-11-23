@@ -73,3 +73,10 @@ pub struct ExecutionFilters {
     /// Offset for pagination
     pub offset: Option<i64>,
 }
+
+/// Outcome of an execution (success or failure)
+#[derive(Debug, Clone)]
+pub enum ExecutionOutcome {
+    Success(JsonValue),
+    Failure(JsonValue),
+}

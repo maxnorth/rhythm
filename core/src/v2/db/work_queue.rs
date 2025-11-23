@@ -40,11 +40,14 @@ where
 ///
 /// Returns a list of execution IDs that were successfully claimed.
 /// Uses lease-based claiming with a 5-minute timeout.
-pub async fn claim_work(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+pub async fn claim_work<'e, E>(
+    executor: E,
     queue: &str,
     limit: i32,
-) -> Result<Vec<String>> {
+) -> Result<Vec<String>>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     let rows = sqlx::query(
         r#"
         UPDATE work_queue
@@ -69,7 +72,7 @@ pub async fn claim_work(
     )
     .bind(queue)
     .bind(limit)
-    .fetch_all(&mut **tx)
+    .fetch_all(executor)
     .await
     .context("Failed to claim work")?;
 

@@ -7,8 +7,8 @@ pub mod client_adapter;
 pub mod db;
 pub mod executor;
 pub mod parser;
-pub mod runner;
 pub mod types;
+pub mod worker;
 
 #[cfg(test)]
 pub mod test_helpers;

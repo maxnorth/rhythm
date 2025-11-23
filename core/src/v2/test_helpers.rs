@@ -7,6 +7,7 @@ use std::ops::Deref;
 
 use crate::v2::client_adapter::ClientAdapter;
 use crate::v2::db;
+use crate::v2::types::Execution;
 
 /// Test database pool that automatically cleans up on drop
 pub struct TestPool {
@@ -68,25 +69,25 @@ pub async fn with_test_db() -> TestPool {
 /// Helper to set up a workflow test
 ///
 /// Creates workflow, submits execution, and claims work.
-/// Returns (pool, adapter, execution_id) for use in tests.
+/// Returns (pool, adapter, execution) for use in tests.
 pub async fn setup_workflow_test(
     workflow_name: &str,
     workflow_source: &str,
     inputs: JsonValue,
-) -> (TestPool, ClientAdapter, String) {
+) -> (TestPool, ClientAdapter, Execution) {
     setup_workflow_test_with_pool(None, workflow_name, workflow_source, inputs).await
 }
 
 /// Helper to set up a workflow test with an optional existing pool
 ///
 /// If pool is provided, reuses it. Otherwise creates a new one.
-/// Returns (pool, adapter, execution_id) for use in tests.
+/// Returns (pool, adapter, execution) for use in tests.
 pub async fn setup_workflow_test_with_pool(
     pool: Option<TestPool>,
     workflow_name: &str,
     workflow_source: &str,
     inputs: JsonValue,
-) -> (TestPool, ClientAdapter, String) {
+) -> (TestPool, ClientAdapter, Execution) {
     let pool = pool.unwrap_or_else(|| {
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
@@ -111,7 +112,13 @@ pub async fn setup_workflow_test_with_pool(
         .await
         .unwrap();
 
-    (pool, adapter, execution_id)
+    // Fetch the execution from the database
+    let execution = db::executions::get_execution(&pool, &execution_id)
+        .await
+        .unwrap()
+        .expect("Execution should exist");
+
+    (pool, adapter, execution)
 }
 
 /// Helper to enqueue and claim work for an execution
