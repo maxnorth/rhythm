@@ -1,0 +1,121 @@
+//! Work Queue Database Operations
+//!
+//! Provides scheduling primitives for the V2 workflow engine.
+
+use anyhow::{Context, Result};
+use sqlx::Row;
+
+/// Enqueue work for an execution
+///
+/// Creates an unclaimed work queue entry. If an unclaimed entry already exists,
+/// this operation does nothing (idempotent).
+pub async fn enqueue_work(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    execution_id: &str,
+    queue: &str,
+    priority: i32,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO work_queue (execution_id, queue, priority)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (execution_id, (claimed_until IS NULL))
+        DO NOTHING
+        "#,
+    )
+    .bind(execution_id)
+    .bind(queue)
+    .bind(priority)
+    .execute(&mut **tx)
+    .await
+    .context("Failed to enqueue work")?;
+
+    Ok(())
+}
+
+/// Claim work from the queue
+///
+/// Returns a list of execution IDs that were successfully claimed.
+/// Uses lease-based claiming with a 5-minute timeout.
+pub async fn claim_work(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    queue: &str,
+    limit: i32,
+) -> Result<Vec<String>> {
+    let rows = sqlx::query(
+        r#"
+        UPDATE work_queue
+        SET claimed_until = NOW() + INTERVAL '5 minutes'
+        WHERE id IN (
+            SELECT wq.id
+            FROM work_queue wq
+            WHERE wq.queue = $1
+              AND (wq.claimed_until IS NULL OR wq.claimed_until < NOW())
+              AND NOT EXISTS (
+                  SELECT 1 FROM work_queue wq2
+                  WHERE wq2.execution_id = wq.execution_id
+                    AND wq2.claimed_until IS NOT NULL
+                    AND wq2.claimed_until > NOW()
+              )
+            ORDER BY wq.priority DESC, wq.created_at ASC
+            LIMIT $2
+            FOR UPDATE SKIP LOCKED
+        )
+        RETURNING execution_id
+        "#,
+    )
+    .bind(queue)
+    .bind(limit)
+    .fetch_all(&mut **tx)
+    .await
+    .context("Failed to claim work")?;
+
+    Ok(rows.into_iter().map(|row| row.get("execution_id")).collect())
+}
+
+/// Claim work for a specific execution
+///
+/// Claims the unclaimed work queue entry for a specific execution.
+/// Useful for testing or manual work claiming.
+/// Uses lease-based claiming with a 5-minute timeout.
+pub async fn claim_specific_execution(
+    pool: &sqlx::PgPool,
+    execution_id: &str,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE work_queue
+        SET claimed_until = NOW() + INTERVAL '5 minutes'
+        WHERE execution_id = $1 AND claimed_until IS NULL
+        "#,
+    )
+    .bind(execution_id)
+    .execute(pool)
+    .await
+    .context("Failed to claim specific execution")?;
+
+    Ok(())
+}
+
+/// Complete work for an execution
+///
+/// Deletes the claimed work queue entry. Preserves any unclaimed entry that
+/// was queued while this work was in progress.
+pub async fn complete_work(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    execution_id: &str,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        DELETE FROM work_queue
+        WHERE execution_id = $1
+          AND claimed_until IS NOT NULL
+        "#,
+    )
+    .bind(execution_id)
+    .execute(&mut **tx)
+    .await
+    .context("Failed to complete work")?;
+
+    Ok(())
+}

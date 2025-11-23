@@ -1,0 +1,75 @@
+//! V2 Type Definitions
+//!
+//! Core types for the V2 workflow engine.
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "text", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum ExecutionType {
+    Task,
+    Workflow,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "text", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum ExecutionStatus {
+    Pending,
+    Running,
+    Suspended,
+    Completed,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Execution {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub exec_type: ExecutionType,
+    pub function_name: String,
+    pub queue: String,
+    pub status: ExecutionStatus,
+
+    pub inputs: JsonValue,
+    pub output: Option<JsonValue>,
+
+    pub attempt: i32,
+
+    pub parent_workflow_id: Option<String>,
+
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateExecutionParams {
+    pub id: Option<String>,
+    pub exec_type: ExecutionType,
+    pub function_name: String,
+    pub queue: String,
+    pub inputs: JsonValue,
+    pub parent_workflow_id: Option<String>,
+}
+
+/// Filters for querying executions
+#[derive(Default, Debug, Clone)]
+pub struct ExecutionFilters {
+    /// Filter by parent workflow ID (to get child tasks)
+    pub parent_workflow_id: Option<String>,
+
+    /// Filter by execution status
+    pub status: Option<ExecutionStatus>,
+
+    /// Filter by function/workflow name
+    pub function_name: Option<String>,
+
+    /// Limit number of results
+    pub limit: Option<i64>,
+
+    /// Offset for pagination
+    pub offset: Option<i64>,
+}
