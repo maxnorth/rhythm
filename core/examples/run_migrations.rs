@@ -1,4 +1,4 @@
-use rhythm_core::init::InitBuilder;
+use rhythm_core::application::InitBuilder;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -1,3 +1,7 @@
+//! V2 Type Definitions
+//!
+//! Core types for the V2 workflow engine.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -51,9 +55,29 @@ pub struct CreateExecutionParams {
     pub parent_workflow_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExecutionListFilter {
-    pub queue: Option<String>,
+/// Filters for querying executions
+#[derive(Default, Debug, Clone)]
+pub struct ExecutionFilters {
+    /// Filter by parent workflow ID (to get child tasks)
+    pub parent_workflow_id: Option<String>,
+
+    /// Filter by execution status
     pub status: Option<ExecutionStatus>,
-    pub limit: Option<i32>,
+
+    /// Filter by function/workflow name
+    pub function_name: Option<String>,
+
+    /// Limit number of results
+    pub limit: Option<i64>,
+
+    /// Offset for pagination
+    pub offset: Option<i64>,
+}
+
+/// Outcome of an execution (success, failure, or suspended)
+#[derive(Debug, Clone)]
+pub enum ExecutionOutcome {
+    Success(JsonValue),
+    Failure(JsonValue),
+    Suspended,
 }

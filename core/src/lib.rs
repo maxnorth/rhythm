@@ -1,17 +1,21 @@
 pub mod adapter;
-pub mod benchmark;
-pub mod cli;
+pub mod application;
+pub mod client_adapter;
 pub mod config;
 pub mod db;
-pub mod executions;
-pub mod init;
-pub mod interpreter;
+pub mod executor;
+pub mod parser;
 pub mod types;
-pub mod v2;
-pub mod workflows;
+pub mod worker;
+
+#[cfg(test)]
+pub mod test_helpers;
+
+#[cfg(test)]
+mod tests;
 
 // Re-export main types
 pub use types::*;
 
-// Re-export init API for convenience
-pub use init::{initialize, InitBuilder, InitOptions};
+// Re-export application API for convenience
+pub use application::{initialize, InitBuilder, InitOptions, Application};

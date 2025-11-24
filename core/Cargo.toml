@@ -7,9 +7,6 @@ edition = "2021"
 name = "rhythm_core"
 crate-type = ["rlib"]
 
-[[bin]]
-name = "rhythm"
-path = "src/bin/main.rs"
 
 [dependencies]
 # Database
