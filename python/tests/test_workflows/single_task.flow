@@ -1,4 +1,0 @@
-workflow(ctx, inputs) {
-  let result = await Task.run("echo", {message: inputs.message})
-  return result
-}

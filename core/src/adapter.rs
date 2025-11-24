@@ -66,18 +66,32 @@ pub async fn create_execution(
 
 /// Claim an execution for a worker
 pub async fn claim_execution(worker_id: String, queues: Vec<String>) -> Result<Option<JsonValue>> {
-    let execution = executions::claim_execution(&worker_id, &queues).await?;
-    Ok(execution.map(|e| serde_json::to_value(e).unwrap()))
+    use crate::v2::worker;
+
+    // Get the pool
+    let pool = db::get_pool().await?;
+
+    // V2's claim_work handles workflows internally and only returns tasks
+    // TODO: support worker_id and queues parameters (currently hardcoded to "default")
+    let claimed_task = worker::claim_work(&pool).await?;
+
+    // Return the claimed task as JSON (includes execution_id, function_name, inputs)
+    Ok(Some(serde_json::to_value(claimed_task)?))
 }
 
 /// Complete an execution with a result
 pub async fn complete_execution(execution_id: String, result: JsonValue) -> Result<()> {
-    executions::complete_execution(&execution_id, result).await
+    use crate::v2::worker;
+    let pool = db::get_pool().await?;
+    worker::complete_work(&pool, &execution_id, Some(result), None).await
 }
 
 /// Fail an execution with an error
-pub async fn fail_execution(execution_id: String, error: JsonValue, retry: bool) -> Result<()> {
-    executions::fail_execution(&execution_id, error, retry).await
+pub async fn fail_execution(execution_id: String, error: JsonValue, _retry: bool) -> Result<()> {
+    use crate::v2::worker;
+    let pool = db::get_pool().await?;
+    // V2 doesn't have a separate retry flag - just report the error
+    worker::complete_work(&pool, &execution_id, None, Some(error)).await
 }
 
 /// Get execution by ID
@@ -91,17 +105,6 @@ pub async fn get_execution(execution_id: String) -> Result<Option<JsonValue>> {
 /// Start a workflow execution
 pub async fn start_workflow(workflow_name: String, inputs: JsonValue) -> Result<String> {
     workflows::start_workflow(&workflow_name, inputs).await
-}
-
-/// Execute one step of a workflow
-///
-/// This is the main workflow execution entry point. Returns:
-/// - "Suspended" if workflow is waiting for a task
-/// - "Completed" if workflow finished successfully
-/// - Error if workflow failed
-pub async fn execute_workflow_step(execution_id: String) -> Result<String> {
-    let result = workflows::execute_workflow_step(&execution_id).await?;
-    Ok(format!("{:?}", result))
 }
 
 /// Get all child task executions for a workflow

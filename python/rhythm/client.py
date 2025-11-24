@@ -3,7 +3,7 @@
 import logging
 from typing import Any, Optional
 
-from rhythm.rust_bridge import RustBridge
+from rhythm.core_bridge import CoreBridge
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ async def queue_execution(
     Returns:
         Execution ID
     """
-    execution_id = RustBridge.create_execution(
+    execution_id = CoreBridge.create_execution(
         exec_type=exec_type,
         function_name=function_name,
         queue=queue,
@@ -50,7 +50,7 @@ async def get_execution_status(execution_id: str) -> Optional[dict]:
     Returns:
         Execution status dict or None if not found
     """
-    return RustBridge.get_execution(execution_id)
+    return CoreBridge.get_execution(execution_id)
 
 
 async def cancel_execution(execution_id: str) -> bool:
@@ -64,7 +64,7 @@ async def cancel_execution(execution_id: str) -> bool:
         True if cancelled, False if not found or already completed/running
     """
     try:
-        RustBridge.fail_execution(
+        CoreBridge.fail_execution(
             execution_id,
             {"message": "Execution cancelled", "type": "CancellationError"},
             retry=False,
@@ -93,7 +93,7 @@ async def start_workflow(workflow_name: str, inputs: dict[str, Any]) -> str:
         ...     inputs={"orderId": "order-123", "amount": 99.99}
         ... )
     """
-    execution_id = RustBridge.start_workflow(workflow_name, inputs)
+    execution_id = CoreBridge.start_workflow(workflow_name, inputs)
     logger.info(f"Started workflow {workflow_name} with ID {execution_id}")
     return execution_id
 

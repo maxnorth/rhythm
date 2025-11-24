@@ -3,7 +3,7 @@
 //! This module provides thin PyO3 wrappers around the core adapter interface.
 //! All functions delegate to `rhythm_core::adapter` for a stable, language-agnostic API.
 
-use ::rhythm_core::{adapter, benchmark, cli, workflows, ExecutionType};
+use ::rhythm_core::{adapter, workflows, ExecutionType};
 use pyo3::prelude::*;
 use serde_json::Value as JsonValue;
 use std::sync::OnceLock;
@@ -35,6 +35,7 @@ fn init_runtime() -> PyResult<()> {
 #[pyfunction]
 #[pyo3(signature = (database_url=None, config_path=None, auto_migrate=true, require_initialized=true, workflows_json=None))]
 fn initialize_sync(
+    py: Python,
     database_url: Option<String>,
     config_path: Option<String>,
     auto_migrate: bool,
@@ -70,18 +71,23 @@ fn initialize_sync(
         None
     };
 
-    runtime
-        .block_on(adapter::initialize(database_url, config_path, auto_migrate, require_initialized, workflows))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    // Release GIL while doing DB initialization
+    py.allow_threads(|| {
+        runtime.block_on(adapter::initialize(database_url, config_path, auto_migrate, require_initialized, workflows))
+    })
+    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
 /// Run migrations
 #[pyfunction]
-fn migrate_sync() -> PyResult<()> {
+fn migrate_sync(py: Python) -> PyResult<()> {
     let runtime = get_runtime();
-    runtime
-        .block_on(adapter::migrate())
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+
+    // Release GIL while running migrations
+    py.allow_threads(|| {
+        runtime.block_on(adapter::migrate())
+    })
+    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
 /* ===================== Execution Lifecycle ===================== */
@@ -90,6 +96,7 @@ fn migrate_sync() -> PyResult<()> {
 #[pyfunction]
 #[pyo3(signature = (exec_type, function_name, queue, inputs, parent_workflow_id=None, id=None))]
 fn create_execution_sync(
+    py: Python,
     exec_type: String,
     function_name: String,
     queue: String,
@@ -108,8 +115,9 @@ fn create_execution_sync(
     let inputs: JsonValue = serde_json::from_str(&inputs)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
 
-    runtime
-        .block_on(adapter::create_execution(
+    // Release GIL while doing DB write
+    py.allow_threads(|| {
+        runtime.block_on(adapter::create_execution(
             exec_type,
             function_name,
             queue,
@@ -117,55 +125,64 @@ fn create_execution_sync(
             parent_workflow_id,
             id,
         ))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    })
+    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
 /// Claim an execution for a worker
 #[pyfunction]
-fn claim_execution_sync(worker_id: String, queues: Vec<String>) -> PyResult<Option<String>> {
+fn claim_execution_sync(py: Python, worker_id: String, queues: Vec<String>) -> PyResult<Option<String>> {
     let runtime = get_runtime();
 
-    let result = runtime
-        .block_on(adapter::claim_execution(worker_id, queues))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+    // Release GIL while doing DB query
+    let result = py.allow_threads(|| {
+        runtime.block_on(adapter::claim_execution(worker_id, queues))
+    })
+    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     Ok(result.map(|json| json.to_string()))
 }
 
 /// Complete an execution
 #[pyfunction]
-fn complete_execution_sync(execution_id: String, result: String) -> PyResult<()> {
+fn complete_execution_sync(py: Python, execution_id: String, result: String) -> PyResult<()> {
     let runtime = get_runtime();
 
     let result: JsonValue = serde_json::from_str(&result)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
 
-    runtime
-        .block_on(adapter::complete_execution(execution_id, result))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    // Release GIL while doing DB write
+    py.allow_threads(|| {
+        runtime.block_on(adapter::complete_execution(execution_id, result))
+    })
+    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
 /// Fail an execution
 #[pyfunction]
-fn fail_execution_sync(execution_id: String, error: String, retry: bool) -> PyResult<()> {
+fn fail_execution_sync(py: Python, execution_id: String, error: String, retry: bool) -> PyResult<()> {
     let runtime = get_runtime();
 
     let error: JsonValue = serde_json::from_str(&error)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
 
-    runtime
-        .block_on(adapter::fail_execution(execution_id, error, retry))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    // Release GIL while doing DB write
+    py.allow_threads(|| {
+        runtime.block_on(adapter::fail_execution(execution_id, error, retry))
+    })
+    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
 /// Get execution by ID
 #[pyfunction]
-fn get_execution_sync(execution_id: String) -> PyResult<Option<String>> {
+fn get_execution_sync(py: Python, execution_id: String) -> PyResult<Option<String>> {
     let runtime = get_runtime();
 
-    let result = runtime
-        .block_on(adapter::get_execution(execution_id))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+    // Release GIL while doing DB query
+    let result = py.allow_threads(|| {
+        runtime.block_on(adapter::get_execution(execution_id))
+    })
+    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     Ok(result.map(|json| json.to_string()))
 }
@@ -174,93 +191,31 @@ fn get_execution_sync(execution_id: String) -> PyResult<Option<String>> {
 
 /// Start a workflow execution
 #[pyfunction]
-fn start_workflow_sync(workflow_name: String, inputs_json: String) -> PyResult<String> {
+fn start_workflow_sync(py: Python, workflow_name: String, inputs_json: String) -> PyResult<String> {
     let runtime = get_runtime();
 
     let inputs: serde_json::Value = serde_json::from_str(&inputs_json)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid inputs JSON: {}", e)))?;
 
-    runtime
-        .block_on(adapter::start_workflow(workflow_name, inputs))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
-
-/// Execute a single workflow step
-#[pyfunction]
-fn execute_workflow_step_sync(execution_id: String) -> PyResult<String> {
-    let runtime = get_runtime();
-
-    runtime
-        .block_on(adapter::execute_workflow_step(execution_id))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    // Release GIL while doing DB write
+    py.allow_threads(|| {
+        runtime.block_on(adapter::start_workflow(workflow_name, inputs))
+    })
+    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
 /// Get workflow child tasks
 #[pyfunction]
-fn get_workflow_tasks_sync(workflow_id: String) -> PyResult<String> {
+fn get_workflow_tasks_sync(py: Python, workflow_id: String) -> PyResult<String> {
     let runtime = get_runtime();
 
-    let tasks = runtime
-        .block_on(adapter::get_workflow_tasks(workflow_id))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+    // Release GIL while doing DB query
+    let tasks = py.allow_threads(|| {
+        runtime.block_on(adapter::get_workflow_tasks(workflow_id))
+    })
+    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     serde_json::to_string(&tasks)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
-
-/* ===================== Utilities ===================== */
-
-/// Run the CLI
-#[pyfunction]
-fn run_cli_sync(args: Vec<String>) -> PyResult<()> {
-    let runtime = get_runtime();
-
-    runtime
-        .block_on(cli::run_cli_from_args(args))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-}
-
-/// Run a benchmark
-#[pyfunction]
-#[pyo3(signature = (worker_command, workers, tasks, workflows, task_type, payload_size, tasks_per_workflow, queues, compute_iterations, warmup_percent, queue_distribution=None, duration=None, rate=None))]
-#[allow(clippy::too_many_arguments)]
-fn run_benchmark_sync(
-    worker_command: Vec<String>,
-    workers: usize,
-    tasks: usize,
-    workflows: usize,
-    task_type: String,
-    payload_size: usize,
-    tasks_per_workflow: usize,
-    queues: String,
-    compute_iterations: usize,
-    warmup_percent: f64,
-    queue_distribution: Option<String>,
-    duration: Option<String>,
-    rate: Option<f64>,
-) -> PyResult<()> {
-    let runtime = get_runtime();
-
-    let params = benchmark::BenchmarkParams {
-        mode: benchmark::WorkerMode::External {
-            command: worker_command,
-            workers,
-        },
-        tasks,
-        workflows,
-        task_type,
-        payload_size,
-        tasks_per_workflow,
-        queues,
-        queue_distribution,
-        duration,
-        rate,
-        compute_iterations,
-        warmup_percent,
-    };
-
-    runtime
-        .block_on(benchmark::run_benchmark(params))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
@@ -283,12 +238,7 @@ fn rhythm_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Workflow operations
     m.add_function(wrap_pyfunction!(start_workflow_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(execute_workflow_step_sync, m)?)?;
     m.add_function(wrap_pyfunction!(get_workflow_tasks_sync, m)?)?;
-
-    // Utilities
-    m.add_function(wrap_pyfunction!(run_cli_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(run_benchmark_sync, m)?)?;
 
     Ok(())
 }

@@ -1,4 +1,4 @@
-"""Bridge to Rust core via PyO3"""
+"""Bridge to core via PyO3"""
 
 import json
 from typing import Any, Dict, List, Optional
@@ -10,9 +10,11 @@ except ImportError:
         "rhythm_core Rust extension not found."
     )
 
+from rhythm.models import Execution
 
-class RustBridge:
-    """Wrapper around Rust core functions"""
+
+class CoreBridge:
+    """Bridge to Rhythm core functionality"""
 
     @staticmethod
     def initialize(
@@ -62,11 +64,12 @@ class RustBridge:
         )
 
     @staticmethod
-    def claim_execution(worker_id: str, queues: List[str]) -> Optional[Dict[str, Any]]:
+    def claim_execution(worker_id: str, queues: List[str]) -> Optional[Execution]:
         """Claim an execution for a worker"""
         result = rust.claim_execution_sync(worker_id=worker_id, queues=queues)
         if result:
-            return json.loads(result)
+            data = json.loads(result)
+            return Execution.from_dict(data)
         return None
 
     @staticmethod
@@ -80,11 +83,12 @@ class RustBridge:
         rust.fail_execution_sync(execution_id=execution_id, error=json.dumps(error), retry=retry)
 
     @staticmethod
-    def get_execution(execution_id: str) -> Optional[Dict[str, Any]]:
+    def get_execution(execution_id: str) -> Optional[Execution]:
         """Get execution by ID"""
         result = rust.get_execution_sync(execution_id=execution_id)
         if result:
-            return json.loads(result)
+            data = json.loads(result)
+            return Execution.from_dict(data)
         return None
 
     @staticmethod
@@ -97,70 +101,6 @@ class RustBridge:
     def migrate() -> None:
         """Run database migrations"""
         rust.migrate_sync()
-
-    @staticmethod
-    def run_cli(args: List[str]) -> None:
-        """
-        Run the CLI by calling into Rust.
-
-        Args:
-            args: Command-line arguments (sys.argv)
-
-        The Rust code parses the provided arguments.
-        This allows the CLI logic to live entirely in Rust while being invoked
-        from Python.
-        """
-        rust.run_cli_sync(args)
-
-    @staticmethod
-    def run_benchmark(
-        worker_command: List[str],
-        workers: int,
-        tasks: int,
-        workflows: int,
-        task_type: str,
-        payload_size: int,
-        tasks_per_workflow: int,
-        queues: str,
-        queue_distribution: Optional[str],
-        duration: Optional[str],
-        rate: Optional[float],
-        compute_iterations: int,
-        warmup_percent: float,
-    ) -> None:
-        """
-        Run a benchmark by calling into Rust.
-
-        Args:
-            worker_command: Command to spawn workers (e.g., ["python", "-m", "rhythm", "worker"])
-            workers: Number of worker processes to spawn
-            tasks: Number of tasks to enqueue
-            workflows: Number of workflows to enqueue
-            task_type: Type of task ('noop' or 'compute')
-            payload_size: Size of payload in bytes
-            tasks_per_workflow: Number of tasks per workflow
-            queues: Comma-separated queue names
-            queue_distribution: Queue distribution percentages
-            duration: Benchmark duration (e.g., "30s", "5m")
-            rate: Task enqueue rate (tasks/sec)
-            compute_iterations: Iterations for compute task type
-            warmup_percent: Percentage of executions to exclude from metrics
-        """
-        rust.run_benchmark_sync(
-            worker_command=worker_command,
-            workers=workers,
-            tasks=tasks,
-            workflows=workflows,
-            task_type=task_type,
-            payload_size=payload_size,
-            tasks_per_workflow=tasks_per_workflow,
-            queues=queues,
-            queue_distribution=queue_distribution,
-            duration=duration,
-            rate=rate,
-            compute_iterations=compute_iterations,
-            warmup_percent=warmup_percent,
-        )
 
     @staticmethod
     def start_workflow(workflow_name: str, inputs: dict) -> str:

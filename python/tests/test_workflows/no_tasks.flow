@@ -1,3 +1,0 @@
-workflow(ctx, inputs) {
-  return {message: "No tasks executed", input: inputs.value}
-}
