@@ -177,7 +177,7 @@ async def run_worker(queues: list[str], worker_id: Optional[str] = None):
     # Ensure core is initialized before starting worker
     # This initializes the database pool without running migrations
     try:
-        CoreBridge.initialize(auto_migrate=False, require_initialized=False)
+        CoreBridge.initialize(auto_migrate=False)
     except Exception as e:
         logger.warning(f"Failed to initialize Rust bridge: {e}")
 

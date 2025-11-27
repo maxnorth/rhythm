@@ -1,10 +1,10 @@
-pub mod adapter;
 pub mod application;
-pub mod client_adapter;
+pub mod client;
 pub mod config;
 pub mod db;
 pub mod executor;
 pub mod parser;
+pub mod services;
 pub mod types;
 pub mod worker;
 
@@ -17,5 +17,8 @@ mod tests;
 // Re-export main types
 pub use types::*;
 
-// Re-export application API for convenience
-pub use application::{initialize, InitBuilder, InitOptions, Application};
+// Re-export client for FFI layers
+pub use client::Client;
+
+// Re-export application API
+pub use application::{Application, InitBuilder, InitOptions, WorkflowFile};

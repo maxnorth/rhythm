@@ -21,7 +21,6 @@ class CoreBridge:
         database_url: Optional[str] = None,
         config_path: Optional[str] = None,
         auto_migrate: bool = True,
-        require_initialized: bool = True,
         workflows: Optional[List[Dict[str, str]]] = None,
     ) -> None:
         """
@@ -31,7 +30,6 @@ class CoreBridge:
             database_url: Database URL (overrides config file and env vars)
             config_path: Path to config file (overrides default search)
             auto_migrate: Whether to automatically run migrations if database is not initialized
-            require_initialized: Whether to fail if database is not initialized (when auto_migrate is False)
             workflows: List of workflow files to register (each with name, source, file_path)
         """
         workflows_json = None
@@ -42,7 +40,6 @@ class CoreBridge:
             database_url=database_url,
             config_path=config_path,
             auto_migrate=auto_migrate,
-            require_initialized=require_initialized,
             workflows_json=workflows_json,
         )
 
@@ -96,11 +93,6 @@ class CoreBridge:
         """Get workflow child tasks"""
         result = rust.get_workflow_tasks_sync(workflow_id=workflow_id)
         return json.loads(result)
-
-    @staticmethod
-    def migrate() -> None:
-        """Run database migrations"""
-        rust.migrate_sync()
 
     @staticmethod
     def start_workflow(workflow_name: str, inputs: dict) -> str:

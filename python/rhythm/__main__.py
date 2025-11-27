@@ -55,22 +55,5 @@ def worker(queues, worker_id, import_modules):
         sys.exit(130)
 
 
-@main.command()
-def migrate():
-    """Run database migrations"""
-    from rhythm.core_bridge import CoreBridge
-
-    click.echo("Running database migrations...")
-    try:
-        CoreBridge.migrate()
-        click.echo("✓ Migrations completed successfully")
-    except KeyboardInterrupt:
-        click.echo("\nInterrupted")
-        sys.exit(130)
-    except Exception as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
-
-
 if __name__ == "__main__":
     main()
