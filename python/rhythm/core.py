@@ -1,4 +1,4 @@
-"""Bridge to core via PyO3"""
+"""Rhythm core interface"""
 
 import json
 from typing import Any, Dict, List, Optional
@@ -10,11 +10,11 @@ except ImportError:
         "rhythm_core Rust extension not found."
     )
 
-from rhythm.models import Execution
+from rhythm.models import Execution, DelegatedAction
 
 
-class CoreBridge:
-    """Bridge to Rhythm core functionality"""
+class RhythmCore:
+    """Rhythm core interface for managing executions and workflows"""
 
     @staticmethod
     def initialize(
@@ -61,13 +61,33 @@ class CoreBridge:
         )
 
     @staticmethod
-    def claim_execution(worker_id: str, queues: List[str]) -> Optional[Execution]:
-        """Claim an execution for a worker"""
-        result = rust.claim_execution_sync(worker_id=worker_id, queues=queues)
-        if result:
-            data = json.loads(result)
-            return Execution.from_dict(data)
-        return None
+    def run_cooperative_worker_loop() -> DelegatedAction:
+        """
+        Run cooperative worker loop - blocks until task needs host execution.
+
+        This method runs an infinite loop in Rust that:
+        - Claims work from the queue
+        - Executes workflows internally
+        - Returns tasks to the host for execution
+
+        Only returns when it has a task that needs to be executed by the host.
+        Queue is hardcoded to "default".
+
+        Returns a DelegatedAction indicating what the host should do.
+        """
+        result = rust.run_cooperative_worker_loop()
+        data = json.loads(result)
+        return DelegatedAction.from_dict(data)
+
+    @staticmethod
+    def request_shutdown() -> None:
+        """
+        Request graceful shutdown of worker loops.
+
+        Triggers the shutdown token, causing all active worker loops to
+        exit gracefully on their next iteration (~100ms latency).
+        """
+        rust.request_shutdown()
 
     @staticmethod
     def complete_execution(execution_id: str, result: Any) -> None:

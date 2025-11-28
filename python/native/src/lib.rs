@@ -74,7 +74,10 @@ fn initialize_sync(
     py.allow_threads(|| {
         runtime.block_on(Client::initialize(database_url, config_path, auto_migrate, workflows))
     })
-    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+    .map_err(|e| {
+        let error_msg = format!("{:?}", e);
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(error_msg)
+    })
 }
 
 /* ===================== Execution Lifecycle ===================== */
@@ -118,18 +121,28 @@ fn create_execution_sync(
     .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
-/// Claim an execution for a worker
+/// Run cooperative worker loop - blocks until task needs host execution
+///
+/// Workflows are executed internally, only returns when task needs Python execution.
+/// Queue is hardcoded to "default".
 #[pyfunction]
-fn claim_execution_sync(py: Python, worker_id: String, queues: Vec<String>) -> PyResult<String> {
+fn run_cooperative_worker_loop(py: Python) -> PyResult<String> {
     let runtime = get_runtime();
 
-    // Release GIL while doing DB query
+    // Release GIL while running the worker loop
     let result = py.allow_threads(|| {
-        runtime.block_on(Client::claim_work(worker_id, queues))
+        runtime.block_on(Client::run_cooperative_worker_loop())
     })
     .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
     Ok(result.to_string())
+}
+
+/// Request graceful shutdown of worker loops
+#[pyfunction]
+fn request_shutdown() -> PyResult<()> {
+    Client::request_shutdown()
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
 /// Complete an execution
@@ -219,7 +232,8 @@ fn rhythm_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Execution lifecycle
     m.add_function(wrap_pyfunction!(create_execution_sync, m)?)?;
-    m.add_function(wrap_pyfunction!(claim_execution_sync, m)?)?;
+    m.add_function(wrap_pyfunction!(run_cooperative_worker_loop, m)?)?;
+    m.add_function(wrap_pyfunction!(request_shutdown, m)?)?;
     m.add_function(wrap_pyfunction!(complete_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(fail_execution_sync, m)?)?;
     m.add_function(wrap_pyfunction!(get_execution_sync, m)?)?;

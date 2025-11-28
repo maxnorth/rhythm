@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     # Worker settings
     worker_poll_interval: float = 1.0  # seconds (can be fractional for fast polling in tests)
     worker_max_concurrent: int = 10  # max concurrent executions per worker
+    worker_verbose: bool = False  # enable verbose diagnostic logging
 
     # Execution defaults
     default_timeout: int = 300  # seconds

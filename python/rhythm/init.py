@@ -5,7 +5,7 @@ Initialization for Rhythm workflows
 from typing import List, Optional
 from pathlib import Path
 
-from rhythm.core_bridge import CoreBridge
+from rhythm.core import RhythmCore
 
 
 def init(
@@ -65,7 +65,7 @@ def init(
             print("No workflows found")
 
     # Initialize Rust core with workflows
-    CoreBridge.initialize(
+    RhythmCore.initialize(
         database_url=database_url,
         auto_migrate=auto_migrate,
         workflows=workflows if workflows else None,

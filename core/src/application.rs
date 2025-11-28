@@ -6,6 +6,7 @@
 
 use anyhow::Result;
 use sqlx::PgPool;
+use tokio_util::sync::CancellationToken;
 
 use crate::config::Config;
 use crate::services::{ExecutionService, InitializationService, WorkerService, WorkflowService};
@@ -14,6 +15,7 @@ use crate::services::{ExecutionService, InitializationService, WorkerService, Wo
 pub struct Application {
     pub config: Config,
     pub pool: PgPool,
+    pub shutdown_token: CancellationToken,
     pub execution_service: ExecutionService,
     pub workflow_service: WorkflowService,
     pub worker_service: WorkerService,
@@ -23,12 +25,15 @@ pub struct Application {
 impl Application {
     /// Create a new Application instance (pure instantiation, no I/O)
     pub fn new(config: Config, pool: PgPool) -> Self {
+        let shutdown_token = CancellationToken::new();
+
         Self {
             config,
             pool: pool.clone(),
+            shutdown_token: shutdown_token.clone(),
             execution_service: ExecutionService::new(pool.clone()),
             workflow_service: WorkflowService::new(pool.clone()),
-            worker_service: WorkerService::new(pool.clone()),
+            worker_service: WorkerService::new(pool.clone(), shutdown_token),
             initialization_service: InitializationService::new(pool),
         }
     }
@@ -41,6 +46,11 @@ impl Application {
     /// Get the configuration
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    /// Request graceful shutdown
+    pub fn request_shutdown(&self) {
+        self.shutdown_token.cancel();
     }
 }
 

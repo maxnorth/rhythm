@@ -3,12 +3,12 @@
 import logging
 from typing import Any, Optional
 
-from rhythm.core_bridge import CoreBridge
+from rhythm.core import RhythmCore
 
 logger = logging.getLogger(__name__)
 
 
-async def queue_execution(
+def queue_execution(
     exec_type: str,
     function_name: str,
     inputs: dict,
@@ -28,7 +28,7 @@ async def queue_execution(
     Returns:
         Execution ID
     """
-    execution_id = CoreBridge.create_execution(
+    execution_id = RhythmCore.create_execution(
         exec_type=exec_type,
         function_name=function_name,
         queue=queue,
@@ -40,7 +40,7 @@ async def queue_execution(
     return execution_id
 
 
-async def get_execution_status(execution_id: str) -> Optional[dict]:
+def get_execution_status(execution_id: str) -> Optional[dict]:
     """
     Get the status of an execution.
 
@@ -50,10 +50,10 @@ async def get_execution_status(execution_id: str) -> Optional[dict]:
     Returns:
         Execution status dict or None if not found
     """
-    return CoreBridge.get_execution(execution_id)
+    return RhythmCore.get_execution(execution_id)
 
 
-async def cancel_execution(execution_id: str) -> bool:
+def cancel_execution(execution_id: str) -> bool:
     """
     Cancel a pending or suspended execution.
 
@@ -64,7 +64,7 @@ async def cancel_execution(execution_id: str) -> bool:
         True if cancelled, False if not found or already completed/running
     """
     try:
-        CoreBridge.fail_execution(
+        RhythmCore.fail_execution(
             execution_id,
             {"message": "Execution cancelled", "type": "CancellationError"},
             retry=False,
@@ -76,7 +76,7 @@ async def cancel_execution(execution_id: str) -> bool:
         return False
 
 
-async def start_workflow(workflow_name: str, inputs: dict[str, Any]) -> str:
+def start_workflow(workflow_name: str, inputs: dict[str, Any]) -> str:
     """
     Start a workflow execution.
 
@@ -88,17 +88,17 @@ async def start_workflow(workflow_name: str, inputs: dict[str, Any]) -> str:
         Workflow execution ID
 
     Example:
-        >>> workflow_id = await rhythm.start_workflow(
+        >>> workflow_id = rhythm.start_workflow(
         ...     "processOrder",
         ...     inputs={"orderId": "order-123", "amount": 99.99}
         ... )
     """
-    execution_id = CoreBridge.start_workflow(workflow_name, inputs)
+    execution_id = RhythmCore.start_workflow(workflow_name, inputs)
     logger.info(f"Started workflow {workflow_name} with ID {execution_id}")
     return execution_id
 
 
-async def list_executions(
+def list_executions(
     queue: Optional[str] = None,
     status: Optional[str] = None,
     limit: int = 100,

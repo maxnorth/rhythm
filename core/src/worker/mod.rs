@@ -7,6 +7,6 @@ pub mod complete;
 pub mod runner;
 
 // Re-export public API
-pub use claim::{claim_work, ClaimedTask};
+pub use claim::{run_cooperative_worker_loop, DelegatedAction};
 pub use complete::complete_work;
 pub use runner::run_workflow;

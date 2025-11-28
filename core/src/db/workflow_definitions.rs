@@ -3,23 +3,41 @@
 use anyhow::{Context, Result};
 use sqlx::{PgPool, Row};
 
+/// Get existing workflow definition by name and version hash
+///
+/// Returns the workflow ID if it exists, None otherwise.
+pub async fn get_workflow_by_name_and_hash(
+    pool: &PgPool,
+    name: &str,
+    version_hash: &str,
+) -> Result<Option<i32>> {
+    let row = sqlx::query(
+        r#"
+        SELECT id
+        FROM workflow_definitions
+        WHERE name = $1 AND version_hash = $2
+        LIMIT 1
+        "#,
+    )
+    .bind(name)
+    .bind(version_hash)
+    .fetch_optional(pool)
+    .await
+    .context("Failed to check for existing workflow definition")?;
+
+    Ok(row.map(|r| r.get("id")))
+}
+
 /// Create a new workflow definition
 ///
-/// Inserts a workflow definition with the given name and source code.
+/// Inserts a workflow definition with the given name, version hash, and source code.
 /// Returns the workflow definition ID.
 pub async fn create_workflow_definition(
     pool: &PgPool,
     name: &str,
+    version_hash: &str,
     source: &str,
 ) -> Result<i32> {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    // Generate a simple version hash based on content
-    let mut hasher = DefaultHasher::new();
-    source.hash(&mut hasher);
-    let version_hash = format!("{:x}", hasher.finish());
-
     let row = sqlx::query(
         r#"
         INSERT INTO workflow_definitions (name, version_hash, source, parsed_steps, file_path)

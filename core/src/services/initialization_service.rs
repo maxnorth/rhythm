@@ -43,8 +43,11 @@ impl InitializationService {
         db::migrate(&self.pool).await
     }
 
-    /// Register workflows in the database
+    /// Register workflows in the database (idempotent)
     pub async fn register_workflows(&self, workflows: Vec<WorkflowFile>) -> Result<()> {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
         for workflow in workflows {
             // Parse and validate the workflow source
             let _ast = crate::parser::parse(&workflow.source).map_err(|e| {
@@ -56,10 +59,35 @@ impl InitializationService {
                 )
             })?;
 
-            // Register the workflow definition
+            // Generate version hash
+            let mut hasher = DefaultHasher::new();
+            workflow.source.hash(&mut hasher);
+            let version_hash = format!("{:x}", hasher.finish());
+
+            // Check if workflow already exists
+            let existing_id = db::workflow_definitions::get_workflow_by_name_and_hash(
+                &self.pool,
+                &workflow.name,
+                &version_hash,
+            )
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to check for existing workflow '{}'",
+                    workflow.name
+                )
+            })?;
+
+            if existing_id.is_some() {
+                // Workflow already registered, skip
+                continue;
+            }
+
+            // Register the new workflow definition
             db::workflow_definitions::create_workflow_definition(
                 &self.pool,
                 &workflow.name,
+                &version_hash,
                 &workflow.source,
             )
             .await

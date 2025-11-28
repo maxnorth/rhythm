@@ -126,14 +126,28 @@ impl Client {
 
     /* ===================== Worker Operations ===================== */
 
-    /// Claim work from the queue
+    /// Run cooperative worker loop - blocks until task needs host execution
     ///
-    /// This blocks/retries until work is available. Workflows are executed
-    /// internally, only tasks are returned to the caller.
-    pub async fn claim_work(_worker_id: String, _queues: Vec<String>) -> Result<JsonValue> {
+    /// This blocks/retries until work is available. When it finds work:
+    /// - If it's a workflow: executes it internally and loops again
+    /// - If it's a task: returns the task details to the host for execution
+    ///
+    /// Only returns when it has a task that needs to be executed by the host.
+    /// Queue is hardcoded to "default".
+    pub async fn run_cooperative_worker_loop() -> Result<JsonValue> {
         let app = Self::get_app()?;
-        let task = app.worker_service.claim_work().await?;
-        Ok(serde_json::to_value(task)?)
+        let action = app.worker_service.run_cooperative_worker_loop().await?;
+        Ok(serde_json::to_value(action)?)
+    }
+
+    /// Request graceful shutdown of worker loops
+    ///
+    /// Triggers the shutdown token, causing all active worker loops to
+    /// exit gracefully on their next iteration (~100ms latency).
+    pub fn request_shutdown() -> Result<()> {
+        let app = Self::get_app()?;
+        app.request_shutdown();
+        Ok(())
     }
 
     /* ===================== Workflow Operations ===================== */

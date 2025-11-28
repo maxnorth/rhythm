@@ -49,12 +49,20 @@ impl WorkflowService {
 
     /// Register a workflow definition
     pub async fn register_workflow(&self, name: &str, source: &str) -> Result<i32> {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
         // Parse and validate the workflow source
         let _ast = crate::parser::parse(source)
             .map_err(|e| anyhow::anyhow!("Failed to parse workflow '{}': {:?}", name, e))?;
 
+        // Generate version hash
+        let mut hasher = DefaultHasher::new();
+        source.hash(&mut hasher);
+        let version_hash = format!("{:x}", hasher.finish());
+
         // Register the workflow definition (stores raw source)
-        db::workflow_definitions::create_workflow_definition(&self.pool, name, source).await
+        db::workflow_definitions::create_workflow_definition(&self.pool, name, &version_hash, source).await
     }
 
     /// Get all child task executions for a workflow

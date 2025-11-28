@@ -4,60 +4,80 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use sqlx::PgPool;
+use tokio_util::sync::CancellationToken;
 
 use crate::db;
 use crate::types::ExecutionType;
 use super::runner;
 
-/// Task details returned to the host for execution
+/// Delegated action returned to the client for cooperative execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClaimedTask {
-    pub execution_id: String,
-    pub function_name: String,
-    pub inputs: JsonValue,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum DelegatedAction {
+    /// Execute a task in the host language
+    ExecuteTask {
+        execution_id: String,
+        function_name: String,
+        inputs: JsonValue,
+    },
+    /// Continue immediately - workflow was executed, check for more work
+    Continue,
+    /// Wait for the specified duration before checking for more work
+    Wait {
+        duration_ms: u64,
+    },
+    /// Shutdown requested - worker should exit gracefully
+    Shutdown,
 }
 
-/// Claim work from the queue
+/// Claim and process one unit of work
 ///
-/// This method blocks/retries until work is available. When it finds work:
-/// - If it's a workflow: executes it internally and loops again
-/// - If it's a task: returns the task details to the host for execution
+/// This method attempts to claim work once and returns an action for the host:
+/// - If it's a workflow: executes it internally and returns Continue
+/// - If it's a task: returns ExecuteTask with task details
+/// - If no work: returns Wait with suggested duration
 ///
-/// The queue parameter is hardcoded to "default" for now.
-pub async fn claim_work(pool: &PgPool) -> Result<ClaimedTask> {
-    let queue = "default"; // TODO: Make this configurable
+/// The host should call this in a loop, handling each action appropriately.
+/// The queue is hardcoded to "default".
+pub async fn run_cooperative_worker_loop(
+    pool: &PgPool,
+    shutdown_token: &CancellationToken,
+) -> Result<DelegatedAction> {
+    let queue = "default";
 
-    loop {
-        // Try to claim work from the queue
-        // TODO: heartbeat for claimed work
-        let claimed_ids = db::work_queue::claim_work(pool, queue, 1).await?;
+    // Check for shutdown signal
+    if shutdown_token.is_cancelled() {
+        return Ok(DelegatedAction::Shutdown);
+    }
 
-        if let Some(claimed_execution_id) = claimed_ids.into_iter().next() {
-            // Fetch the execution and mark it as running in a single query
-            let execution = db::executions::start_execution(pool, &claimed_execution_id)
-                .await?
-                .ok_or_else(|| anyhow::anyhow!("Claimed execution not found: {}", claimed_execution_id))?;
+    // Try to claim work (one attempt)
+    let claimed_ids = db::work_queue::claim_work(pool, queue, 1).await?;
+    if let Some(claimed_execution_id) = claimed_ids.into_iter().next() {
+        // Fetch the execution and mark it as running
+        let execution = db::executions::start_execution(pool, &claimed_execution_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Claimed execution not found: {}", claimed_execution_id))?;
 
-            match execution.exec_type {
-                ExecutionType::Workflow => {
-                    // Execute the workflow internally
-                    runner::run_workflow(pool, execution).await?;
+        match execution.exec_type {
+            ExecutionType::Workflow => {
+                // Execute the workflow internally
+                runner::run_workflow(pool, execution).await?;
 
-                    // Loop again to find more work (workflows are handled automatically)
-                    continue;
-                }
-                ExecutionType::Task => {
-                    // Return task details to host for execution
-                    return Ok(ClaimedTask {
-                        execution_id: execution.id,
-                        function_name: execution.function_name,
-                        inputs: execution.inputs,
-                    });
-                }
+                // Return Continue so host can immediately check for more work
+                return Ok(DelegatedAction::Continue);
+            }
+            ExecutionType::Task => {
+                // Return task details to host for execution
+                return Ok(DelegatedAction::ExecuteTask {
+                    execution_id: execution.id,
+                    function_name: execution.function_name,
+                    inputs: execution.inputs,
+                });
             }
         }
-
-        // No work available, sleep briefly and retry
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
+
+    // No work available, tell host to wait before retrying
+    Ok(DelegatedAction::Wait { duration_ms: 100 })
 }
+

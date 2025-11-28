@@ -61,3 +61,29 @@ class Execution(BaseModel):
         if "exec_type" in data:
             data["type"] = data.pop("exec_type")
         return cls(**data)
+
+
+class DelegatedAction(BaseModel):
+    """Action delegated from Rust cooperative worker loop to host
+
+    Action types:
+    - execute_task: Execute a task (has execution_id, function_name, inputs)
+    - continue: Continue immediately, check for more work
+    - wait: Wait for duration_ms before checking for more work
+    - shutdown: Shutdown requested, worker should exit gracefully
+    """
+
+    type: str
+
+    # Fields for execute_task action
+    execution_id: Optional[str] = None
+    function_name: Optional[str] = None
+    inputs: Optional[dict[str, Any]] = None
+
+    # Fields for wait action
+    duration_ms: Optional[int] = None
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "DelegatedAction":
+        """Create from dictionary (from Rust)"""
+        return cls(**data)

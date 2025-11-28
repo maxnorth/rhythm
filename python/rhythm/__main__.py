@@ -44,7 +44,7 @@ def worker(queues, worker_id, import_modules):
 
     async def _run():
         try:
-            await run_worker(list(queues), worker_id)
+            await run_worker()
         except KeyboardInterrupt:
             click.echo("\nShutting down worker...")
 
