@@ -20,10 +20,10 @@ mod tests;
 /// Format: Optional front matter + top-level statements
 ///
 /// Example:
-/// ```
+/// ```text
 /// name: my_workflow
 /// description: A simple workflow
-/// ```
+///
 /// let x = 42
 /// return x
 /// ```

@@ -1,5 +1,25 @@
 let orderId = Inputs.orderId
 
+let result1 = await Task.run("process_payment", {
+    order_id: "test1",
+    amount: 1
+})
+
+let task2 = Task.run("process_payment", {
+    order_id: "test2",
+    amount: 2
+})
+
+let result3 = await Task.run("process_payment", {
+    order_id: "test3",
+    amount: 3
+})
+
+let result2 = await task2
+
 return {
-    orderId: orderId
+    orderId: orderId,
+    result1: result1,
+    result2: result2,
+    result3: result3
 }

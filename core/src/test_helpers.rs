@@ -5,9 +5,8 @@ use serde_json::Value as JsonValue;
 use sqlx::PgPool;
 use std::ops::Deref;
 
-use crate::client_adapter::ClientAdapter;
 use crate::db;
-use crate::types::Execution;
+use crate::types::{CreateExecutionParams, Execution, ExecutionType};
 
 /// Test database pool that automatically cleans up on drop
 pub struct TestPool {
@@ -69,25 +68,25 @@ pub async fn with_test_db() -> TestPool {
 /// Helper to set up a workflow test
 ///
 /// Creates workflow, submits execution, and claims work.
-/// Returns (pool, adapter, execution) for use in tests.
+/// Returns (pool, execution) for use in tests.
 pub async fn setup_workflow_test(
     workflow_name: &str,
     workflow_source: &str,
     inputs: JsonValue,
-) -> (TestPool, ClientAdapter, Execution) {
+) -> (TestPool, Execution) {
     setup_workflow_test_with_pool(None, workflow_name, workflow_source, inputs).await
 }
 
 /// Helper to set up a workflow test with an optional existing pool
 ///
 /// If pool is provided, reuses it. Otherwise creates a new one.
-/// Returns (pool, adapter, execution) for use in tests.
+/// Returns (pool, execution) for use in tests.
 pub async fn setup_workflow_test_with_pool(
     pool: Option<TestPool>,
     workflow_name: &str,
     workflow_source: &str,
     inputs: JsonValue,
-) -> (TestPool, ClientAdapter, Execution) {
+) -> (TestPool, Execution) {
     let pool = pool.unwrap_or_else(|| {
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
@@ -96,18 +95,34 @@ pub async fn setup_workflow_test_with_pool(
         })
     });
 
-    let adapter = ClientAdapter::new(pool.clone());
-
-    adapter
-        .create_workflow_version(workflow_name, workflow_source)
+    // Create workflow definition with a simple version hash
+    let version_hash = format!("test-{}", workflow_name);
+    db::workflow_definitions::create_workflow_definition(&pool, workflow_name, &version_hash, workflow_source)
         .await
         .unwrap();
 
-    let execution_id = adapter
-        .run_workflow(workflow_name, inputs, "default")
+    // Create execution and enqueue work
+    let params = CreateExecutionParams {
+        id: None,
+        exec_type: ExecutionType::Workflow,
+        function_name: workflow_name.to_string(),
+        queue: "default".to_string(),
+        inputs,
+        parent_workflow_id: None,
+    };
+
+    let mut tx = pool.begin().await.unwrap();
+    let execution_id = db::executions::create_execution(&mut tx, params)
         .await
         .unwrap();
 
+    db::work_queue::enqueue_work(&mut *tx, &execution_id, "default", 0)
+        .await
+        .unwrap();
+
+    tx.commit().await.unwrap();
+
+    // Claim the work
     db::work_queue::claim_specific_execution(&pool, &execution_id)
         .await
         .unwrap();
@@ -118,7 +133,7 @@ pub async fn setup_workflow_test_with_pool(
         .unwrap()
         .expect("Execution should exist");
 
-    (pool, adapter, execution)
+    (pool, execution)
 }
 
 /// Helper to enqueue and claim work for an execution
@@ -127,8 +142,7 @@ pub async fn enqueue_and_claim_execution(
     execution_id: &str,
     queue: &str,
 ) -> Result<()> {
-    let mut tx = pool.begin().await?;
-    db::work_queue::enqueue_work(&mut *tx, execution_id, queue, 0).await?;
+    db::work_queue::enqueue_work(pool, execution_id, queue, 0).await?;
 
     // Manually claim the work (simpler than using claim_work for testing)
     sqlx::query(
@@ -139,10 +153,9 @@ pub async fn enqueue_and_claim_execution(
         "#,
     )
     .bind(execution_id)
-    .execute(&mut *tx)
+    .execute(pool)
     .await?;
 
-    tx.commit().await?;
     Ok(())
 }
 

@@ -25,23 +25,6 @@
 //! - RHYTHM_DATABASE_MAX_CONNECTIONS
 //! - RHYTHM_DATABASE_MIN_CONNECTIONS
 //! - etc.
-//!
-//! # Usage
-//!
-//! ```rust
-//! use rhythm_core::config::Config;
-//!
-//! // Load config with full priority chain
-//! let config = Config::load()?;
-//!
-//! // Load from specific file
-//! let config = Config::from_file("rhythm.toml")?;
-//!
-//! // Load with CLI overrides
-//! let config = Config::builder()
-//!     .database_url(Some("postgresql://...".to_string()))
-//!     .build()?;
-//! ```
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};

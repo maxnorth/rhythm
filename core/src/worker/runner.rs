@@ -108,6 +108,10 @@ async fn create_child_tasks(
         db::executions::create_execution(tx, params)
             .await
             .context("Failed to create child task execution")?;
+
+        db::work_queue::enqueue_work(&mut **tx, &task_creation.task_id, queue, 0)
+            .await
+            .context("Failed to enqueue work")?;
     }
 
     Ok(())

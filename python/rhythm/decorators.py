@@ -1,91 +1,57 @@
 """Decorators for defining tasks"""
 
 from typing import Callable, Optional
-import inspect
 
 from rhythm.registry import register_function
 from rhythm.client import queue_execution
 
 
-class ExecutableProxy:
-    """Base proxy for executable functions (tasks)"""
-
-    def __init__(
-        self,
-        fn: Callable,
-        exec_type: str,
-        queue: Optional[str] = None,
-        **extra_config,
-    ):
-        self.fn = fn
-        self.exec_type = exec_type
-        # Use just the function name without module prefix
-        # This allows DSL workflows to reference tasks by simple name
-        self.function_name = fn.__name__
-
-        # Store configuration
-        self.config = {
-            "queue": queue,
-            **extra_config,
-        }
-
-        # Register the function
-        register_function(self.function_name, fn)
-
-    def options(self, **opts) -> "ExecutableProxy":
-        """Return a new proxy with modified options"""
-        new_config = {**self.config, **opts}
-        return ExecutableProxy(
-            fn=self.fn,
-            exec_type=self.exec_type,
-            **new_config,
-        )
-
-    async def queue(self, **inputs) -> str:
-        """Enqueue this execution with keyword arguments as inputs"""
-
-        return await queue_execution(
-            exec_type=self.exec_type,
-            function_name=self.function_name,
-            inputs=inputs,
-            queue=self.config["queue"],
-        )
-
-    def __call__(self, *args, **kwargs):
-        """Direct call - execute the function directly"""
-        return self.fn(*args, **kwargs)
-
-
-class TaskProxy(ExecutableProxy):
-    """Proxy for task functions"""
-
-    def __init__(self, fn: Callable, queue: str, **config):
-        if queue is None:
-            raise ValueError("@task decorator requires a 'queue' parameter")
-
-        super().__init__(fn, exec_type="task", queue=queue, **config)
-
-
-def task(queue: str):
+def task(fn: Optional[Callable] = None, *, queue: str = "default"):
     """
-    Decorator for defining a task (standalone async task).
+    Decorator for defining a task (standalone task).
 
     Args:
-        queue: The queue name to execute in
+        queue: The queue name to execute in (defaults to "default")
 
     Example:
+        # Simple usage with default queue
+        @task
+        def send_email(to: str, subject: str):
+            email_client.send(to, subject)
+
+        # Or specify a queue
         @task(queue="emails")
-        async def send_email(to: str, subject: str):
-            await email_client.send(to, subject)
+        def send_notification(user_id: str, message: str):
+            pass
+
+        # Direct call
+        send_email("user@example.com", "Hello")
+
+        # Queue for async execution
+        send_email.queue(to="user@example.com", subject="Hello")
     """
 
-    def decorator(fn: Callable) -> TaskProxy:
-        if not inspect.iscoroutinefunction(fn):
-            raise TypeError(f"@task decorated function must be async: {fn.__name__}")
+    def decorator(func: Callable) -> Callable:
+        # Register the function in the registry
+        register_function(func.__name__, func)
 
-        return TaskProxy(
-            fn=fn,
-            queue=queue,
-        )
+        # Add a queue method to the function
+        def queue_fn(**inputs) -> str:
+            """Enqueue this task for execution"""
+            return queue_execution(
+                exec_type="task",
+                function_name=func.__name__,
+                inputs=inputs,
+                queue=queue,
+            )
 
-    return decorator
+        func.queue = queue_fn
+        return func
+
+    # Support both @task and @task() and @task(queue="name")
+    if fn is None:
+        # Called with arguments: @task() or @task(queue="name")
+        return decorator
+    else:
+        # Called without arguments: @task
+        return decorator(fn)

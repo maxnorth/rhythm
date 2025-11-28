@@ -6,7 +6,6 @@ async fn main() -> anyhow::Result<()> {
 
     InitBuilder::new()
         .auto_migrate(true)
-        .require_initialized(false)
         .init()
         .await?;
 

@@ -26,7 +26,7 @@ async fn test_simple_workflow_completes_immediately() {
         return x
     "#;
 
-    let (pool, adapter, execution) =
+    let (pool, execution) =
         setup_workflow_test("simple_workflow", workflow_source, json!({})).await;
     let execution_id = execution.id.clone();
 
@@ -34,7 +34,7 @@ async fn test_simple_workflow_completes_immediately() {
     run_workflow(&pool, execution).await.unwrap();
 
     // Verify execution completed successfully
-    let execution = adapter.get_execution(&execution_id).await.unwrap().unwrap();
+    let execution = db::executions::get_execution(&pool, &execution_id).await.unwrap().unwrap();
     assert_eq!(execution.status, ExecutionStatus::Completed);
     assert_eq!(execution.output, Some(json!(42.0)));
 
@@ -57,7 +57,7 @@ async fn test_workflow_suspends_on_task_then_completes() {
         return task_result * 2
     "#;
 
-    let (pool, adapter, execution) =
+    let (pool, execution) =
         setup_workflow_test("workflow_with_task", workflow_source, json!({})).await;
     let workflow_id = execution.id.clone();
 
@@ -65,7 +65,7 @@ async fn test_workflow_suspends_on_task_then_completes() {
     run_workflow(&pool, execution).await.unwrap();
 
     // Verify workflow suspended
-    let workflow_execution = adapter.get_execution(&workflow_id).await.unwrap().unwrap();
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id).await.unwrap().unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Suspended);
 
     // Verify workflow execution context exists
@@ -99,7 +99,7 @@ async fn test_workflow_suspends_on_task_then_completes() {
     run_workflow(&pool, execution).await.unwrap();
 
     // Verify workflow completed successfully
-    let workflow_execution = adapter.get_execution(&workflow_id).await.unwrap().unwrap();
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id).await.unwrap().unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
     assert_eq!(workflow_execution.output, Some(json!(200.0)));
 
@@ -124,7 +124,7 @@ async fn test_workflow_with_multiple_sequential_tasks() {
         return third
     "#;
 
-    let (pool, adapter, execution) =
+    let (pool, execution) =
         setup_workflow_test("multi_step_workflow", workflow_source, json!({})).await;
     let workflow_id = execution.id.clone();
 
@@ -200,7 +200,7 @@ async fn test_workflow_with_multiple_sequential_tasks() {
     .unwrap();
 
     // Verify workflow completed
-    let workflow_execution = adapter.get_execution(&workflow_id).await.unwrap().unwrap();
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id).await.unwrap().unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
 
     // Verify all three child tasks exist
@@ -217,7 +217,7 @@ async fn test_workflow_with_fire_and_forget_task() {
         return result
     "#;
 
-    let (pool, adapter, execution) =
+    let (pool, execution) =
         setup_workflow_test("mixed_task_workflow", workflow_source, json!({})).await;
     let workflow_id = execution.id.clone();
 
@@ -252,12 +252,12 @@ async fn test_workflow_with_fire_and_forget_task() {
     .unwrap();
 
     // Verify workflow completed
-    let workflow_execution = adapter.get_execution(&workflow_id).await.unwrap().unwrap();
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id).await.unwrap().unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
     assert_eq!(workflow_execution.output, Some(json!(999.0)));
 
     // Background task should still be pending (or whatever state it's in)
-    let background_task = adapter.get_execution(&tasks[0].0).await.unwrap().unwrap();
+    let background_task = db::executions::get_execution(&pool, &tasks[0].0).await.unwrap().unwrap();
     assert_eq!(background_task.status, ExecutionStatus::Pending);
 }
 
@@ -266,7 +266,7 @@ async fn test_workflow_with_invalid_syntax_fails() {
     // Workflow with invalid syntax that will fail during parsing
     let workflow_source = r#"this is not valid syntax!!!"#;
 
-    let (pool, _adapter, execution) =
+    let (pool, execution) =
         setup_workflow_test("invalid_workflow", workflow_source, json!({})).await;
 
     // Run workflow - should fail during parsing
@@ -288,7 +288,7 @@ async fn test_workflow_with_inputs() {
         return result
     "#;
 
-    let (pool, adapter, execution) =
+    let (pool, execution) =
         setup_workflow_test("inputs_workflow", workflow_source, json!({"x": 15, "y": 27})).await;
     let workflow_id = execution.id.clone();
 
@@ -297,7 +297,7 @@ async fn test_workflow_with_inputs() {
     .unwrap();
 
     // Verify workflow completed with correct output
-    let workflow_execution = adapter.get_execution(&workflow_id).await.unwrap().unwrap();
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id).await.unwrap().unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
     assert_eq!(workflow_execution.output, Some(json!(42.0)));
 }
@@ -310,7 +310,7 @@ async fn test_workflow_resumes_with_failed_task() {
         return task_result
     "#;
 
-    let (pool, adapter, execution) =
+    let (pool, execution) =
         setup_workflow_test("workflow_with_failing_task", workflow_source, json!({})).await;
     let workflow_id = execution.id.clone();
 
@@ -342,7 +342,7 @@ async fn test_workflow_resumes_with_failed_task() {
     .unwrap();
 
     // Workflow should complete and return the error output
-    let workflow_execution = adapter.get_execution(&workflow_id).await.unwrap().unwrap();
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id).await.unwrap().unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
     assert_eq!(
         workflow_execution.output,
@@ -357,7 +357,7 @@ async fn test_resume_without_task_completion_fails() {
         return result
     "#;
 
-    let (pool, _adapter, execution) =
+    let (pool, execution) =
         setup_workflow_test("workflow_waiting", workflow_source, json!({})).await;
     let workflow_id = execution.id.clone();
 
@@ -390,7 +390,7 @@ async fn test_corrupted_vm_state_fails_gracefully() {
         return result
     "#;
 
-    let (pool, _adapter, execution) =
+    let (pool, execution) =
         setup_workflow_test("workflow_corrupted", workflow_source, json!({})).await;
     let workflow_id = execution.id.clone();
 
@@ -433,7 +433,7 @@ async fn test_corrupted_vm_state_fails_gracefully() {
 async fn test_workflow_returns_different_types() {
     // Test null return
     let null_workflow = r#"return null"#;
-    let (pool, adapter, execution) =
+    let (pool, execution) =
         setup_workflow_test("null_workflow", null_workflow, json!({})).await;
     let workflow_id = execution.id.clone();
 
@@ -441,12 +441,12 @@ async fn test_workflow_returns_different_types() {
     .await
     .unwrap();
 
-    let execution = adapter.get_execution(&workflow_id).await.unwrap().unwrap();
+    let execution = db::executions::get_execution(&pool, &workflow_id).await.unwrap().unwrap();
     assert_eq!(execution.output, Some(json!(null)));
 
     // Test boolean return
     let bool_workflow = r#"return true"#;
-    let (pool, adapter2, execution) =
+    let (pool, execution) =
         setup_workflow_test_with_pool(Some(pool), "bool_workflow", bool_workflow, json!({})).await;
     let workflow_id2 = execution.id.clone();
 
@@ -454,12 +454,12 @@ async fn test_workflow_returns_different_types() {
     .await
     .unwrap();
 
-    let execution2 = adapter2.get_execution(&workflow_id2).await.unwrap().unwrap();
+    let execution2 = db::executions::get_execution(&pool, &workflow_id2).await.unwrap().unwrap();
     assert_eq!(execution2.output, Some(json!(true)));
 
     // Test array return
     let array_workflow = r#"return [1, 2, 3]"#;
-    let (pool, adapter3, execution) =
+    let (pool, execution) =
         setup_workflow_test_with_pool(Some(pool), "array_workflow", array_workflow, json!({})).await;
     let workflow_id3 = execution.id.clone();
 
@@ -467,7 +467,7 @@ async fn test_workflow_returns_different_types() {
     .await
     .unwrap();
 
-    let execution3 = adapter3.get_execution(&workflow_id3).await.unwrap().unwrap();
+    let execution3 = db::executions::get_execution(&pool, &workflow_id3).await.unwrap().unwrap();
     assert_eq!(execution3.output, Some(json!([1.0, 2.0, 3.0])));
 }
 
@@ -478,7 +478,7 @@ async fn test_dual_row_work_queue_pattern() {
         return result
     "#;
 
-    let (pool, _adapter, execution) =
+    let (pool, execution) =
         setup_workflow_test("dual_row_workflow", workflow_source, json!({})).await;
     let workflow_id = execution.id.clone();
 
@@ -514,7 +514,7 @@ async fn test_workflow_creates_many_tasks() {
         return "all_tasks_created"
     "#;
 
-    let (pool, adapter, execution) =
+    let (pool, execution) =
         setup_workflow_test("many_tasks_workflow", workflow_source, json!({})).await;
     let workflow_id = execution.id.clone();
 
@@ -527,7 +527,7 @@ async fn test_workflow_creates_many_tasks() {
     assert_eq!(task_count, 5);
 
     // Verify workflow completed
-    let execution = adapter.get_execution(&workflow_id).await.unwrap().unwrap();
+    let execution = db::executions::get_execution(&pool, &workflow_id).await.unwrap().unwrap();
     assert_eq!(execution.status, ExecutionStatus::Completed);
 }
 
@@ -541,7 +541,7 @@ async fn test_workflow_with_varying_task_counts() {
     "#;
 
     // Test 1: Workflow that creates tasks
-    let (pool1, _adapter1, execution) =
+    let (pool1, execution) =
         setup_workflow_test("workflow_with_tasks", workflow_with_tasks, json!({})).await;
     let workflow_id1 = execution.id.clone();
 
@@ -558,7 +558,7 @@ async fn test_workflow_with_varying_task_counts() {
         return x
     "#;
 
-    let (pool2, _adapter2, execution) =
+    let (pool2, execution) =
         setup_workflow_test("workflow_no_tasks", workflow_no_tasks, json!({})).await;
     let workflow_id2 = execution.id.clone();
 
@@ -568,4 +568,73 @@ async fn test_workflow_with_varying_task_counts() {
 
     let task_count2 = get_child_task_count(&pool2, &workflow_id2).await.unwrap();
     assert_eq!(task_count2, 0, "Should create 0 tasks");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_child_tasks_are_enqueued_to_work_queue() {
+    // Workflow that creates multiple fire-and-forget tasks
+    let workflow_source = r#"
+        Task.run("task_one", {value: 1})
+        Task.run("task_two", {value: 2})
+        Task.run("task_three", {value: 3})
+        return "tasks_created"
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("workflow_enqueue_test", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // Run workflow - should create 3 tasks and complete
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify workflow completed
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id).await.unwrap().unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
+
+    // Verify all 3 child tasks were created
+    let child_tasks = get_child_tasks(&pool, &workflow_id).await.unwrap();
+    assert_eq!(child_tasks.len(), 3, "Should create 3 child tasks");
+
+    // Verify each child task is enqueued to the work queue
+    for (task_id, task_name) in &child_tasks {
+        let work_count = get_work_queue_count(&pool, task_id).await.unwrap();
+        assert_eq!(
+            work_count, 1,
+            "Child task '{}' ({}) should have exactly 1 work queue entry",
+            task_name, task_id
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_awaited_task_is_enqueued_to_work_queue() {
+    // Workflow that awaits a task
+    let workflow_source = r#"
+        result = await Task.run("awaited_task", {data: "test"})
+        return result
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("workflow_await_enqueue_test", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // Run workflow - should suspend on the task
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify workflow suspended
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id).await.unwrap().unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Suspended);
+
+    // Verify child task was created
+    let child_tasks = get_child_tasks(&pool, &workflow_id).await.unwrap();
+    assert_eq!(child_tasks.len(), 1, "Should create 1 child task");
+
+    // Verify the child task is enqueued to the work queue
+    let (task_id, task_name) = &child_tasks[0];
+    let work_count = get_work_queue_count(&pool, task_id).await.unwrap();
+    assert_eq!(
+        work_count, 1,
+        "Child task '{}' ({}) should have exactly 1 work queue entry",
+        task_name, task_id
+    );
 }
