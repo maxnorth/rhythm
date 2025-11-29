@@ -39,7 +39,7 @@ where
 /// Claim work from the queue
 ///
 /// Returns a list of execution IDs that were successfully claimed.
-/// Uses lease-based claiming with a 5-minute timeout.
+/// Uses lease-based claiming with a 1-minute timeout.
 pub async fn claim_work<'e, E>(
     executor: E,
     queue: &str,
@@ -50,23 +50,24 @@ where
 {
     let rows = sqlx::query(
         r#"
-        UPDATE work_queue
-        SET claimed_until = NOW() + INTERVAL '5 minutes'
-        WHERE id IN (
-            SELECT wq.id
-            FROM work_queue wq
-            WHERE wq.queue = $1
-              AND (wq.claimed_until IS NULL OR wq.claimed_until < NOW())
+        WITH to_claim AS (
+            SELECT id
+            FROM work_queue
+            WHERE queue = $1
+              AND (claimed_until IS NULL OR claimed_until < NOW())
               AND NOT EXISTS (
                   SELECT 1 FROM work_queue wq2
-                  WHERE wq2.execution_id = wq.execution_id
+                  WHERE wq2.execution_id = work_queue.execution_id
                     AND wq2.claimed_until IS NOT NULL
                     AND wq2.claimed_until > NOW()
               )
-            ORDER BY wq.priority DESC, wq.created_at ASC
+            ORDER BY priority DESC, created_at ASC
             LIMIT $2
             FOR UPDATE SKIP LOCKED
         )
+        UPDATE work_queue
+        SET claimed_until = NOW() + INTERVAL '1 minute'
+        WHERE id IN (SELECT id FROM to_claim)
         RETURNING execution_id
         "#,
     )
@@ -83,7 +84,7 @@ where
 ///
 /// Claims the unclaimed work queue entry for a specific execution.
 /// Useful for testing or manual work claiming.
-/// Uses lease-based claiming with a 5-minute timeout.
+/// Uses lease-based claiming with a 1-minute timeout.
 pub async fn claim_specific_execution(
     pool: &sqlx::PgPool,
     execution_id: &str,
@@ -91,7 +92,7 @@ pub async fn claim_specific_execution(
     sqlx::query(
         r#"
         UPDATE work_queue
-        SET claimed_until = NOW() + INTERVAL '5 minutes'
+        SET claimed_until = NOW() + INTERVAL '1 minute'
         WHERE execution_id = $1 AND claimed_until IS NULL
         "#,
     )

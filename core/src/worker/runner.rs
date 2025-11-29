@@ -16,62 +16,77 @@ pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> 
     let maybe_context = db::workflow_execution_context::get_context(&pool, &execution.id).await?;
 
     let (mut vm, workflow_def_id) = if let Some(context) = maybe_context {
-        resume_workflow(&pool, context).await?
+        (
+            serde_json::from_value(context.vm_state).context("Failed to deserialize VM state")?,
+            context.workflow_definition_id
+        )
     } else {
         initialize_workflow(&pool, &execution.function_name, &execution.inputs).await?
     };
 
-    run_until_done(&mut vm);
+    loop {
+        // if suspended and has result, or any other status
+        if !try_resume_suspended_task(&pool, &mut vm).await? {
+            break; // Task not ready, suspend and save state
+        }
+
+        run_until_done(&mut vm);
+
+        if !should_continue_execution(&vm.control)? {
+            break; // Workflow completed or errored
+        }
+    }
 
     let mut tx = pool.begin().await?;
-
     create_child_tasks(&mut tx, &vm.outbox, &execution.id, &execution.queue).await?;
-
-    handle_workflow_result(
-        &mut tx,
-        &vm,
-        &execution.id,
-        workflow_def_id,
-    )
-    .await?;
-
+    handle_workflow_result(&mut tx, &vm, &execution.id, workflow_def_id).await?;
     tx.commit().await?;
 
     Ok(())
 }
 
-async fn resume_workflow(
-    pool: &PgPool,
-    context: db::workflow_execution_context::WorkflowExecutionContext,
-) -> Result<(VM, i32)> {
-    let mut vm: VM =
-        serde_json::from_value(context.vm_state).context("Failed to deserialize VM state")?;
+/// Checks if VM is suspended on a completed task and resumes if so.
+/// Returns true if execution should continue, false if it should break.
+async fn try_resume_suspended_task(pool: &PgPool, vm: &mut VM) -> Result<bool> {
+    if let Control::Suspend(task_id) = &vm.control {
+        if let Some(task_execution) = db::executions::get_execution(&pool, task_id).await? {
+            match task_execution.status {
+                crate::types::ExecutionStatus::Completed | crate::types::ExecutionStatus::Failed => {
+                    let task_result = task_execution.output
+                        .map(|json| json_to_val(&json))
+                        .transpose()?
+                        .unwrap_or(crate::executor::Val::Null);
 
-    let task_id = match &vm.control {
-        Control::Suspend(id) => id.clone(),
-        _ => {
-            return Err(anyhow::anyhow!(
-                "Workflow execution context exists but VM is not suspended"
-            ));
+                    vm.resume(task_result);
+                    Ok(true) // Continue execution
+                }
+                _ => {
+                    Ok(false) // Task still pending, break
+                }
+            }
+        } else {
+            // Task doesn't exist in database - check if it's in the outbox (just created)
+            let task_in_outbox = vm.outbox.iter().any(|t| t.task_id == *task_id);
+            if task_in_outbox {
+                Ok(false) // Task in outbox, break to save it
+            } else {
+                Err(anyhow::anyhow!("Workflow suspended on non-existent task: {}", task_id))
+            }
         }
-    };
-
-    let task_execution = db::executions::get_execution(&pool, &task_id)
-        .await
-        .context("Failed to fetch suspended task execution")?
-        .ok_or_else(|| anyhow::anyhow!("Task execution not found: {}", task_id))?;
-
-    let task_result = task_execution
-        .output
-        .ok_or_else(|| anyhow::anyhow!("Task execution has no result"))?;
-
-    let task_result_val = json_to_val(&task_result)?;
-
-    if !vm.resume(task_result_val) {
-        return Err(anyhow::anyhow!("Failed to resume VM"));
+    } else {
+        Ok(true) // Not suspended, continue
     }
+}
 
-    Ok((vm, context.workflow_definition_id))
+/// Checks the VM control state and returns whether to continue the loop.
+fn should_continue_execution(control: &Control) -> Result<bool> {
+    match control {
+        Control::None | Control::Suspend(_) => Ok(true), // Still running, continue
+        Control::Return(_) | Control::Throw(_) => Ok(false), // Suspend/complete, break
+        Control::Break(_) | Control::Continue(_) => {
+            Err(anyhow::anyhow!("Unexpected control flow at top level"))
+        }
+    }
 }
 
 async fn initialize_workflow(pool: &PgPool, workflow_name: &str, inputs: &JsonValue) -> Result<(VM, i32)> {
@@ -93,6 +108,10 @@ async fn create_child_tasks(
     execution_id: &str,
     queue: &str,
 ) -> Result<()> {
+    if outbox.is_empty() {
+        return Ok(());
+    }
+
     for task_creation in outbox {
         let task_inputs = val_map_to_json(&task_creation.inputs)?;
 
@@ -136,7 +155,7 @@ async fn handle_workflow_result(
             finish_work(&mut *tx, &execution_id, ExecutionOutcome::Success(result_json))
                 .await?;
         }
-        Control::Suspend(_) => {
+        Control::Suspend(_task_id) => {
             let vm_state = serde_json::to_value(&vm)
                 .context("Failed to serialize VM state")?;
 

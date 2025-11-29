@@ -10,6 +10,9 @@ pub mod workflow_definitions;
 pub mod workflow_execution_context;
 pub mod work_queue;
 
+#[cfg(test)]
+mod tests;
+
 // Re-export commonly used items
 pub use executions::*;
 pub use migration::*;

@@ -6,6 +6,7 @@ import signal
 import uuid
 from typing import Optional
 import traceback
+import time
 
 from rhythm.core import RhythmCore
 from rhythm.registry import get_function
@@ -93,7 +94,6 @@ def run_worker():
                 # No work available, wait before checking again
                 wait_seconds = action.duration_ms / 1000.0
                 logger.debug(f"Wait action - sleeping for {wait_seconds}s")
-                import time
                 time.sleep(wait_seconds)
 
             elif action.type == "shutdown":

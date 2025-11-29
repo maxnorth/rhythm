@@ -9,6 +9,9 @@ RHYTHM_DATABASE_ACQUIRE_TIMEOUT_SECS = "30"
 RHYTHM_DATABASE_IDLE_TIMEOUT_SECS = "60"
 RHYTHM_DATABASE_MAX_LIFETIME_SECS = "600"
 
+# For sqlx::test macro
+DATABASE_URL = "postgresql://rhythm@localhost/rhythm"
+
 # Force sequential test execution to avoid test interference
 # Tests share a global connection pool and database, so parallel execution causes failures
 [target.'cfg(all())']
