@@ -7,9 +7,9 @@ Rhythm is a Durable Execution framework that aims to make writing Workflows-as-C
 
 ## Key Features
 - Immutable, self-versioning workflows written in a JS-based DSL
-- Pauses and resumes when you `await` - no replay or determinism constraints
-- Task execution in your application's language
-- A 2-in-1 platform for both workflows and simple background tasks, with a unified model for scheduling and monitoring
+- Pauses and resumes when you `await` - no replay or determinism traps
+- Define and run tasks in your application's language
+- Provides a 2-in-1 framework for workflows and background tasks, with unified scheduling and monitoring
 
 ## Example
 ```js
