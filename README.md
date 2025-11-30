@@ -1,14 +1,9 @@
 # Rhythm
 
-Effortless durable execution
+Rhythm is a Durable Execution framework with a novel architecture that makes writing Workflows-as-Code intuitive and effortless. It’s easy to setup and use, requiring only Postgres and a package install. It supports multiple programming languages, each using a shared core engine written in rust.
 
-Key features
-- Immutable, self-versioning workflows written in a JS-based DSL
-- Pauses and resumes when you `await` - no replay or determinism constraints
-- Task execution in your application's language
-- Unified model for scheduling workflows and simple background tasks
-- Embedded Rust runtime powering scheduling and workflow execution
-- Single dependency on Postgres, no complex hosting barriers
+> [!WARNING]
+> The project is still in early development. It's usable, but missing many features, and is not battle tested for production. It's recommended to only use it for experimental evaluation or hobby projects at this time.
 
 
 ## Example
@@ -82,7 +77,7 @@ result = await client.start_workflow(
 
 Tasks: Regular functions in your application, written in your language, invoked from workflows via adapters (e.g. Task.run("send-email", payload)).
 
-**No replay:** Workflow code is not replayed from history; it’s a true pause/resume interpreter, not a deterministic replay engine.
+**No replay:** Workflow code is not replayed from history; it’s a sequential interpreter that can pause/snapshot/resume, not a deterministic replay engine.
 
 
 ## Learn More
