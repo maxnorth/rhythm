@@ -127,7 +127,7 @@ mod test_utils {
         CreateExecutionParams {
             id,
             exec_type: ExecutionType::Task,
-            function_name: "test.task".to_string(),
+            target_name: "test.task".to_string(),
             queue: "test".to_string(),
             inputs: serde_json::json!({}),
             parent_workflow_id: None,

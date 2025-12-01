@@ -29,7 +29,7 @@ class Execution(BaseModel):
 
     id: str
     type: ExecutionType
-    function_name: str
+    target_name: str
     queue: str
     status: ExecutionStatus
 
@@ -67,7 +67,7 @@ class DelegatedAction(BaseModel):
     """Action delegated from Rust cooperative worker loop to host
 
     Action types:
-    - execute_task: Execute a task (has execution_id, function_name, inputs)
+    - execute_task: Execute a task (has execution_id, target_name, inputs)
     - continue: Continue immediately, check for more work
     - wait: Wait for duration_ms before checking for more work
     - shutdown: Shutdown requested, worker should exit gracefully
@@ -77,7 +77,7 @@ class DelegatedAction(BaseModel):
 
     # Fields for execute_task action
     execution_id: Optional[str] = None
-    function_name: Optional[str] = None
+    target_name: Optional[str] = None
     inputs: Optional[dict[str, Any]] = None
 
     # Fields for wait action

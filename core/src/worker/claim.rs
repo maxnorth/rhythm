@@ -17,7 +17,7 @@ pub enum DelegatedAction {
     /// Execute a task in the host language
     ExecuteTask {
         execution_id: String,
-        function_name: String,
+        target_name: String,
         inputs: JsonValue,
     },
     /// Continue immediately - workflow was executed, check for more work
@@ -70,7 +70,7 @@ pub async fn run_cooperative_worker_loop(
                 // Return task details to host for execution
                 return Ok(DelegatedAction::ExecuteTask {
                     execution_id: execution.id,
-                    function_name: execution.function_name,
+                    target_name: execution.target_name,
                     inputs: execution.inputs,
                 });
             }

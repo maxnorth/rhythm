@@ -46,7 +46,7 @@ class RhythmCore:
     @staticmethod
     def create_execution(
         exec_type: str,
-        function_name: str,
+        target_name: str,
         queue: str,
         inputs: Dict[str, Any],
         parent_workflow_id: Optional[str] = None,
@@ -54,7 +54,7 @@ class RhythmCore:
         """Create a new execution"""
         return rust.create_execution_sync(
             exec_type=exec_type,
-            function_name=function_name,
+            target_name=target_name,
             queue=queue,
             inputs=json.dumps(inputs),
             parent_workflow_id=parent_workflow_id,

@@ -105,7 +105,7 @@ pub async fn setup_workflow_test_with_pool(
     let params = CreateExecutionParams {
         id: None,
         exec_type: ExecutionType::Workflow,
-        function_name: workflow_name.to_string(),
+        target_name: workflow_name.to_string(),
         queue: "default".to_string(),
         inputs,
         parent_workflow_id: None,
@@ -183,10 +183,10 @@ pub async fn get_child_task_count(pool: &PgPool, parent_id: &str) -> Result<i64>
 
 /// Helper to get all child tasks for a workflow
 ///
-/// Returns a list of (task_id, function_name) tuples ordered by creation time.
+/// Returns a list of (task_id, target_name) tuples ordered by creation time.
 pub async fn get_child_tasks(pool: &PgPool, parent_id: &str) -> Result<Vec<(String, String)>> {
     let tasks = sqlx::query_as(
-        "SELECT id, function_name FROM executions WHERE parent_workflow_id = $1 ORDER BY created_at",
+        "SELECT id, target_name FROM executions WHERE parent_workflow_id = $1 ORDER BY created_at",
     )
     .bind(parent_id)
     .fetch_all(pool)
@@ -194,19 +194,19 @@ pub async fn get_child_tasks(pool: &PgPool, parent_id: &str) -> Result<Vec<(Stri
     Ok(tasks)
 }
 
-/// Helper to get a specific child task by function name
+/// Helper to get a specific child task by target name
 ///
-/// Returns the task ID for a child task with the given function name.
-pub async fn get_task_by_function_name(
+/// Returns the task ID for a child task with the given target name.
+pub async fn get_task_by_target_name(
     pool: &PgPool,
     parent_id: &str,
-    function_name: &str,
+    target_name: &str,
 ) -> Result<String> {
     let task_id = sqlx::query_scalar(
-        "SELECT id FROM executions WHERE parent_workflow_id = $1 AND function_name = $2",
+        "SELECT id FROM executions WHERE parent_workflow_id = $1 AND target_name = $2",
     )
     .bind(parent_id)
-    .bind(function_name)
+    .bind(target_name)
     .fetch_one(pool)
     .await?;
     Ok(task_id)

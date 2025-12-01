@@ -84,11 +84,11 @@ fn initialize_sync(
 
 /// Create an execution
 #[pyfunction]
-#[pyo3(signature = (exec_type, function_name, queue, inputs, parent_workflow_id=None, id=None))]
+#[pyo3(signature = (exec_type, target_name, queue, inputs, parent_workflow_id=None, id=None))]
 fn create_execution_sync(
     py: Python,
     exec_type: String,
-    function_name: String,
+    target_name: String,
     queue: String,
     inputs: String,
     parent_workflow_id: Option<String>,
@@ -108,7 +108,7 @@ fn create_execution_sync(
     let params = CreateExecutionParams {
         id,
         exec_type,
-        function_name,
+        target_name,
         queue,
         inputs,
         parent_workflow_id,

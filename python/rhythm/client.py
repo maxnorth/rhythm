@@ -34,7 +34,7 @@ def queue_task(
     """
     execution_id = RhythmCore.create_execution(
         exec_type="task",
-        function_name=name,
+        target_name=name,
         queue=queue,
         inputs=inputs,
         parent_workflow_id=None,
@@ -68,7 +68,7 @@ def queue_workflow(
     """
     execution_id = RhythmCore.create_execution(
         exec_type="workflow",
-        function_name=name,
+        target_name=name,
         queue=queue,
         inputs=inputs,
         parent_workflow_id=None,
@@ -80,7 +80,7 @@ def queue_workflow(
 
 def queue_execution(
     exec_type: str,
-    function_name: str,
+    target_name: str,
     inputs: dict,
     queue: str,
     parent_workflow_id: Optional[str] = None,
@@ -92,7 +92,7 @@ def queue_execution(
 
     Args:
         exec_type: Type of execution ('task', 'workflow')
-        function_name: Fully qualified function name
+        target_name: Target name (task or workflow name)
         inputs: Input parameters as a dictionary
         queue: Queue name
         parent_workflow_id: Parent workflow ID (for workflow tasks)
@@ -102,13 +102,13 @@ def queue_execution(
     """
     execution_id = RhythmCore.create_execution(
         exec_type=exec_type,
-        function_name=function_name,
+        target_name=target_name,
         queue=queue,
         inputs=inputs,
         parent_workflow_id=parent_workflow_id,
     )
 
-    logger.info(f"Enqueued {exec_type} {execution_id}: {function_name} on queue {queue}")
+    logger.info(f"Enqueued {exec_type} {execution_id}: {target_name} on queue {queue}")
     return execution_id
 
 

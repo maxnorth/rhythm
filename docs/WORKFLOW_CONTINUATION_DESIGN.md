@@ -61,7 +61,7 @@ when task_completes(task_id) {
 We introduce a new built-in task type: `builtin.resume_workflow`
 
 ```sql
-INSERT INTO executions (id, type, function_name, queue, status, args, ...)
+INSERT INTO executions (id, type, target_name, queue, status, args, ...)
 VALUES (
     'resume-abc',
     'task',
@@ -133,7 +133,7 @@ pub async fn complete_execution(execution_id: &str, result: JsonValue) -> Result
             WHERE id = $2
             RETURNING parent_workflow_id
         )
-        INSERT INTO executions (id, type, function_name, queue, status, args, kwargs, priority, max_retries)
+        INSERT INTO executions (id, type, target_name, queue, status, args, kwargs, priority, max_retries)
         SELECT
             gen_random_uuid()::text,
             'task',
@@ -197,7 +197,7 @@ async fn process_expired_timers(pool: Arc<PgPool>) -> Result<usize> {
 ```rust
 // worker.rs - in task execution loop
 
-if execution.function_name == "builtin.resume_workflow" {
+if execution.target_name == "builtin.resume_workflow" {
     let workflow_id = execution.args[0].as_str()
         .ok_or_else(|| anyhow::anyhow!("resume_workflow requires workflow_id"))?;
 
@@ -291,7 +291,7 @@ Task completes:
     ↓
 3. Enqueue resume task:
    INSERT INTO executions
-   (function_name='builtin.resume_workflow', args='["workflow-123"]')
+   (target_name='builtin.resume_workflow', args='["workflow-123"]')
     ↓
 Worker claims resume task:
     ↓
@@ -468,7 +468,7 @@ INSERT INTO executions (...)
 SELECT ...
 WHERE NOT EXISTS (
     SELECT 1 FROM executions
-    WHERE function_name = 'builtin.resume_workflow'
+    WHERE target_name = 'builtin.resume_workflow'
       AND args->>0 = $workflow_id
       AND status = 'pending'
 )
@@ -562,7 +562,7 @@ async fn test_task_completion_enqueues_resume() {
     // Check: resume task was enqueued
     let resume_tasks = find_resume_tasks(workflow_id).await;
     assert_eq!(resume_tasks.len(), 1);
-    assert_eq!(resume_tasks[0].function_name, "builtin.resume_workflow");
+    assert_eq!(resume_tasks[0].target_name, "builtin.resume_workflow");
 }
 ```
 

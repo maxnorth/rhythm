@@ -30,7 +30,7 @@ pub struct Execution {
     pub id: String,
     #[serde(rename = "type")]
     pub exec_type: ExecutionType,
-    pub function_name: String,
+    pub target_name: String,
     pub queue: String,
     pub status: ExecutionStatus,
 
@@ -49,7 +49,7 @@ pub struct Execution {
 pub struct CreateExecutionParams {
     pub id: Option<String>,
     pub exec_type: ExecutionType,
-    pub function_name: String,
+    pub target_name: String,
     pub queue: String,
     pub inputs: JsonValue,
     pub parent_workflow_id: Option<String>,
@@ -65,7 +65,7 @@ pub struct ExecutionFilters {
     pub status: Option<ExecutionStatus>,
 
     /// Filter by function/workflow name
-    pub function_name: Option<String>,
+    pub target_name: Option<String>,
 
     /// Limit number of results
     pub limit: Option<i64>,

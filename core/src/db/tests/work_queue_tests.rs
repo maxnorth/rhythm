@@ -17,7 +17,7 @@ async fn create_test_execution(
     let params = CreateExecutionParams {
         id: Some(id.to_string()),
         exec_type: ExecutionType::Task,
-        function_name: "test_task".to_string(),
+        target_name: "test_task".to_string(),
         queue: queue.to_string(),
         inputs: serde_json::json!({}),
         parent_workflow_id: None,

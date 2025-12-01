@@ -121,7 +121,7 @@ async fn resume_expired_delays_batch() -> Result<usize> {
             SELECT execution_id
             FROM workflow_execution_context wec
             JOIN executions delay ON delay.id = wec.awaiting_task_id
-            WHERE delay.function_name = 'builtin.delay'
+            WHERE delay.target_name = 'builtin.delay'
               AND (delay.checkpoint->>'resume_at')::TIMESTAMPTZ <= NOW()
             LIMIT 100
             FOR UPDATE SKIP LOCKED  -- Key: each worker gets different rows

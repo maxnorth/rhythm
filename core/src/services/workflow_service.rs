@@ -31,7 +31,7 @@ impl WorkflowService {
             CreateExecutionParams {
                 id: None,
                 exec_type: ExecutionType::Workflow,
-                function_name: workflow_name.to_string(),
+                target_name: workflow_name.to_string(),
                 queue: queue.to_string(),
                 inputs,
                 parent_workflow_id: None,

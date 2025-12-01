@@ -55,17 +55,17 @@ def run():
             # Handle different action types
             if action.type == "execute_task":
                 logger.info(
-                    f"Received task: {action.function_name} (execution {action.execution_id})"
+                    f"Received task: {action.target_name} (execution {action.execution_id})"
                 )
 
                 # Execute the task synchronously
-                fn = get_function(action.function_name)
+                fn = get_function(action.target_name)
 
                 # Only support sync functions
                 if asyncio.iscoroutinefunction(fn):
-                    raise TypeError(f"Async functions not supported: {action.function_name}")
+                    raise TypeError(f"Async functions not supported: {action.target_name}")
 
-                logger.debug(f"Executing sync function {action.function_name}")
+                logger.debug(f"Executing sync function {action.target_name}")
                 try:
                     result = fn(**action.inputs)
                 except Exception as e:

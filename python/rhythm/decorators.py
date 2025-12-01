@@ -40,7 +40,7 @@ def task(fn: Optional[Callable] = None, *, queue: str = "default"):
             """Enqueue this task for execution"""
             return queue_execution(
                 exec_type="task",
-                function_name=func.__name__,
+                target_name=func.__name__,
                 inputs=inputs,
                 queue=queue,
             )

@@ -21,7 +21,7 @@ pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> 
             context.workflow_definition_id
         )
     } else {
-        initialize_workflow(&pool, &execution.function_name, &execution.inputs).await?
+        initialize_workflow(&pool, &execution.target_name, &execution.inputs).await?
     };
 
     loop {
@@ -118,7 +118,7 @@ async fn create_child_tasks(
         let params = CreateExecutionParams {
             id: Some(task_creation.task_id.clone()),
             exec_type: ExecutionType::Task,
-            function_name: task_creation.task_name.clone(),
+            target_name: task_creation.task_name.clone(),
             queue: queue.to_string(),
             inputs: task_inputs,
             parent_workflow_id: Some(execution_id.to_string()),

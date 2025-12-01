@@ -74,7 +74,7 @@ pub async fn complete_execution(execution_id: &str, result: JsonValue) -> Result
             WHERE id = $2
             RETURNING parent_workflow_id
         )
-        INSERT INTO executions (id, type, function_name, queue, status, args, kwargs, priority, max_retries)
+        INSERT INTO executions (id, type, target_name, queue, status, args, kwargs, priority, max_retries)
         SELECT
             gen_random_uuid()::text,
             'task',
@@ -113,7 +113,7 @@ async fn test_task_completion_enqueues_resume_task() {
         id: Some("test-task".to_string()),
         parent_workflow_id: Some(workflow_id.clone()),
         exec_type: ExecutionType::Task,
-        function_name: "test.task".to_string(),
+        target_name: "test.task".to_string(),
         queue: "default".to_string(),
         // ... other fields
     }).await.unwrap();
@@ -124,7 +124,7 @@ async fn test_task_completion_enqueues_resume_task() {
     // Verify resume task was created
     let resume_tasks: Vec<Execution> = sqlx::query_as(
         "SELECT * FROM executions
-         WHERE function_name = 'builtin.resume_workflow'
+         WHERE target_name = 'builtin.resume_workflow'
          AND args->>0 = $1"
     )
     .bind(&workflow_id)
@@ -157,7 +157,7 @@ async fn test_task_completion_enqueues_resume_task() {
 
 async fn execute_task(execution: &Execution) -> Result<()> {
     // Check if this is a builtin function
-    if execution.function_name.starts_with("builtin.") {
+    if execution.target_name.starts_with("builtin.") {
         return execute_builtin_task(execution).await;
     }
 
@@ -166,7 +166,7 @@ async fn execute_task(execution: &Execution) -> Result<()> {
 }
 
 async fn execute_builtin_task(execution: &Execution) -> Result<()> {
-    match execution.function_name.as_str() {
+    match execution.target_name.as_str() {
         "builtin.resume_workflow" => {
             let workflow_id = execution.args[0].as_str()
                 .ok_or_else(|| anyhow::anyhow!("resume_workflow requires workflow_id"))?;
@@ -176,7 +176,7 @@ async fn execute_builtin_task(execution: &Execution) -> Result<()> {
 
             Ok(())
         }
-        _ => Err(anyhow::anyhow!("Unknown builtin function: {}", execution.function_name))
+        _ => Err(anyhow::anyhow!("Unknown builtin function: {}", execution.target_name))
     }
 }
 ```
@@ -194,7 +194,7 @@ async fn test_resume_workflow_builtin() {
     let resume_task_id = create_execution(CreateExecutionParams {
         id: Some("resume-task".to_string()),
         exec_type: ExecutionType::Task,
-        function_name: "builtin.resume_workflow".to_string(),
+        target_name: "builtin.resume_workflow".to_string(),
         queue: "system".to_string(),
         args: json!([workflow_id]),
         // ... other fields
@@ -393,7 +393,7 @@ pub async fn process_expired_timers(pool: Arc<PgPool>) -> Result<usize> {
     for (timer_id, workflow_id) in &expired {
         sqlx::query(
             r#"
-            INSERT INTO executions (id, type, function_name, queue, status, args, kwargs, priority, max_retries)
+            INSERT INTO executions (id, type, target_name, queue, status, args, kwargs, priority, max_retries)
             VALUES (gen_random_uuid()::text, 'task', 'builtin.resume_workflow', 'system', 'pending', $1, '{}', 10, 0)
             "#
         )
@@ -472,7 +472,7 @@ async fn test_timer_processor_resumes_workflow() {
     // Verify resume task was created
     let resume_tasks: Vec<Execution> = sqlx::query_as(
         "SELECT * FROM executions
-         WHERE function_name = 'builtin.resume_workflow'
+         WHERE target_name = 'builtin.resume_workflow'
          AND args->>0 = $1"
     )
     .bind(&workflow_id)

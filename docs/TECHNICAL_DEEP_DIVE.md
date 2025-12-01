@@ -288,7 +288,7 @@ async def charge_card(order_id: str, amount: float):
 CREATE TABLE executions (
     id UUID PRIMARY KEY,
     execution_type VARCHAR NOT NULL, -- 'task' or 'workflow'
-    function_name VARCHAR NOT NULL,
+    target_name VARCHAR NOT NULL,
     queue VARCHAR NOT NULL,
     status VARCHAR NOT NULL, -- 'pending', 'running', 'completed', 'failed', 'suspended'
     inputs JSONB,

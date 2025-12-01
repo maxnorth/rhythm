@@ -2,7 +2,7 @@
 
 from typing import Callable, Dict
 
-# Global registry of function_name -> function
+# Global registry of target_name -> function
 _FUNCTION_REGISTRY: Dict[str, Callable] = {}
 
 

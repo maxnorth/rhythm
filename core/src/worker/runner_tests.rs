@@ -13,7 +13,7 @@ use crate::db;
 use super::run_workflow;
 use crate::test_helpers::{
     enqueue_and_claim_execution, get_child_task_count, get_child_tasks,
-    get_task_by_function_name, get_unclaimed_work_count, get_work_queue_count, setup_workflow_test,
+    get_task_by_target_name, get_unclaimed_work_count, get_work_queue_count, setup_workflow_test,
     setup_workflow_test_with_pool,
 };
 use crate::types::ExecutionStatus;
@@ -134,7 +134,7 @@ async fn test_workflow_with_multiple_sequential_tasks() {
     .unwrap();
 
     // Complete first task
-    let task1_id = get_task_by_function_name(&pool, &workflow_id, "step_one")
+    let task1_id = get_task_by_target_name(&pool, &workflow_id, "step_one")
         .await
         .unwrap();
 
@@ -156,7 +156,7 @@ async fn test_workflow_with_multiple_sequential_tasks() {
     .unwrap();
 
     // Complete second task
-    let task2_id = get_task_by_function_name(&pool, &workflow_id, "step_two")
+    let task2_id = get_task_by_target_name(&pool, &workflow_id, "step_two")
         .await
         .unwrap();
 
@@ -178,7 +178,7 @@ async fn test_workflow_with_multiple_sequential_tasks() {
     .unwrap();
 
     // Complete third task
-    let task3_id = get_task_by_function_name(&pool, &workflow_id, "step_three")
+    let task3_id = get_task_by_target_name(&pool, &workflow_id, "step_three")
         .await
         .unwrap();
 

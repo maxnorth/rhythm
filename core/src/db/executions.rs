@@ -22,7 +22,7 @@ pub async fn get_execution(pool: &PgPool, execution_id: &str) -> Result<Option<E
         let exec = Execution {
             id: row.get("id"),
             exec_type: row.get("type"),
-            function_name: row.get("function_name"),
+            target_name: row.get("target_name"),
             queue: row.get("queue"),
             status: row.get("status"),
             inputs: row.get("inputs"),
@@ -54,7 +54,7 @@ pub async fn create_execution(
         let result: Option<(String, bool)> = sqlx::query_as(
             r#"
             INSERT INTO executions (
-                id, type, function_name, queue, status,
+                id, type, target_name, queue, status,
                 inputs, parent_workflow_id
             ) VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (id) DO NOTHING
@@ -63,7 +63,7 @@ pub async fn create_execution(
         )
         .bind(&id)
         .bind(&current_params.exec_type)
-        .bind(&current_params.function_name)
+        .bind(&current_params.target_name)
         .bind(&current_params.queue)
         .bind(ExecutionStatus::Pending)
         .bind(&current_params.inputs)
@@ -134,7 +134,7 @@ where
         let exec = Execution {
             id: row.get("id"),
             exec_type: row.get("type"),
-            function_name: row.get("function_name"),
+            target_name: row.get("target_name"),
             queue: row.get("queue"),
             status: row.get("status"),
             inputs: row.get("inputs"),
@@ -178,7 +178,7 @@ where
         let exec = Execution {
             id: row.get("id"),
             exec_type: row.get("type"),
-            function_name: row.get("function_name"),
+            target_name: row.get("target_name"),
             queue: row.get("queue"),
             status: row.get("status"),
             inputs: row.get("inputs"),
@@ -222,7 +222,7 @@ where
         let exec = Execution {
             id: row.get("id"),
             exec_type: row.get("type"),
-            function_name: row.get("function_name"),
+            target_name: row.get("target_name"),
             queue: row.get("queue"),
             status: row.get("status"),
             inputs: row.get("inputs"),
@@ -263,7 +263,7 @@ where
         let exec = Execution {
             id: row.get("id"),
             exec_type: row.get("type"),
-            function_name: row.get("function_name"),
+            target_name: row.get("target_name"),
             queue: row.get("queue"),
             status: row.get("status"),
             inputs: row.get("inputs"),
@@ -300,9 +300,9 @@ pub async fn query_executions(
         query.push_str(&format!(" AND status = ${}", bind_count));
     }
 
-    if filters.function_name.is_some() {
+    if filters.target_name.is_some() {
         bind_count += 1;
-        query.push_str(&format!(" AND function_name = ${}", bind_count));
+        query.push_str(&format!(" AND target_name = ${}", bind_count));
     }
 
     query.push_str(" ORDER BY created_at DESC");
@@ -328,8 +328,8 @@ pub async fn query_executions(
         sql_query = sql_query.bind(status);
     }
 
-    if let Some(ref func_name) = filters.function_name {
-        sql_query = sql_query.bind(func_name);
+    if let Some(ref target_name) = filters.target_name {
+        sql_query = sql_query.bind(target_name);
     }
 
     if let Some(limit) = filters.limit {
@@ -350,7 +350,7 @@ pub async fn query_executions(
         .map(|row| Execution {
             id: row.get("id"),
             exec_type: row.get("type"),
-            function_name: row.get("function_name"),
+            target_name: row.get("target_name"),
             queue: row.get("queue"),
             status: row.get("status"),
             inputs: row.get("inputs"),
