@@ -1,14 +1,13 @@
 """Example tasks for the simple application"""
 
-import asyncio
 import logging
-from rhythm import task
+import rhythm
 import time
 
 logger = logging.getLogger(__name__)
 
 
-@task
+@rhythm.task
 def send_email(to: str, subject: str, body: str) -> dict:
     """Simulate sending an email"""
     logger.info(f"Sending email to {to}: {subject}")
@@ -17,7 +16,7 @@ def send_email(to: str, subject: str, body: str) -> dict:
     return {"status": "sent", "to": to, "subject": subject}
 
 
-@task
+@rhythm.task
 def process_payment(order_id: str, amount: float) -> dict:
     """Simulate processing a payment (sync function)"""
     logger.info(f"Processing payment for order {order_id}: ${amount}")
@@ -27,7 +26,7 @@ def process_payment(order_id: str, amount: float) -> dict:
     return {"status": "completed", "order_id": order_id, "amount": amount}
 
 
-@task
+@rhythm.task
 def update_inventory(product_id: str, quantity: int) -> dict:
     """Update inventory for a product"""
     logger.info(f"Updating inventory for product {product_id}: {quantity} units")
@@ -36,7 +35,7 @@ def update_inventory(product_id: str, quantity: int) -> dict:
     return {"product_id": product_id, "new_quantity": quantity}
 
 
-@task
+@rhythm.task
 def send_notification(user_id: str, message: str) -> dict:
     """Send a notification to a user"""
     logger.info(f"Sending notification to user {user_id}: {message}")

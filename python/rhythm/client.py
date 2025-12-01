@@ -1,11 +1,81 @@
 """Client API for enqueuing work and sending signals"""
 
 import logging
+import time
 from typing import Any, Optional
 
 from rhythm.core import RhythmCore
+from rhythm.models import Execution, ExecutionStatus
 
 logger = logging.getLogger(__name__)
+
+
+def queue_task(
+    name: str,
+    inputs: dict,
+    queue: str = "default",
+) -> str:
+    """
+    Queue a task for execution.
+
+    Args:
+        name: Task function name
+        inputs: Input parameters as a dictionary
+        queue: Queue name (default: "default")
+
+    Returns:
+        Execution ID
+
+    Example:
+        >>> task_id = rhythm.client.queue_task(
+        ...     name="send_email",
+        ...     inputs={"to": "user@example.com", "subject": "Hello"},
+        ... )
+    """
+    execution_id = RhythmCore.create_execution(
+        exec_type="task",
+        function_name=name,
+        queue=queue,
+        inputs=inputs,
+        parent_workflow_id=None,
+    )
+
+    logger.info(f"Enqueued task {execution_id}: {name} on queue {queue}")
+    return execution_id
+
+
+def queue_workflow(
+    name: str,
+    inputs: dict,
+    queue: str = "default",
+) -> str:
+    """
+    Queue a workflow for execution.
+
+    Args:
+        name: Workflow name
+        inputs: Input parameters as a dictionary
+        queue: Queue name (default: "default")
+
+    Returns:
+        Execution ID
+
+    Example:
+        >>> workflow_id = rhythm.client.queue_workflow(
+        ...     name="process_order",
+        ...     inputs={"orderId": "order-123"},
+        ... )
+    """
+    execution_id = RhythmCore.create_execution(
+        exec_type="workflow",
+        function_name=name,
+        queue=queue,
+        inputs=inputs,
+        parent_workflow_id=None,
+    )
+
+    logger.info(f"Enqueued workflow {execution_id}: {name} on queue {queue}")
+    return execution_id
 
 
 def queue_execution(
@@ -17,6 +87,8 @@ def queue_execution(
 ) -> str:
     """
     Enqueue an execution (task or workflow).
+
+    Note: Prefer using queue_task() or queue_workflow() for better type safety.
 
     Args:
         exec_type: Type of execution ('task', 'workflow')
@@ -40,15 +112,15 @@ def queue_execution(
     return execution_id
 
 
-def get_execution_status(execution_id: str) -> Optional[dict]:
+def get_execution(execution_id: str) -> Optional[Execution]:
     """
-    Get the status of an execution.
+    Get an execution by ID.
 
     Args:
         execution_id: The execution ID
 
     Returns:
-        Execution status dict or None if not found
+        Execution object or None if not found
     """
     return RhythmCore.get_execution(execution_id)
 
@@ -122,3 +194,56 @@ def list_executions(
     raise NotImplementedError(
         "list_executions is not yet implemented. Use Rust bridge functions for execution management."
     )
+
+
+def wait_for_execution(
+    execution_id: str,
+    timeout: float = 60.0,
+    poll_interval: float = 0.5,
+) -> Execution:
+    """
+    Wait for an execution to reach a terminal state and return it.
+
+    Polls the execution status until it reaches "completed" or "failed" status.
+    Does not raise exceptions on failure - check execution.status to determine
+    success or failure.
+
+    Args:
+        execution_id: The execution ID to wait for
+        timeout: Maximum time to wait in seconds (default: 60)
+        poll_interval: How often to poll in seconds (default: 0.5)
+
+    Returns:
+        Execution object with full execution details
+
+    Raises:
+        TimeoutError: If execution doesn't reach terminal state within timeout
+        RuntimeError: If execution not found
+
+    Example:
+        >>> execution = rhythm.client.wait_for_execution(workflow_id)
+        >>> if execution.status == ExecutionStatus.COMPLETED:
+        ...     print(f"Result: {execution.output}")
+        >>> else:
+        ...     print(f"Failed with status: {execution.status}")
+    """
+    start_time = time.time()
+
+    while True:
+        execution = get_execution(execution_id)
+
+        if execution is None:
+            raise RuntimeError(f"Execution {execution_id} not found")
+
+        # Check if reached terminal state
+        if execution.status in (ExecutionStatus.COMPLETED, ExecutionStatus.FAILED):
+            return execution
+
+        # Check timeout
+        if time.time() - start_time > timeout:
+            raise TimeoutError(
+                f"Execution {execution_id} did not complete within {timeout}s "
+                f"(current status: {execution.status})"
+            )
+
+        time.sleep(poll_interval)

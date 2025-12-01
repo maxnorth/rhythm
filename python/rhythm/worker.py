@@ -24,7 +24,7 @@ def _handle_shutdown_signal(signum, frame):
         logger.error(f"Error requesting shutdown: {e}")
 
 
-def run_worker():
+def run():
     """Run a simple single-threaded worker loop
 
     This worker runs synchronously in a single thread. It:

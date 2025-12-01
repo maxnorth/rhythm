@@ -18,7 +18,6 @@ os.environ.setdefault("WORKFLOWS_WORKER_VERBOSE", "true")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 import rhythm
-from rhythm.worker import run_worker
 from rhythm.config import settings
 
 # Import tasks to register them
@@ -52,7 +51,7 @@ def main():
     # Start the worker
     # Note: Queue configuration is set during initialization (currently "default")
     logger.info("Starting worker...")
-    run_worker()
+    rhythm.worker.run()
 
 
 if __name__ == "__main__":
