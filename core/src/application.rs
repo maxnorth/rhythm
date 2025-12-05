@@ -23,11 +23,14 @@ pub struct Application {
 }
 
 impl Application {
-    /// Create a new Application instance (pure instantiation, no I/O)
-    pub fn new(config: Config, pool: PgPool) -> Self {
+    /// Create a new Application instance
+    pub async fn new(config: Config) -> Result<Self> {
+        // Create pool from config
+        let pool = crate::db::pool::create_pool_from_config(&config).await?;
+
         let shutdown_token = CancellationToken::new();
 
-        Self {
+        Ok(Self {
             config,
             pool: pool.clone(),
             shutdown_token: shutdown_token.clone(),
@@ -35,7 +38,7 @@ impl Application {
             workflow_service: WorkflowService::new(pool.clone()),
             worker_service: WorkerService::new(pool.clone(), shutdown_token),
             initialization_service: InitializationService::new(pool),
-        }
+        })
     }
 
     /// Get the database pool
@@ -150,30 +153,8 @@ pub async fn initialize(options: InitOptions) -> Result<Application> {
         .config_path(options.config_path.map(std::path::PathBuf::from))
         .build()?;
 
-    // Create pool
-    let pool = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(config.database.max_connections)
-        .min_connections(config.database.min_connections)
-        .acquire_timeout(std::time::Duration::from_secs(
-            config.database.acquire_timeout_secs,
-        ))
-        .idle_timeout(std::time::Duration::from_secs(
-            config.database.idle_timeout_secs,
-        ))
-        .max_lifetime(std::time::Duration::from_secs(
-            config.database.max_lifetime_secs,
-        ))
-        .connect(
-            &config
-                .database
-                .url
-                .clone()
-                .expect("Database URL validated by config loading"),
-        )
-        .await?;
-
-    // Instantiate
-    let app = Application::new(config, pool);
+    // Instantiate (creates pool internally)
+    let app = Application::new(config).await?;
 
     // Initialize
     app.initialization_service

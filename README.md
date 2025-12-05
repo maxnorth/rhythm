@@ -16,15 +16,21 @@ Rhythm is a Durable Execution framework that aims to make writing Workflows-as-C
 ```js
 // workflows/onboard_user.flow
 
-const user = await Task.run("get-user", { userId: Inputs.userId })
-const account = await Task.run("create-billing-account", { user })
-await Task.run("send-welcome-email", { user, account })
+await Task.run("submit-report", { reportId: Inputs.reportId })
 
-return {
-  userId: user.id,
-  accountId: account.id,
-  status: "onboarded"
+try {
+    await Signal.when("manager-approval", { timeout: "24h" })
+} catch (err) {
+  return await Task.run("fail-submission", {
+    draftId: draft.id,
+    reason: err.type
+  })
 }
+
+return await Task.run("publish-submission", {
+  draftId: draft.id,
+  approvedBy: approval.managerId
+})
 ```
 
 ```py

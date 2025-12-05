@@ -43,45 +43,17 @@ impl Client {
             return Ok(());
         }
 
-        // 1. Bootstrap: Load config and create pool
-        let config = crate::config::Config::builder()
-            .database_url(database_url)
-            .config_path(config_path.map(std::path::PathBuf::from))
-            .build()
-            .context("Failed to load configuration")?;
+        // Delegate to application::initialize for all the complex work
+        let app = crate::application::initialize(crate::application::InitOptions {
+            database_url,
+            config_path,
+            auto_migrate,
+            workflows,
+        })
+        .await
+        .context("Failed to initialize application")?;
 
-        let pool = sqlx::postgres::PgPoolOptions::new()
-            .max_connections(config.database.max_connections)
-            .min_connections(config.database.min_connections)
-            .acquire_timeout(std::time::Duration::from_secs(
-                config.database.acquire_timeout_secs,
-            ))
-            .idle_timeout(std::time::Duration::from_secs(
-                config.database.idle_timeout_secs,
-            ))
-            .max_lifetime(std::time::Duration::from_secs(
-                config.database.max_lifetime_secs,
-            ))
-            .connect(
-                &config
-                    .database
-                    .url
-                    .clone()
-                    .expect("Database URL validated by config loading"),
-            )
-            .await
-            .context("Failed to connect to database")?;
-
-        // 2. Instantiate: Construct application with services
-        let app = Application::new(config, pool);
-
-        // 3. Initialize: Run migrations and register workflows
-        app.initialization_service
-            .initialize(auto_migrate, workflows)
-            .await
-            .context("Failed to initialize application")?;
-
-        // 4. Store: Save singleton
+        // Store the singleton
         APP.set(app)
             .map_err(|_| anyhow!("Application already initialized"))?;
 
