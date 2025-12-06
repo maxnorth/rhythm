@@ -16,12 +16,6 @@ Rhythm may appeal to you if:
 - You define tasks in your application's language. These run when invoked by a workflow, or they can be run directly as a standalone queued task.
 - Workflow files are persisted and automatically versioned by their content hash. Running workflows are guaranteed to resume with the same version they started with, making file changes safe and effortless.
 
-- Immutable, self-versioning workflows written in a JS-based DSL
-- Pauses and resumes when you `await` - no replay or determinism traps
-- Define and run tasks in your application's language
-- 2-in-1 framework for workflows and background tasks, with unified scheduling and monitoring
-- SDK's currently available for Python and JavaScript, with more planned
-
 ## Example
 ```js
 // workflows/onboard_user.flow
