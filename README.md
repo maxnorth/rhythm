@@ -4,11 +4,11 @@ Rhythm is a Durable Execution framework that aims to make writing Workflows-as-C
 
 Rhythm may appeal to you if:
 - You have seen how replay-based durable execution can harm maintainability and reliability
-- You want a free and low-maintenance platform whose design isn't constrained by the needs of VC-backed startups
+- You want a free, low-maintenance platform designed for developers, without commercial constraints
 - You don't want to monitor and maintain separate platforms for durable workflows *and* queued tasks
 
 > [!WARNING]
-> The project is still in early development. It's usable but missing many features, and is not battle tested for production. It's exclusively recommended for experimental evaluation or hobby projects at this time.
+> The project is in in early access. It's usable but missing many features, and is not battle tested for production. It's exclusively recommended for experimental evaluation or hobby projects at this time.
 
 ## How it Works
 - You write workflows in `.flow` files, which use a JS-based scripting language to run tasks asynchronously and wait on external signals or timers of any duration.
