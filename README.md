@@ -12,7 +12,7 @@ Rhythm may appeal to you if:
 
 ## How it Works
 - You write workflows in `.flow` files, which use a JS-based scripting language to run tasks asynchronously and wait on external signals or timers of any duration.
-- Rhythm's rust-based interpreter runs your workflows. When you `await`, it pauses and saves state, and when the result is resolved, the workflow restores state and resumes where it left off.
+- Rhythm's rust-based interpreter runs your workflows. When you `await`, it pauses and saves state, and when the result is resolved, the workflow restores state and resumes exactly where it left off, like normal code.
 - You define tasks in your application's language. These run when invoked by a workflow, or they can be run directly as a standalone queued task.
 - Workflow files are persisted and automatically versioned by their content hash. In-progress workflows are guaranteed to resume with the same version they started with, making file changes safe and effortless.
 - Because workflows do not use event replay to restore state like other durable execution platforms, they do not have the same event limits or determinism requirements.
