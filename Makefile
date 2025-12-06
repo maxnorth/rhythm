@@ -16,7 +16,7 @@ db-reset:
 	docker compose up -d
 
 migrate:
-	cd core && RHYTHM_DATABASE_URL=postgresql://rhythm@localhost/rhythm cargo run --release --bin rhythm -- migrate
+	cd core && RHYTHM_DATABASE_URL=postgresql://postgres@localhost/rhythm cargo run --release --bin rhythm -- migrate
 
 core-test:
 	cd core && cargo test -- --test-threads=1

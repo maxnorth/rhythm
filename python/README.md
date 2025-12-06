@@ -1,38 +1,23 @@
 # Rhythm Python
 
-Python client library for Rhythm - a lightweight durable execution framework.
+Python client library for Rhythm.
 
 ## Installation
 
-### Development Install
-
-From the `python` directory:
-
 ```bash
-pip install -e .
+pip install rhythm-async
 ```
 
-This will:
-1. Build the Rust extension (rhythm_core) using maturin
-2. Install the Python package in development mode
-
-### Production Install
-
-```bash
-pip install rhythm
-```
-
-## Quick Start
+## Example
 
 ```python
 import rhythm
-from rhythm import task
 
 # Define a task
-@task
-async def send_email(to: str, subject: str, body: str):
+@rhythm.task
+def send_email(ctx, inputs):
     # Your task implementation
-    pass
+    print("email sent")
 
 # Initialize Rhythm
 rhythm.init(
@@ -41,10 +26,28 @@ rhythm.init(
 )
 
 # Start a workflow
-workflow_id = await rhythm.start_workflow(
+workflow_id = rhythm.start_workflow(
     "processOrder",
     inputs={"orderId": "123", "amount": 99.99}
 )
+
+# Start a worker process (holds the process)
+rhythm.start_worker()
+```
+
+## Quickstart
+```
+# environment setup
+git clone https://github.com/maxnorth/rhythm.git
+docker compose up -d postgres
+
+# start worker
+cd python/examples/simple_app
+python3 worker.py
+
+# run client app in another terminal
+cd python/examples/simple_app
+python3 app.py
 ```
 
 ## Documentation
