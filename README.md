@@ -8,7 +8,7 @@ Rhythm may appeal to you if:
 - You don't want to monitor and maintain separate platforms for durable workflows *and* queued tasks
 
 > [!WARNING]
-> The project is in in early access. It's usable but missing many features, and is not battle tested for production. It's exclusively recommended for experimental evaluation or hobby projects at this time.
+> This project is in early access. It's usable but missing many features, and is not battle tested for production. Backwards compatibility is not guaranteed. It's exclusively recommended for evaluation or hobby projects at this time. [Learn more.](./docs/release_status.md)
 
 ## How it Works
 - You write workflows in `.flow` files, which use a JS-based scripting language to run tasks asynchronously and wait on external signals or timers of any duration.
@@ -21,8 +21,18 @@ Rhythm may appeal to you if:
 ```js
 // workflows/onboard_user.flow
 
-await Task.run("submit-report", { reportId: Inputs.reportId })
+// run task and wait for result
+let report = await Task.run("submit-report", { reportId: Inputs.reportId })
 
+// fire and forget tasks (no await)
+Task.run("something-else", { report })
+
+// use loops
+for (let item of report.approvers) {
+    await Task.run("another-thing", { item })
+}
+
+// use try/catch for reliable error handling
 try {
     await Signal.when("manager-approval", { timeout: "24h" })
 } catch (err) {
@@ -32,10 +42,10 @@ try {
   })
 }
 
-return await Task.run("publish-submission", {
-  draftId: draft.id,
-  approvedBy: approval.managerId
-})
+// capture outputs, to fetch via API, or returned to parent workflow
+return {
+  example: 'whatever'
+}
 ```
 
 ## Setup
