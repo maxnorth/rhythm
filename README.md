@@ -11,10 +11,11 @@ Rhythm may appeal to you if:
 > The project is still in early development. It's usable but missing many features, and is not battle tested for production. It's exclusively recommended for experimental evaluation or hobby projects at this time.
 
 ## How it Works
-- You write workflows in `.flow` files, which use a JS-like scripting language to schedule tasks and wait on external signals or timers of any duration.
+- You write workflows in `.flow` files, which use a JS-like scripting language to run tasks and wait on external signals or timers of any duration.
 - Rhythm's rust-based interpreter runs your workflows. When you `await`, it pauses and saves state, and when the result is resolved, the workflow restores state and resumes where it left off.
 - You define tasks in your application's language. These run when invoked by a workflow, or they can be run directly as a standalone queued task.
-- Workflow files are persisted and automatically versioned by their content hash. Running workflows are guaranteed to resume with the same version they started with, making file changes safe and effortless.
+- Workflow files are persisted and automatically versioned by their content hash. In-progress workflows are guaranteed to resume with the same version they started with, making file changes safe and effortless.
+- Because workflows do not use event replay to restore state like other durable execution platforms, they do not have the same event limits or determinism requirements.
 
 ## Example
 ```js
@@ -37,63 +38,9 @@ return await Task.run("publish-submission", {
 })
 ```
 
-```py
-# app/tasks.py
-
-from rhythm import RhythmApp, task
-
-app = RhythmApp()
-
-@task("get-user")
-def get_user(payload: dict) -> dict:
-    user_id = payload["userId"]
-    user = db.fetch_user(user_id)
-    return {"id": user.id, "email": user.email}
-
-
-@task("create-billing-account")
-def create_billing_account(payload: dict) -> dict:
-    user = payload["user"]
-    account = billing.create_account(email=user["email"])
-    return {"id": account.id}
-
-
-@task("send-welcome-email")
-def send_welcome_email(payload: dict) -> dict:
-    user = payload["user"]
-    account = payload["account"]
-    mailer.send(
-        to=user["email"],
-        template="welcome",
-        context={"accountId": account["id"]},
-    )
-    return {"sent": True}
-```
-
-```py
-# app/main.py
-
-from rhythm import RhythmClient
-
-client = RhythmClient()
-
-result = await client.start_workflow(
-    "onboard_user",
-    {"userId": 42}
-)
-```
-
-## Architecture at a glance
-
-**Workflow DSL:** Workflows are written in a custom DSL stored in .flow files, based on a simplified subset of JavaScript. Rhythm 
-
-**Immutable, self-versioning workflows:** During app init, Rhythm stores the source of workflows in Postgres, versioned by hash. In-flight workflows resume using the same version they started with. New workflow runs use latest by default.
-
-**Single dependency:** All state, scheduling, and results are stored in Postgres. All execution happens inside your service. Compare to a simple Postgres-backed task queue.
-
-Tasks: Regular functions in your application, written in your language, invoked from workflows via adapters (e.g. Task.run("send-email", payload)).
-
-**No replay:** Workflow code is not replayed from history; it’s a sequential interpreter that can pause/snapshot/resume, not a deterministic replay engine.
+## Setup
+See below for setup instructions and examples in your chosen app language.
+- [Python](./python/README.md)
 
 ## Planned Features
 - Timed delays in workflows (minutes, hours, days, weeks, etc.)
