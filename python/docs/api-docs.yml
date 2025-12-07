@@ -1,0 +1,46 @@
+# Supplemental documentation content for Python API Reference
+# This file defines section structure, descriptions, and examples
+
+sections:
+  - name: Initialization
+    description: |
+      Initialize Rhythm and configure your application for task execution.
+
+      The initialization process connects to your PostgreSQL database, scans for workflow
+      definitions, and prepares the system for executing tasks and workflows.
+    examples:
+      - title: Basic initialization
+        description: Initialize with database connection
+        code: |
+          import rhythm
+
+          rhythm.init("postgresql://rhythm@localhost/rhythm")
+
+      - title: Custom workflow paths
+        description: Specify custom directories containing .flow files
+        code: |
+          import rhythm
+
+          rhythm.init(
+              "postgresql://rhythm@localhost/rhythm",
+              workflow_paths=["./workflows", "./custom-flows"]
+          )
+
+  - name: Tasks
+    description: |
+      Define and execute background tasks using the @task decorator.
+
+      Tasks can be called synchronously or queued for asynchronous execution. The decorator
+      adds a `.queue()` method to your functions for background processing.
+
+  - name: Client
+    description: |
+      Client functions for queuing tasks, managing executions, and checking execution status.
+
+      Use these functions to interact with the Rhythm execution system from your application code.
+
+  - name: Worker
+    description: |
+      Worker functions for processing queued tasks and workflows.
+
+      Workers poll the database for pending executions and process them sequentially.

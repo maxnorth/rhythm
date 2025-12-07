@@ -11,6 +11,12 @@ from typing import Any, Dict, List, Optional
 from pathlib import Path
 import sys
 
+try:
+    import yaml
+except ImportError:
+    print("Error: pyyaml package is required. Install with: pip install pyyaml", file=sys.stderr)
+    sys.exit(1)
+
 # Add parent directory to path to import rhythm
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -21,21 +27,29 @@ import rhythm.decorators as decorators_module
 from importlib import import_module
 init_module = import_module('rhythm.init')
 
-# Valid documentation sections
-VALID_SECTIONS = {
-    "Client",
-    "Initialization",
-    "Tasks",
-    "Worker",
-}
+# These will be populated from supplemental docs YAML
+VALID_SECTIONS = set()
+SECTION_ORDER = []
+SUPPLEMENTAL_DOCS = {}
 
-# Section order for documentation
-SECTION_ORDER = [
-    "Initialization",
-    "Tasks",
-    "Client",
-    "Worker",
-]
+
+def load_supplemental_docs(yaml_path: Path) -> Dict[str, Any]:
+    """Load supplemental documentation content from YAML file."""
+    with open(yaml_path) as f:
+        return yaml.safe_load(f)
+
+
+def initialize_from_supplemental_docs(docs: Dict[str, Any]) -> None:
+    """Initialize global section data from supplemental docs."""
+    global VALID_SECTIONS, SECTION_ORDER, SUPPLEMENTAL_DOCS
+
+    SUPPLEMENTAL_DOCS = docs
+
+    # Extract section names and order
+    for section in docs.get('sections', []):
+        section_name = section['name']
+        SECTION_ORDER.append(section_name)
+        VALID_SECTIONS.add(section_name)
 
 
 def parse_google_section(docstring: str, section_name: str) -> Optional[str]:
@@ -221,7 +235,7 @@ def extract_module(module: Any, name: str, public_only: bool = True) -> List[Dic
 
 
 def organize_into_sections(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Organize items into sections."""
+    """Organize items into sections and merge with supplemental docs."""
     # Group by section
     sections_dict = {}
 
@@ -236,23 +250,44 @@ def organize_into_sections(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
         sections_dict[section_name]["items"].append(item)
 
-    # Build sections in predefined order
+    # Build sections in predefined order, merging supplemental content
     sections = []
-    for section_name in SECTION_ORDER:
+    for section_config in SUPPLEMENTAL_DOCS.get('sections', []):
+        section_name = section_config['name']
+
         if section_name in sections_dict:
             # Sort items within section alphabetically by name
             sorted_items = sorted(sections_dict[section_name]["items"], key=lambda x: x['name'])
 
-            sections.append({
+            section_data = {
                 "title": section_name,
                 "items": sorted_items
-            })
+            }
+
+            # Add supplemental content if present
+            if 'description' in section_config:
+                section_data['description'] = section_config['description'].strip()
+
+            if 'examples' in section_config:
+                section_data['examples'] = section_config['examples']
+
+            sections.append(section_data)
 
     return sections
 
 
 def main():
     """Extract API metadata and generate documentation."""
+
+    # Load supplemental documentation
+    docs_yaml_path = Path(__file__).parent.parent / "docs" / "api-docs.yml"
+    if not docs_yaml_path.exists():
+        print(f"Error: Supplemental docs YAML not found: {docs_yaml_path}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Loading supplemental docs from {docs_yaml_path}...")
+    supplemental_docs = load_supplemental_docs(docs_yaml_path)
+    initialize_from_supplemental_docs(supplemental_docs)
 
     modules_to_extract = [
         (rhythm, "rhythm"),

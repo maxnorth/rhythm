@@ -25,6 +25,19 @@
             }
           ]
         }
+      ],
+      "description": "Initialize Rhythm and configure your application for task execution.\n\nThe initialization process connects to your PostgreSQL database, scans for workflow\ndefinitions, and prepares the system for executing tasks and workflows.",
+      "examples": [
+        {
+          "title": "Basic initialization",
+          "description": "Initialize with database connection",
+          "code": "import rhythm\n\nrhythm.init(\"postgresql://rhythm@localhost/rhythm\")\n"
+        },
+        {
+          "title": "Custom workflow paths",
+          "description": "Specify custom directories containing .flow files",
+          "code": "import rhythm\n\nrhythm.init(\n    \"postgresql://rhythm@localhost/rhythm\",\n    workflow_paths=[\"./workflows\", \"./custom-flows\"]\n)\n"
+        }
       ]
     },
     {
@@ -44,7 +57,8 @@
           "returns": "The decorated function with an added `.queue()` method",
           "usage": "@task\n    def send_email(to: str, subject: str):\n        email_client.send(to, subject)\n\n    # Direct call (synchronous)\n    send_email(\"user@example.com\", \"Hello\")\n\n    # Queue for async execution\n    execution_id = send_email.queue(to=\"user@example.com\", subject=\"Hello\")"
         }
-      ]
+      ],
+      "description": "Define and execute background tasks using the @task decorator.\n\nTasks can be called synchronously or queued for asynchronous execution. The decorator\nadds a `.queue()` method to your functions for background processing."
     },
     {
       "title": "Client",
@@ -214,7 +228,8 @@
             "RuntimeError: If execution not found"
           ]
         }
-      ]
+      ],
+      "description": "Client functions for queuing tasks, managing executions, and checking execution status.\n\nUse these functions to interact with the Rhythm execution system from your application code."
     },
     {
       "title": "Worker",
@@ -226,7 +241,8 @@
           "description": "Run a worker loop that polls for and executes tasks.\n\nThe worker runs synchronously in a single thread, polling the database\nfor pending tasks and executing them one at a time.",
           "parameters": []
         }
-      ]
+      ],
+      "description": "Worker functions for processing queued tasks and workflows.\n\nWorkers poll the database for pending executions and process them sequentially."
     }
   ]
 }

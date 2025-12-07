@@ -29,11 +29,34 @@ definitions:
       title:
         type: string
         description: "Section heading in rendered docs"
+      description:
+        type: string
+        description: "Optional description of the section"
+      examples:
+        type: array
+        description: "Optional examples for the section"
+        items:
+          $ref: "#/definitions/Example"
       items:
         type: array
         description: "API items in this section"
         items:
           $ref: "#/definitions/Item"
+
+  Example:
+    type: object
+    required:
+      - code
+    properties:
+      title:
+        type: string
+        description: "Optional title for the example"
+      description:
+        type: string
+        description: "Optional description of what the example demonstrates"
+      code:
+        type: string
+        description: "Example code"
 
   Item:
     type: object

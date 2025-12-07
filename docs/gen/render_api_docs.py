@@ -125,12 +125,36 @@ def render_item(item: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def render_section_example(example: Dict[str, Any]) -> str:
+    """Render a single section example to markdown."""
+    lines = []
+
+    if example.get('title'):
+        lines.append(f"**{example['title']}**")
+
+    if example.get('description'):
+        lines.append(f"{example['description']}\n")
+
+    lines.append(f"```python\n{example['code']}\n```\n")
+
+    return "\n".join(lines)
+
+
 def render_section(section: Dict[str, Any]) -> str:
     """Render a section with all its items to markdown."""
     lines = []
 
     # Section header
     lines.append(f"## {section['title']}\n")
+
+    # Section description if present
+    if section.get('description'):
+        lines.append(f"{section['description']}\n")
+
+    # Section examples if present
+    if section.get('examples'):
+        for example in section['examples']:
+            lines.append(render_section_example(example))
 
     # Render each item
     for item in section['items']:
@@ -150,7 +174,7 @@ def generate_anchor(text: str) -> str:
 
 def render_table_of_contents(data: Dict[str, Any]) -> str:
     """Generate table of contents with links to sections and items."""
-    lines = ["## Table of Contents\n"]
+    lines = ["### Table of Contents\n"]
 
     for section in data['sections']:
         section_anchor = generate_anchor(section['title'])

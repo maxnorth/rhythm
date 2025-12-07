@@ -2,7 +2,7 @@
 
 Complete API reference for the Rhythm Python SDK
 
-## Table of Contents
+### Table of Contents
 
 - [Initialization](#initialization)
   - [init](#init)
@@ -22,6 +22,34 @@ Complete API reference for the Rhythm Python SDK
 
 ## Initialization
 
+Initialize Rhythm and configure your application for task execution.
+
+The initialization process connects to your PostgreSQL database, scans for workflow
+definitions, and prepares the system for executing tasks and workflows.
+
+**Basic initialization**
+Initialize with database connection
+
+```python
+import rhythm
+
+rhythm.init("postgresql://rhythm@localhost/rhythm")
+
+```
+
+**Custom workflow paths**
+Specify custom directories containing .flow files
+
+```python
+import rhythm
+
+rhythm.init(
+    "postgresql://rhythm@localhost/rhythm",
+    workflow_paths=["./workflows", "./custom-flows"]
+)
+
+```
+
 ### init `function`
 
 ```python
@@ -40,6 +68,11 @@ scans for .flow workflow files, and prepares the system for execution.
 - **`auto_migrate`**: Whether to automatically run migrations if needed
 
 ## Tasks
+
+Define and execute background tasks using the @task decorator.
+
+Tasks can be called synchronously or queued for asynchronous execution. The decorator
+adds a `.queue()` method to your functions for background processing.
 
 ### task `decorator`
 
@@ -73,6 +106,10 @@ async execution via the added `.queue()` method.
 ```
 
 ## Client
+
+Client functions for queuing tasks, managing executions, and checking execution status.
+
+Use these functions to interact with the Rhythm execution system from your application code.
 
 ### cancel_execution `function`
 
@@ -222,6 +259,10 @@ Polls the execution status until it reaches "completed" or "failed" status.
 - `RuntimeError: If execution not found`
 
 ## Worker
+
+Worker functions for processing queued tasks and workflows.
+
+Workers poll the database for pending executions and process them sequentially.
 
 ### run `function`
 
