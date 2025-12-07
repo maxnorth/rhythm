@@ -1,0 +1,85 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: "API Reference Documentation"
+type: object
+required:
+  - title
+  - summary
+  - sections
+
+properties:
+  title:
+    type: string
+    description: "Human-readable page title"
+  summary:
+    type: string
+    description: "Brief summary of the API"
+  sections:
+    type: array
+    description: "Logical documentation sections (Initialization, Tasks, Client, Worker, etc.)"
+    items:
+      $ref: "#/definitions/Section"
+
+definitions:
+  Section:
+    type: object
+    required:
+      - title
+      - items
+    properties:
+      title:
+        type: string
+        description: "Section heading in rendered docs"
+      items:
+        type: array
+        description: "API items in this section"
+        items:
+          $ref: "#/definitions/Item"
+
+  Item:
+    type: object
+    required:
+      - kind
+      - name
+      - signature
+      - description
+      - parameters
+    properties:
+      kind:
+        type: string
+        enum: [function, decorator, class, method]
+        description: "Type of API item"
+      name:
+        type: string
+        description: "Name of the function/decorator/class"
+      signature:
+        type: string
+        description: "Function signature"
+      description:
+        type: string
+        description: "Description of what this does"
+      parameters:
+        type: array
+        description: "List of parameters"
+        items:
+          type: object
+          required:
+            - name
+            - description
+          properties:
+            name:
+              type: string
+              description: "Parameter name"
+            description:
+              type: string
+              description: "Parameter description"
+      returns:
+        type: string
+        description: "Description of return value"
+      raises:
+        type: array
+        description: "List of exceptions that may be raised"
+        items:
+          type: string
+      usage:
+        type: string
+        description: "Example usage code"

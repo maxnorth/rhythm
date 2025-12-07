@@ -13,25 +13,18 @@ def init(
     workflow_paths: Optional[List[str]] = None,
     auto_migrate: bool = True,
 ) -> None:
-    """
-    Initialize Rhythm with workflow definitions.
+    """Initialize Rhythm with workflow definitions.
 
-    This function:
-    1. Initializes Rust core with database connection
-    2. Scans workflow_paths for .flow files
-    3. Sends workflow files to Rust core for parsing and storage
+    This function initializes the Rust core with a database connection,
+    scans for .flow workflow files, and prepares the system for execution.
 
     Args:
         database_url: PostgreSQL connection string
         workflow_paths: List of paths to directories containing .flow files
         auto_migrate: Whether to automatically run migrations if needed
 
-    Example:
-        >>> import rhythm
-        >>> rhythm.init(
-        ...     database_url="postgresql://localhost/myapp",
-        ...     workflow_paths=["./workflows", "./app/workflows"]
-        ... )
+    Meta:
+        section: Initialization
     """
     workflow_paths = workflow_paths or []
 

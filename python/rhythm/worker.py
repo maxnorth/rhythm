@@ -25,12 +25,13 @@ def _handle_shutdown_signal(signum, frame):
 
 
 def run():
-    """Run a simple single-threaded worker loop
+    """Run a worker loop that polls for and executes tasks.
 
-    This worker runs synchronously in a single thread. It:
-    - Calls Rust cooperative worker loop (blocks until task available)
-    - Executes the task synchronously (only sync functions supported)
-    - Repeats
+    The worker runs synchronously in a single thread, polling the database
+    for pending tasks and executing them one at a time.
+
+    Meta:
+        section: Worker
     """
     logger.info(f"Worker starting...")
 

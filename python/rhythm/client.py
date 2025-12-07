@@ -15,8 +15,7 @@ def queue_task(
     inputs: dict,
     queue: str = "default",
 ) -> str:
-    """
-    Queue a task for execution.
+    """Queue a task for execution.
 
     Args:
         name: Task function name
@@ -26,11 +25,8 @@ def queue_task(
     Returns:
         Execution ID
 
-    Example:
-        >>> task_id = rhythm.client.queue_task(
-        ...     name="send_email",
-        ...     inputs={"to": "user@example.com", "subject": "Hello"},
-        ... )
+    Meta:
+        section: Client
     """
     execution_id = RhythmCore.create_execution(
         exec_type="task",
@@ -49,8 +45,7 @@ def queue_workflow(
     inputs: dict,
     queue: str = "default",
 ) -> str:
-    """
-    Queue a workflow for execution.
+    """Queue a workflow for execution.
 
     Args:
         name: Workflow name
@@ -60,11 +55,8 @@ def queue_workflow(
     Returns:
         Execution ID
 
-    Example:
-        >>> workflow_id = rhythm.client.queue_workflow(
-        ...     name="process_order",
-        ...     inputs={"orderId": "order-123"},
-        ... )
+    Meta:
+        section: Client
     """
     execution_id = RhythmCore.create_execution(
         exec_type="workflow",
@@ -85,8 +77,7 @@ def queue_execution(
     queue: str,
     parent_workflow_id: Optional[str] = None,
 ) -> str:
-    """
-    Enqueue an execution (task or workflow).
+    """Enqueue an execution (task or workflow).
 
     Note: Prefer using queue_task() or queue_workflow() for better type safety.
 
@@ -99,6 +90,9 @@ def queue_execution(
 
     Returns:
         Execution ID
+
+    Meta:
+        section: Client
     """
     execution_id = RhythmCore.create_execution(
         exec_type=exec_type,
@@ -113,27 +107,31 @@ def queue_execution(
 
 
 def get_execution(execution_id: str) -> Optional[Execution]:
-    """
-    Get an execution by ID.
+    """Get an execution by ID.
 
     Args:
         execution_id: The execution ID
 
     Returns:
         Execution object or None if not found
+
+    Meta:
+        section: Client
     """
     return RhythmCore.get_execution(execution_id)
 
 
 def cancel_execution(execution_id: str) -> bool:
-    """
-    Cancel a pending or suspended execution.
+    """Cancel a pending or suspended execution.
 
     Args:
         execution_id: The execution ID
 
     Returns:
         True if cancelled, False if not found or already completed/running
+
+    Meta:
+        section: Client
     """
     try:
         RhythmCore.fail_execution(
@@ -149,8 +147,7 @@ def cancel_execution(execution_id: str) -> bool:
 
 
 def start_workflow(workflow_name: str, inputs: dict[str, Any]) -> str:
-    """
-    Start a workflow execution.
+    """Start a workflow execution.
 
     Args:
         workflow_name: Name of the workflow to execute (matches .flow filename)
@@ -160,10 +157,13 @@ def start_workflow(workflow_name: str, inputs: dict[str, Any]) -> str:
         Workflow execution ID
 
     Example:
-        >>> workflow_id = rhythm.start_workflow(
-        ...     "processOrder",
-        ...     inputs={"orderId": "order-123", "amount": 99.99}
-        ... )
+        workflow_id = rhythm.start_workflow(
+            "processOrder",
+            inputs={"orderId": "order-123", "amount": 99.99}
+        )
+
+    Meta:
+        section: Client
     """
     execution_id = RhythmCore.start_workflow(workflow_name, inputs)
     logger.info(f"Started workflow {workflow_name} with ID {execution_id}")
@@ -176,8 +176,7 @@ def list_executions(
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict]:
-    """
-    List executions with optional filters.
+    """List executions with optional filters.
 
     NOTE: This function is currently not implemented as it requires direct database access.
     Use the Rust bridge functions instead for execution management.
@@ -190,6 +189,9 @@ def list_executions(
 
     Returns:
         List of execution dicts
+
+    Meta:
+        section: Client
     """
     raise NotImplementedError(
         "list_executions is not yet implemented. Use Rust bridge functions for execution management."
@@ -201,12 +203,9 @@ def wait_for_execution(
     timeout: float = 60.0,
     poll_interval: float = 0.5,
 ) -> Execution:
-    """
-    Wait for an execution to reach a terminal state and return it.
+    """Wait for an execution to reach a terminal state and return it.
 
     Polls the execution status until it reaches "completed" or "failed" status.
-    Does not raise exceptions on failure - check execution.status to determine
-    success or failure.
 
     Args:
         execution_id: The execution ID to wait for
@@ -220,12 +219,8 @@ def wait_for_execution(
         TimeoutError: If execution doesn't reach terminal state within timeout
         RuntimeError: If execution not found
 
-    Example:
-        >>> execution = rhythm.client.wait_for_execution(workflow_id)
-        >>> if execution.status == ExecutionStatus.COMPLETED:
-        ...     print(f"Result: {execution.output}")
-        >>> else:
-        ...     print(f"Failed with status: {execution.status}")
+    Meta:
+        section: Client
     """
     start_time = time.time()
 
