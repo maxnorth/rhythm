@@ -163,8 +163,12 @@ def render_section(section: Dict[str, Any]) -> str:
             lines.append(render_section_example(example))
 
     # Render each item with section title for anchor generation
-    for item in section['items']:
+    items = section['items']
+    for i, item in enumerate(items):
         lines.append(render_item(item, section['title']))
+        # Add subtle divider between items (but not after the last one)
+        if i < len(items) - 1:
+            lines.append("* * *\n")
 
     return "\n".join(lines)
 

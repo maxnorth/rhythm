@@ -125,6 +125,8 @@ Cancel a pending or suspended execution.
 
 **Returns:** True if cancelled, False if not found or already completed/running
 
+* * *
+
 ### <a id="client.get_execution"></a>get_execution `function`
 
 ```python
@@ -138,6 +140,8 @@ Get an execution by ID.
 - **`execution_id`**: The execution ID
 
 **Returns:** Execution object or None if not found
+
+* * *
 
 ### <a id="client.list_executions"></a>list_executions `function`
 
@@ -159,6 +163,8 @@ Use the Rust bridge functions instead for execution management.
 
 **Returns:** List of execution dicts
 
+* * *
+
 ### <a id="client.queue_execution"></a>queue_execution `function`
 
 ```python
@@ -179,6 +185,8 @@ Note: Prefer using queue_task() or queue_workflow() for better type safety.
 
 **Returns:** Execution ID
 
+* * *
+
 ### <a id="client.queue_task"></a>queue_task `function`
 
 ```python
@@ -195,6 +203,8 @@ Queue a task for execution.
 
 **Returns:** Execution ID
 
+* * *
+
 ### <a id="client.queue_workflow"></a>queue_workflow `function`
 
 ```python
@@ -210,6 +220,8 @@ Queue a workflow for execution.
 - **`queue`**: Queue name (default: "default")
 
 **Returns:** Execution ID
+
+* * *
 
 ### <a id="client.start_workflow"></a>start_workflow `function`
 
@@ -234,6 +246,8 @@ workflow_id = rhythm.start_workflow(
         inputs={"orderId": "order-123", "amount": 99.99}
     )
 ```
+
+* * *
 
 ### <a id="client.wait_for_execution"></a>wait_for_execution `function`
 
