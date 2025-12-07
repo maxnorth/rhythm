@@ -88,13 +88,19 @@ def render_usage(usage: str) -> str:
     return f"**Example:**\n\n```python\n{usage}\n```"
 
 
-def render_item(item: Dict[str, Any]) -> str:
+def render_item(item: Dict[str, Any], section_title: str = "") -> str:
     """Render a single API item to markdown."""
     lines = []
 
-    # Header with name and kind badge
+    # Header with section prefix and kind badge
     kind_badge = f"`{item['kind']}`"
-    lines.append(f"### {item['name']} {kind_badge}\n")
+    # Use HTML anchor for precise control over ID
+    if section_title:
+        from html import escape
+        anchor_id = generate_anchor(f"{section_title} {item['name']}")
+        lines.append(f"### <a id=\"{anchor_id}\"></a>{item['name']} {kind_badge}\n")
+    else:
+        lines.append(f"### {item['name']} {kind_badge}\n")
 
     # Signature
     lines.append(f"```python\n{item['name']}{item['signature']}\n```\n")
@@ -156,19 +162,19 @@ def render_section(section: Dict[str, Any]) -> str:
         for example in section['examples']:
             lines.append(render_section_example(example))
 
-    # Render each item
+    # Render each item with section title for anchor generation
     for item in section['items']:
-        lines.append(render_item(item))
+        lines.append(render_item(item, section['title']))
 
     return "\n".join(lines)
 
 
 def generate_anchor(text: str) -> str:
     """Generate markdown anchor link from text."""
-    # GitHub-flavored markdown anchor: lowercase, spaces to hyphens, remove special chars
-    anchor = text.lower().replace(' ', '-')
-    # Remove any non-alphanumeric characters except hyphens and underscores
-    anchor = ''.join(c for c in anchor if c.isalnum() or c in '-_')
+    # GitHub-flavored markdown anchor: lowercase, spaces to dots, remove special chars
+    anchor = text.lower().replace(' ', '.')
+    # Remove any non-alphanumeric characters except dots, hyphens and underscores
+    anchor = ''.join(c for c in anchor if c.isalnum() or c in '.-_')
     return anchor
 
 
@@ -182,7 +188,9 @@ def render_table_of_contents(data: Dict[str, Any]) -> str:
 
         # Add items within this section
         for item in section['items']:
-            item_anchor = generate_anchor(item['name'])
+            # Prefix item with section name to avoid conflicts
+            item_header_text = f"{section['title']} {item['name']}"
+            item_anchor = generate_anchor(item_header_text)
             lines.append(f"  - [{item['name']}](#{item_anchor})")
 
     lines.append("")  # Empty line after TOC

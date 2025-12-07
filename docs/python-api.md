@@ -5,20 +5,20 @@ Complete API reference for the Rhythm Python SDK
 ### Table of Contents
 
 - [Initialization](#initialization)
-  - [init](#init)
+  - [init](#initialization.init)
 - [Tasks](#tasks)
-  - [task](#task)
+  - [task](#tasks.task)
 - [Client](#client)
-  - [cancel_execution](#cancel_execution)
-  - [get_execution](#get_execution)
-  - [list_executions](#list_executions)
-  - [queue_execution](#queue_execution)
-  - [queue_task](#queue_task)
-  - [queue_workflow](#queue_workflow)
-  - [start_workflow](#start_workflow)
-  - [wait_for_execution](#wait_for_execution)
+  - [cancel_execution](#client.cancel_execution)
+  - [get_execution](#client.get_execution)
+  - [list_executions](#client.list_executions)
+  - [queue_execution](#client.queue_execution)
+  - [queue_task](#client.queue_task)
+  - [queue_workflow](#client.queue_workflow)
+  - [start_workflow](#client.start_workflow)
+  - [wait_for_execution](#client.wait_for_execution)
 - [Worker](#worker)
-  - [run](#run)
+  - [run](#worker.run)
 
 ## Initialization
 
@@ -50,7 +50,7 @@ rhythm.init(
 
 ```
 
-### init `function`
+### <a id="initialization.init"></a>init `function`
 
 ```python
 init(database_url: str, workflow_paths: Optional[List[str]] = None, auto_migrate: bool = True) -> None
@@ -74,7 +74,7 @@ Define and execute background tasks using the @task decorator.
 Tasks can be called synchronously or queued for asynchronous execution. The decorator
 adds a `.queue()` method to your functions for background processing.
 
-### task `decorator`
+### <a id="tasks.task"></a>task `decorator`
 
 ```python
 task(fn: Optional[Callable] = None, *, queue: str = 'default')
@@ -111,7 +111,7 @@ Client functions for queuing tasks, managing executions, and checking execution 
 
 Use these functions to interact with the Rhythm execution system from your application code.
 
-### cancel_execution `function`
+### <a id="client.cancel_execution"></a>cancel_execution `function`
 
 ```python
 cancel_execution(execution_id: str) -> bool
@@ -125,7 +125,7 @@ Cancel a pending or suspended execution.
 
 **Returns:** True if cancelled, False if not found or already completed/running
 
-### get_execution `function`
+### <a id="client.get_execution"></a>get_execution `function`
 
 ```python
 get_execution(execution_id: str) -> Optional[rhythm.models.Execution]
@@ -139,7 +139,7 @@ Get an execution by ID.
 
 **Returns:** Execution object or None if not found
 
-### list_executions `function`
+### <a id="client.list_executions"></a>list_executions `function`
 
 ```python
 list_executions(queue: Optional[str] = None, status: Optional[str] = None, limit: int = 100, offset: int = 0) -> list[dict]
@@ -159,7 +159,7 @@ Use the Rust bridge functions instead for execution management.
 
 **Returns:** List of execution dicts
 
-### queue_execution `function`
+### <a id="client.queue_execution"></a>queue_execution `function`
 
 ```python
 queue_execution(exec_type: str, target_name: str, inputs: dict, queue: str, parent_workflow_id: Optional[str] = None) -> str
@@ -179,7 +179,7 @@ Note: Prefer using queue_task() or queue_workflow() for better type safety.
 
 **Returns:** Execution ID
 
-### queue_task `function`
+### <a id="client.queue_task"></a>queue_task `function`
 
 ```python
 queue_task(name: str, inputs: dict, queue: str = 'default') -> str
@@ -195,7 +195,7 @@ Queue a task for execution.
 
 **Returns:** Execution ID
 
-### queue_workflow `function`
+### <a id="client.queue_workflow"></a>queue_workflow `function`
 
 ```python
 queue_workflow(name: str, inputs: dict, queue: str = 'default') -> str
@@ -211,7 +211,7 @@ Queue a workflow for execution.
 
 **Returns:** Execution ID
 
-### start_workflow `function`
+### <a id="client.start_workflow"></a>start_workflow `function`
 
 ```python
 start_workflow(workflow_name: str, inputs: dict[str, typing.Any]) -> str
@@ -235,7 +235,7 @@ workflow_id = rhythm.start_workflow(
     )
 ```
 
-### wait_for_execution `function`
+### <a id="client.wait_for_execution"></a>wait_for_execution `function`
 
 ```python
 wait_for_execution(execution_id: str, timeout: float = 60.0, poll_interval: float = 0.5) -> rhythm.models.Execution
@@ -264,7 +264,7 @@ Worker functions for processing queued tasks and workflows.
 
 Workers poll the database for pending executions and process them sequentially.
 
-### run `function`
+### <a id="worker.run"></a>run `function`
 
 ```python
 run()
