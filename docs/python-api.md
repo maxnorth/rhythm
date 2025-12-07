@@ -2,7 +2,23 @@
 
 Complete API reference for the Rhythm Python SDK
 
----
+## Table of Contents
+
+- [Initialization](#initialization)
+  - [init](#init)
+- [Tasks](#tasks)
+  - [task](#task)
+- [Client](#client)
+  - [cancel_execution](#cancel_execution)
+  - [get_execution](#get_execution)
+  - [list_executions](#list_executions)
+  - [queue_execution](#queue_execution)
+  - [queue_task](#queue_task)
+  - [queue_workflow](#queue_workflow)
+  - [start_workflow](#start_workflow)
+  - [wait_for_execution](#wait_for_execution)
+- [Worker](#worker)
+  - [run](#run)
 
 ## Initialization
 
@@ -22,8 +38,6 @@ scans for .flow workflow files, and prepares the system for execution.
 - **`database_url`**: PostgreSQL connection string
 - **`workflow_paths`**: List of paths to directories containing .flow files
 - **`auto_migrate`**: Whether to automatically run migrations if needed
-
----
 
 ## Tasks
 
@@ -58,8 +72,6 @@ async execution via the added `.queue()` method.
     execution_id = send_email.queue(to="user@example.com", subject="Hello")
 ```
 
----
-
 ## Client
 
 ### cancel_execution `function`
@@ -76,8 +88,6 @@ Cancel a pending or suspended execution.
 
 **Returns:** True if cancelled, False if not found or already completed/running
 
----
-
 ### get_execution `function`
 
 ```python
@@ -91,8 +101,6 @@ Get an execution by ID.
 - **`execution_id`**: The execution ID
 
 **Returns:** Execution object or None if not found
-
----
 
 ### list_executions `function`
 
@@ -114,8 +122,6 @@ Use the Rust bridge functions instead for execution management.
 
 **Returns:** List of execution dicts
 
----
-
 ### queue_execution `function`
 
 ```python
@@ -136,8 +142,6 @@ Note: Prefer using queue_task() or queue_workflow() for better type safety.
 
 **Returns:** Execution ID
 
----
-
 ### queue_task `function`
 
 ```python
@@ -154,8 +158,6 @@ Queue a task for execution.
 
 **Returns:** Execution ID
 
----
-
 ### queue_workflow `function`
 
 ```python
@@ -171,8 +173,6 @@ Queue a workflow for execution.
 - **`queue`**: Queue name (default: "default")
 
 **Returns:** Execution ID
-
----
 
 ### start_workflow `function`
 
@@ -198,8 +198,6 @@ workflow_id = rhythm.start_workflow(
     )
 ```
 
----
-
 ### wait_for_execution `function`
 
 ```python
@@ -223,8 +221,6 @@ Polls the execution status until it reaches "completed" or "failed" status.
 - `TimeoutError: If execution doesn't reach terminal state within timeout`
 - `RuntimeError: If execution not found`
 
----
-
 ## Worker
 
 ### run `function`
@@ -237,5 +233,3 @@ Run a worker loop that polls for and executes tasks.
 
 The worker runs synchronously in a single thread, polling the database
 for pending tasks and executing them one at a time.
-
----

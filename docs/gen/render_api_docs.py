@@ -135,8 +135,33 @@ def render_section(section: Dict[str, Any]) -> str:
     # Render each item
     for item in section['items']:
         lines.append(render_item(item))
-        lines.append("---\n")
 
+    return "\n".join(lines)
+
+
+def generate_anchor(text: str) -> str:
+    """Generate markdown anchor link from text."""
+    # GitHub-flavored markdown anchor: lowercase, spaces to hyphens, remove special chars
+    anchor = text.lower().replace(' ', '-')
+    # Remove any non-alphanumeric characters except hyphens and underscores
+    anchor = ''.join(c for c in anchor if c.isalnum() or c in '-_')
+    return anchor
+
+
+def render_table_of_contents(data: Dict[str, Any]) -> str:
+    """Generate table of contents with links to sections and items."""
+    lines = ["## Table of Contents\n"]
+
+    for section in data['sections']:
+        section_anchor = generate_anchor(section['title'])
+        lines.append(f"- [{section['title']}](#{section_anchor})")
+
+        # Add items within this section
+        for item in section['items']:
+            item_anchor = generate_anchor(item['name'])
+            lines.append(f"  - [{item['name']}](#{item_anchor})")
+
+    lines.append("")  # Empty line after TOC
     return "\n".join(lines)
 
 
@@ -147,7 +172,9 @@ def render_to_markdown(data: Dict[str, Any]) -> str:
     # Document title and summary
     lines.append(f"# {data['title']}\n")
     lines.append(f"{data['summary']}\n")
-    lines.append("---\n")
+
+    # Table of contents
+    lines.append(render_table_of_contents(data))
 
     # Render each section
     for section in data['sections']:
