@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Render API reference JSON to Markdown documentation.
+"""Render API reference YAML to Markdown documentation.
 
-This script validates API reference JSON against the schema and renders
+This script validates API reference YAML against the schema and renders
 it to formatted Markdown documentation.
 """
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -33,10 +32,15 @@ def load_schema(schema_path: Path) -> Dict[str, Any]:
             return json.load(f)
 
 
-def load_api_json(json_path: Path) -> Dict[str, Any]:
-    """Load API reference JSON from file."""
-    with open(json_path) as f:
-        return json.load(f)
+def load_api_data(data_path: Path) -> Dict[str, Any]:
+    """Load API reference data from file (supports JSON and YAML)."""
+    with open(data_path) as f:
+        if data_path.suffix in ['.yml', '.yaml']:
+            return yaml.safe_load(f)
+        else:
+            # Fallback to JSON for backwards compatibility
+            import json
+            return json.load(f)
 
 
 def validate_json(data: Dict[str, Any], schema: Dict[str, Any]) -> None:
@@ -102,8 +106,17 @@ def render_item(item: Dict[str, Any], section_title: str = "") -> str:
     else:
         lines.append(f"### {item['name']} {kind_badge}\n")
 
-    # Signature
-    lines.append(f"```python\n{item['name']}{item['signature']}\n```\n")
+    # Signature (only include if present)
+    if item.get('signature'):
+        sig = item['signature']
+        # Check if signature is a complete expression (contains dot, colon, or starts with paren)
+        # This handles workflow API items like "Task.run(...)" or "ctx: object"
+        if '.' in sig or sig.startswith('(') or ': ' in sig:
+            # Already a complete signature, don't prepend name
+            lines.append(f"```\n{sig}\n```\n")
+        else:
+            # Python API style - prepend name to signature
+            lines.append(f"```python\n{item['name']}{sig}\n```\n")
 
     # Description
     lines.append(f"{item['description']}\n")
@@ -123,10 +136,22 @@ def render_item(item: Dict[str, Any], section_title: str = "") -> str:
         lines.append(render_raises(item['raises']))
         lines.append("")
 
-    # Usage example
+    # Usage example (single string)
     if item.get('usage'):
         lines.append(render_usage(item['usage']))
         lines.append("")
+
+    # Examples (array of Example objects)
+    if item.get('examples'):
+        if len(item['examples']) == 1:
+            lines.append("**Example:**\n")
+        else:
+            lines.append("**Examples:**\n")
+        for example in item['examples']:
+            # Reuse section example renderer
+            example_md = render_section_example(example)
+            # Indent the example content slightly
+            lines.append(example_md)
 
     return "\n".join(lines)
 
@@ -222,12 +247,12 @@ def render_to_markdown(data: Dict[str, Any]) -> str:
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Render API reference JSON to Markdown documentation"
+        description="Render API reference YAML to Markdown documentation"
     )
     parser.add_argument(
-        "json_file",
+        "input_file",
         type=Path,
-        help="Path to API reference JSON file"
+        help="Path to API reference YAML file"
     )
     parser.add_argument(
         "output_file",
@@ -243,22 +268,22 @@ def main():
     parser.add_argument(
         "--no-validate",
         action="store_true",
-        help="Skip JSON schema validation"
+        help="Skip schema validation"
     )
 
     args = parser.parse_args()
 
     # Check input file exists
-    if not args.json_file.exists():
-        print(f"Error: Input file not found: {args.json_file}", file=sys.stderr)
+    if not args.input_file.exists():
+        print(f"Error: Input file not found: {args.input_file}", file=sys.stderr)
         sys.exit(1)
 
-    # Load API JSON
-    print(f"Loading API reference from {args.json_file}...")
+    # Load API data
+    print(f"Loading API reference from {args.input_file}...")
     try:
-        api_data = load_api_json(args.json_file)
-    except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON in {args.json_file}: {e}", file=sys.stderr)
+        api_data = load_api_data(args.input_file)
+    except Exception as e:
+        print(f"Error: Failed to load {args.input_file}: {e}", file=sys.stderr)
         sys.exit(1)
 
     # Validate against schema

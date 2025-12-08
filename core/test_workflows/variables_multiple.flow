@@ -1,8 +1,0 @@
-// Test: Multiple variables with complex data flow
-// Expected: All variables are tracked independently
-workflow(ctx, inputs) {
-  let order_id = await Task.run("create_order", { "amount": 100, "currency": "USD" })
-  let payment_id = await Task.run("process_payment", { "order_id": order_id, "method": "card" })
-  let receipt_id = await Task.run("generate_receipt", { "order_id": order_id, "payment_id": payment_id })
-  await Task.run("send_confirmation", { "order": order_id, "payment": payment_id, "receipt": receipt_id })
-}

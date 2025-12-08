@@ -10,14 +10,18 @@ Rhythm may appeal to you if:
 > [!WARNING]
 > This project is in early access. It's usable but missing many features, and is not battle tested for production. Backwards compatibility is not guaranteed. It's exclusively recommended for evaluation or hobby projects at this time. [Learn more.](./docs/release_status.md)
 
+## Quickstart
+See below for setup instructions and examples in your chosen app language.
+- [Python](./python/README.md)
+
 ## How it Works
-- You write workflows in `.flow` files, which use a JS-based scripting language to run tasks asynchronously and wait on external signals or timers of any duration.
+- You write workflows in `.flow` files, which use a JS-like, sandboxed scripting language to run tasks asynchronously and wait on external signals or timers of any duration.
 - Rhythm's rust-based interpreter runs your workflows. When you `await`, it pauses and saves state, and when the result is resolved, the workflow restores state and resumes exactly where it left off, like normal code.
 - You define tasks in your application's language. These run when invoked by a workflow, or they can be run directly as a standalone queued task.
 - Workflow files are persisted and automatically versioned by their content hash. In-progress workflows are guaranteed to resume with the same version they started with, making file changes safe and effortless.
 - Because workflows do not use event replay to restore state like other durable execution platforms, they do not have the same event limits or determinism requirements.
 
-## Example
+## Workflow Example
 ```js
 // workflows/onboard_user.flow
 
@@ -48,17 +52,12 @@ return {
 }
 ```
 
-## Setup
-See below for setup instructions and examples in your chosen app language.
-- [Python](./python/README.md)
-
 ## Learn More
 
-- **[FAQ](FAQ.md)** — Common questions, how this differs from Temporal, technical details
-- **[DSL Syntax Reference](WORKFLOW_DSL_FEATURES.md)** — Complete language guide, why a DSL
-- **[Technical Deep Dive](TECHNICAL_DEEP_DIVE.md)** — Snapshot model, architecture, performance
-- **[Blog Post](https://...)** — Longer explanation of snapshot vs replay
-- **Examples**: [Python](python/examples/) | [Node.js](node/examples/)
+- **[FAQ](FAQ.md)**
+- **[Workflow Syntax and API Reference](WORKFLOW_DSL_FEATURES.md)**
+- **[Supported Languages](docs/languages.md)**
+- **[Technical Architecture](TECHNICAL_DEEP_DIVE.md)**
 
 ---
 

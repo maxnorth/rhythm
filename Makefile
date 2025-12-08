@@ -1,10 +1,11 @@
-.PHONY: test-core help migrate python-docs
+.PHONY: test-core help migrate python-docs workflow-docs
 
 help:
 	@echo "Available targets:"
-	@echo "  test-core    Run tests for the Rust core library"
-	@echo "  migrate      Run database migrations"
-	@echo "  python-docs  Generate Python API documentation (JSON + Markdown)"
+	@echo "  test-core      Run tests for the Rust core library"
+	@echo "  migrate        Run database migrations"
+	@echo "  python-docs    Generate Python API documentation (YAML + Markdown)"
+	@echo "  workflow-docs  Generate Workflow API documentation (Markdown)"
 
 init:
 	./init.sh
@@ -24,4 +25,7 @@ core-test:
 
 python-docs:
 	python/.venv/bin/python python/scripts/generate_api_ref.py
-	python/.venv/bin/python docs/gen/render_api_docs.py python/docs/python-api.json docs/python-api.md
+	python/.venv/bin/python docs/gen/render_api_docs.py python/docs/python-api.yml docs/python-api.md
+
+workflow-docs:
+	python/.venv/bin/python docs/gen/render_api_docs.py docs/workflow-api.yml docs/workflow-api.md

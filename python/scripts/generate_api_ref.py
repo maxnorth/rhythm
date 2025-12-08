@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Generate API reference JSON from Python modules.
+"""Generate API reference YAML from Python modules.
 
-Extracts API metadata from Python source code to JSON format.
+Extracts API metadata from Python source code to YAML format.
 """
 
 import inspect
-import json
 import re
 from typing import Any, Dict, List, Optional
 from pathlib import Path
@@ -319,12 +318,12 @@ def main():
     output_dir = Path(__file__).parent.parent / "docs"
     output_dir.mkdir(exist_ok=True)
 
-    # Save JSON
-    json_path = output_dir / "python-api.json"
-    with open(json_path, 'w') as f:
-        json.dump(api_doc, f, indent=2)
+    # Save YAML
+    yaml_path = output_dir / "python-api.yml"
+    with open(yaml_path, 'w') as f:
+        yaml.dump(api_doc, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
-    print(f"\n✓ Generated: {json_path}")
+    print(f"\n✓ Generated: {yaml_path}")
     print(f"\nExtracted {len(sections)} sections with {len(all_items)} total items:")
     for section in sections:
         print(f"  - {section['title']}: {len(section['items'])} items")
