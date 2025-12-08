@@ -8,6 +8,8 @@ using async/await, loops, conditionals, and error handling.
 
 ### Table of Contents
 
+- [Inputs](#inputs)
+  - [Inputs](#inputs.inputs)
 - [Task](#task)
   - [run](#task.run)
 - [Math](#math)
@@ -15,8 +17,6 @@ using async/await, loops, conditionals, and error handling.
   - [ceil](#math.ceil)
   - [abs](#math.abs)
   - [round](#math.round)
-- [Inputs](#inputs)
-  - [Inputs](#inputs.inputs)
 - [Data Types](#data.types)
   - [string](#data.types.string)
   - [number](#data.types.number)
@@ -24,6 +24,63 @@ using async/await, loops, conditionals, and error handling.
   - [null](#data.types.null)
   - [array](#data.types.array)
   - [object](#data.types.object)
+
+## Inputs
+
+The Inputs object provides access to workflow input parameters.
+
+Inputs are provided when queueing a workflow and are accessible
+throughout the workflow execution.
+
+
+### <a id="inputs.inputs"></a>Inputs `type`
+
+```
+Inputs: object
+```
+
+User-provided input data for the workflow.
+
+Access properties using dot notation. Properties are accessed directly
+from the Inputs object (e.g., `Inputs.orderId`, `Inputs.userId`).
+
+
+**Examples:**
+
+**Accessing workflow inputs**
+```python
+let orderId = Inputs.orderId
+let amount = Inputs.amount
+
+let result = await Task.run("process_payment", {
+  orderId: orderId,
+  amount: amount
+})
+
+return result
+
+```
+
+**Forwarding inputs to tasks**
+```python
+// Forward all inputs
+let result = await Task.run("process_order", Inputs)
+
+return result
+
+```
+
+**Nested property access**
+```python
+let userId = Inputs.user.id
+let email = Inputs.user.email
+
+await Task.run("send_notification", {
+  userId: userId,
+  email: email
+})
+
+```
 
 ## Task
 
@@ -186,63 +243,6 @@ Uses JavaScript-style rounding where half-way cases round towards +∞
 ```python
 let rounded = Math.round(3.5)  // 4
 return rounded
-
-```
-
-## Inputs
-
-The Inputs object provides access to workflow input parameters.
-
-Inputs are provided when queueing a workflow and are accessible
-throughout the workflow execution.
-
-
-### <a id="inputs.inputs"></a>Inputs `type`
-
-```
-Inputs: object
-```
-
-User-provided input data for the workflow.
-
-Access properties using dot notation. Properties are accessed directly
-from the Inputs object (e.g., `Inputs.orderId`, `Inputs.userId`).
-
-
-**Examples:**
-
-**Accessing workflow inputs**
-```python
-let orderId = Inputs.orderId
-let amount = Inputs.amount
-
-let result = await Task.run("process_payment", {
-  orderId: orderId,
-  amount: amount
-})
-
-return result
-
-```
-
-**Forwarding inputs to tasks**
-```python
-// Forward all inputs
-let result = await Task.run("process_order", Inputs)
-
-return result
-
-```
-
-**Nested property access**
-```python
-let userId = Inputs.user.id
-let email = Inputs.user.email
-
-await Task.run("send_notification", {
-  userId: userId,
-  email: email
-})
 
 ```
 
