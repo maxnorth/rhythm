@@ -67,7 +67,7 @@ definitions:
     properties:
       kind:
         type: string
-        enum: [function, decorator, class, method, parameter, type]
+        enum: [function, decorator, class, method, type]
         description: "Type of API item"
       name:
         type: string

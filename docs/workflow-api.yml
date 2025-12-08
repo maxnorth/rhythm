@@ -129,7 +129,7 @@ sections:
       throughout the workflow execution.
     items:
       - name: Inputs
-        kind: parameter
+        kind: type
         signature: "Inputs: object"
         description: |
           User-provided input data for the workflow.
@@ -163,70 +163,6 @@ sections:
                 userId: userId,
                 email: email
               })
-
-  - title: Control Flow
-    description: |
-      Standard JavaScript control flow statements are supported.
-    items:
-      - name: if/else
-        kind: type
-        signature: "if (condition) { ... } else { ... }"
-        description: Conditional execution based on boolean expressions
-        examples:
-          - code: |
-              if (Inputs.priority == "high") {
-                await Task.run("urgent_processing", Inputs)
-              } else {
-                await Task.run("normal_processing", Inputs)
-              }
-
-      - name: for...of
-        kind: type
-        signature: "for (let item of array) { ... }"
-        description: Iterate over array elements
-        examples:
-          - code: |
-              for (let item of Inputs.items) {
-                await Task.run("process_item", { item })
-              }
-
-      - name: try/catch
-        kind: type
-        signature: "try { ... } catch (err) { ... }"
-        description: |
-          Error handling for task failures and exceptions.
-
-          The caught error object contains information about what failed.
-        examples:
-          - code: |
-              try {
-                let result = await Task.run("risky_operation", Inputs)
-                return { success: true, result }
-              } catch (err) {
-                await Task.run("handle_failure", {
-                  error: err.type,
-                  inputs: Inputs
-                })
-                return { success: false }
-              }
-
-      - name: return
-        kind: type
-        signature: "return value"
-        description: |
-          Return a value from the workflow.
-
-          The returned value becomes the workflow's output and can be
-          retrieved via the API or passed to parent workflows.
-        examples:
-          - code: |
-              let result = await Task.run("compute", Inputs)
-
-              return {
-                status: "completed",
-                result: result,
-                timestamp: "2024-01-01"
-              }
 
   - title: Data Types
     description: |

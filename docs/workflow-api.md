@@ -17,11 +17,6 @@ using async/await, loops, conditionals, and error handling.
   - [round](#math.round)
 - [Inputs](#inputs)
   - [Inputs](#inputs.inputs)
-- [Control Flow](#control.flow)
-  - [if/else](#control.flow.ifelse)
-  - [for...of](#control.flow.for...of)
-  - [try/catch](#control.flow.trycatch)
-  - [return](#control.flow.return)
 - [Data Types](#data.types)
   - [string](#data.types.string)
   - [number](#data.types.number)
@@ -202,7 +197,7 @@ Inputs are provided when queueing a workflow and are accessible
 throughout the workflow execution.
 
 
-### <a id="inputs.inputs"></a>Inputs `parameter`
+### <a id="inputs.inputs"></a>Inputs `type`
 
 ```
 Inputs: object
@@ -248,105 +243,6 @@ await Task.run("send_notification", {
   userId: userId,
   email: email
 })
-
-```
-
-## Control Flow
-
-Standard JavaScript control flow statements are supported.
-
-
-### <a id="control.flow.ifelse"></a>if/else `type`
-
-```
-if (condition) { ... } else { ... }
-```
-
-Conditional execution based on boolean expressions
-
-**Example:**
-
-```python
-if (Inputs.priority == "high") {
-  await Task.run("urgent_processing", Inputs)
-} else {
-  await Task.run("normal_processing", Inputs)
-}
-
-```
-
-* * *
-
-### <a id="control.flow.for...of"></a>for...of `type`
-
-```
-for (let item of array) { ... }
-```
-
-Iterate over array elements
-
-**Example:**
-
-```python
-for (let item of Inputs.items) {
-  await Task.run("process_item", { item })
-}
-
-```
-
-* * *
-
-### <a id="control.flow.trycatch"></a>try/catch `type`
-
-```
-try { ... } catch (err) { ... }
-```
-
-Error handling for task failures and exceptions.
-
-The caught error object contains information about what failed.
-
-
-**Example:**
-
-```python
-try {
-  let result = await Task.run("risky_operation", Inputs)
-  return { success: true, result }
-} catch (err) {
-  await Task.run("handle_failure", {
-    error: err.type,
-    inputs: Inputs
-  })
-  return { success: false }
-}
-
-```
-
-* * *
-
-### <a id="control.flow.return"></a>return `type`
-
-```python
-returnreturn value
-```
-
-Return a value from the workflow.
-
-The returned value becomes the workflow's output and can be
-retrieved via the API or passed to parent workflows.
-
-
-**Example:**
-
-```python
-let result = await Task.run("compute", Inputs)
-
-return {
-  status: "completed",
-  result: result,
-  timestamp: "2024-01-01"
-}
 
 ```
 
