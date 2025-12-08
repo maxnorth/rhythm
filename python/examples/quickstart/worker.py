@@ -41,6 +41,7 @@ def main():
 
     # Initialize Rhythm (register workflows, connect to DB)
     logger.info("Initializing Rhythm...")
+    print(database_url)
     rhythm.init(
         database_url=database_url,
         workflow_paths=["./workflows"],

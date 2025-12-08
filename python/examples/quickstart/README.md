@@ -43,7 +43,7 @@ This example demonstrates a basic Rhythm application with:
 ### Terminal 1: Start the Worker
 
 ```bash
-cd python/examples/simple_app
+cd python/examples/quickstart
 python worker.py
 ```
 
@@ -55,7 +55,7 @@ The worker will:
 ### Terminal 2: Schedule Work
 
 ```bash
-cd python/examples/simple_app
+cd python/examples/quickstart
 python scheduler.py
 ```
 
