@@ -3,7 +3,7 @@
 Rhythm is a Durable Execution framework that aims to make writing Workflows-as-Code intuitive and effortless. It’s easy to setup and use, and only requires Postgres as the single hosted dependency. It supports multiple programming languages, each using Rhythm's embedded core engine written in rust.
 
 Rhythm may appeal to you if:
-- You have seen how replay-based durable execution complicate maintainability and reliability
+- You have experienced how replay-based durable execution complicates maintainability and reliability
 - You want a free, low-maintenance platform designed for developers, without commercial constraints
 - You don't want to monitor and maintain separate platforms for durable workflows *and* queued tasks
 
