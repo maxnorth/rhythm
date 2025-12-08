@@ -63,38 +63,26 @@ definitions:
     required:
       - kind
       - name
-      - signature
       - description
-      - parameters
     properties:
       kind:
         type: string
-        enum: [function, decorator, class, method]
+        enum: [function, decorator, class, method, type]
         description: "Type of API item"
       name:
         type: string
-        description: "Name of the function/decorator/class"
+        description: "Name of the function/decorator/class/parameter/type"
       signature:
         type: string
-        description: "Function signature"
+        description: "Function/method signature or type signature"
       description:
         type: string
         description: "Description of what this does"
       parameters:
         type: array
-        description: "List of parameters"
+        description: "List of parameters (for functions/methods)"
         items:
-          type: object
-          required:
-            - name
-            - description
-          properties:
-            name:
-              type: string
-              description: "Parameter name"
-            description:
-              type: string
-              description: "Parameter description"
+          $ref: "#/definitions/Parameter"
       returns:
         type: string
         description: "Description of return value"
@@ -106,3 +94,24 @@ definitions:
       usage:
         type: string
         description: "Example usage code"
+      examples:
+        type: array
+        description: "Examples for this item"
+        items:
+          $ref: "#/definitions/Example"
+
+  Parameter:
+    type: object
+    required:
+      - name
+      - description
+    properties:
+      name:
+        type: string
+        description: "Parameter name"
+      type:
+        type: string
+        description: "Parameter type"
+      description:
+        type: string
+        description: "Parameter description"

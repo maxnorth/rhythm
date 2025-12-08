@@ -1,0 +1,202 @@
+title: Python API Reference
+summary: Complete API reference for the Rhythm Python SDK
+sections:
+- title: Initialization
+  items:
+  - kind: function
+    name: init
+    signature: '(database_url: str, workflow_paths: Optional[List[str]] = None, auto_migrate:
+      bool = True) -> None'
+    description: 'Initialize Rhythm with workflow definitions.
+
+
+      This function initializes the Rust core with a database connection,
+
+      scans for .flow workflow files, and prepares the system for execution.'
+    parameters:
+    - name: database_url
+      description: PostgreSQL connection string
+    - name: workflow_paths
+      description: List of paths to directories containing .flow files
+    - name: auto_migrate
+      description: Whether to automatically run migrations if needed
+  description: 'Initialize Rhythm and configure your application for task execution.
+
+
+    The initialization process connects to your PostgreSQL database, scans for workflow
+
+    definitions, and prepares the system for executing tasks and workflows.'
+  examples:
+  - title: Basic initialization
+    description: Initialize with database connection
+    code: 'import rhythm
+
+
+      rhythm.init("postgresql://rhythm@localhost/rhythm")
+
+      '
+  - title: Custom workflow paths
+    description: Specify custom directories containing .flow files
+    code: "import rhythm\n\nrhythm.init(\n    \"postgresql://rhythm@localhost/rhythm\"\
+      ,\n    workflow_paths=[\"./workflows\", \"./custom-flows\"]\n)\n"
+- title: Tasks
+  items:
+  - kind: decorator
+    name: task
+    signature: '(fn: Optional[Callable] = None, *, queue: str = ''default'')'
+    description: 'Mark a function as a Rhythm task that can be queued for async execution.
+
+
+      Decorated functions can be called directly (synchronous) or queued for
+
+      async execution via the added `.queue()` method.'
+    parameters:
+    - name: queue
+      description: The queue name to execute in (defaults to "default")
+    returns: The decorated function with an added `.queue()` method
+    usage: "@task\n    def send_email(to: str, subject: str):\n        email_client.send(to,\
+      \ subject)\n\n    # Direct call (synchronous)\n    send_email(\"user@example.com\"\
+      , \"Hello\")\n\n    # Queue for async execution\n    execution_id = send_email.queue(to=\"\
+      user@example.com\", subject=\"Hello\")"
+  description: 'Define and execute background tasks using the @task decorator.
+
+
+    Tasks can be called synchronously or queued for asynchronous execution. The decorator
+
+    adds a `.queue()` method to your functions for background processing.'
+- title: Client
+  items:
+  - kind: function
+    name: cancel_execution
+    signature: '(execution_id: str) -> bool'
+    description: Cancel a pending or suspended execution.
+    parameters:
+    - name: execution_id
+      description: The execution ID
+    returns: True if cancelled, False if not found or already completed/running
+  - kind: function
+    name: get_execution
+    signature: '(execution_id: str) -> Optional[rhythm.models.Execution]'
+    description: Get an execution by ID.
+    parameters:
+    - name: execution_id
+      description: The execution ID
+    returns: Execution object or None if not found
+  - kind: function
+    name: list_executions
+    signature: '(queue: Optional[str] = None, status: Optional[str] = None, limit:
+      int = 100, offset: int = 0) -> list[dict]'
+    description: 'List executions with optional filters.
+
+
+      NOTE: This function is currently not implemented as it requires direct database
+      access.
+
+      Use the Rust bridge functions instead for execution management.'
+    parameters:
+    - name: queue
+      description: Filter by queue name
+    - name: status
+      description: Filter by status
+    - name: limit
+      description: Maximum number of results
+    - name: offset
+      description: Offset for pagination
+    returns: List of execution dicts
+  - kind: function
+    name: queue_execution
+    signature: '(exec_type: str, target_name: str, inputs: dict, queue: str, parent_workflow_id:
+      Optional[str] = None) -> str'
+    description: 'Enqueue an execution (task or workflow).
+
+
+      Note: Prefer using queue_task() or queue_workflow() for better type safety.'
+    parameters:
+    - name: exec_type
+      description: Type of execution ('task', 'workflow')
+    - name: target_name
+      description: Target name (task or workflow name)
+    - name: inputs
+      description: Input parameters as a dictionary
+    - name: queue
+      description: Queue name
+    - name: parent_workflow_id
+      description: Parent workflow ID (for workflow tasks)
+    returns: Execution ID
+  - kind: function
+    name: queue_task
+    signature: '(name: str, inputs: dict, queue: str = ''default'') -> str'
+    description: Queue a task for execution.
+    parameters:
+    - name: name
+      description: Task function name
+    - name: inputs
+      description: Input parameters as a dictionary
+    - name: queue
+      description: 'Queue name (default: "default")'
+    returns: Execution ID
+  - kind: function
+    name: queue_workflow
+    signature: '(name: str, inputs: dict, queue: str = ''default'') -> str'
+    description: Queue a workflow for execution.
+    parameters:
+    - name: name
+      description: Workflow name
+    - name: inputs
+      description: Input parameters as a dictionary
+    - name: queue
+      description: 'Queue name (default: "default")'
+    returns: Execution ID
+  - kind: function
+    name: start_workflow
+    signature: '(workflow_name: str, inputs: dict[str, typing.Any]) -> str'
+    description: Start a workflow execution.
+    parameters:
+    - name: workflow_name
+      description: Name of the workflow to execute (matches .flow filename)
+    - name: inputs
+      description: Input parameters for the workflow
+    returns: Workflow execution ID
+    usage: "workflow_id = rhythm.start_workflow(\n        \"processOrder\",\n    \
+      \    inputs={\"orderId\": \"order-123\", \"amount\": 99.99}\n    )"
+  - kind: function
+    name: wait_for_execution
+    signature: '(execution_id: str, timeout: float = 60.0, poll_interval: float =
+      0.5) -> rhythm.models.Execution'
+    description: 'Wait for an execution to reach a terminal state and return it.
+
+
+      Polls the execution status until it reaches "completed" or "failed" status.'
+    parameters:
+    - name: execution_id
+      description: The execution ID to wait for
+    - name: timeout
+      description: 'Maximum time to wait in seconds (default: 60)'
+    - name: poll_interval
+      description: 'How often to poll in seconds (default: 0.5)'
+    returns: Execution object with full execution details
+    raises:
+    - 'TimeoutError: If execution doesn''t reach terminal state within timeout'
+    - 'RuntimeError: If execution not found'
+  description: 'Client functions for queuing tasks, managing executions, and checking
+    execution status.
+
+
+    Use these functions to interact with the Rhythm execution system from your application
+    code.'
+- title: Worker
+  items:
+  - kind: function
+    name: run
+    signature: ()
+    description: 'Run a worker loop that polls for and executes tasks.
+
+
+      The worker runs synchronously in a single thread, polling the database
+
+      for pending tasks and executing them one at a time.'
+    parameters: []
+  description: 'Worker functions for processing queued tasks and workflows.
+
+
+    Workers poll the database for pending executions and process them sequentially.'

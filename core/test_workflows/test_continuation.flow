@@ -1,4 +1,0 @@
-workflow(ctx, inputs) {
-  // Simple workflow that calls a task and waits for it
-  await Task.run("process_data", inputs)
-}

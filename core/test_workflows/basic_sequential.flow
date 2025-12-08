@@ -1,7 +1,0 @@
-// Test: Basic sequential workflow with await
-// Expected: Tasks execute one after another
-workflow(ctx, inputs) {
-  await Task.run("task1", { "step": 1 })
-  await Task.run("task2", { "step": 2 })
-  await Task.run("task3", { "step": 3 })
-}

@@ -1,9 +1,0 @@
-// Test: Variable assignment with fire-and-forget tasks
-// Expected: Variables can be assigned from non-awaited tasks (but value may not be available immediately)
-workflow(ctx, inputs) {
-  let result1 = Task.run("background_job1", { "priority": "low" })
-  let result2 = Task.run("background_job2", { "priority": "low" })
-  // Note: result1 and result2 won't have values yet since we didn't await
-  // But they should still be tracked in locals
-  await Task.run("final_task", { "msg": "done" })
-}

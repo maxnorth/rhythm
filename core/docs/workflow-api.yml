@@ -1,0 +1,235 @@
+# Workflow Runtime API Reference
+# This documents the APIs available within .flow workflow files
+
+title: Workflow API Reference
+summary: |
+  Runtime APIs available within Rhythm workflow files (.flow).
+
+  Workflow files contain JavaScript-like code that orchestrates task execution
+  using async/await, loops, conditionals, and error handling.
+
+sections:
+  - title: Inputs
+    description: |
+      The Inputs object provides access to workflow input parameters.
+
+      Inputs are provided when queueing a workflow and are accessible
+      throughout the workflow execution.
+    items:
+      - name: Inputs
+        kind: type
+        signature: "Inputs: object"
+        description: |
+          User-provided input data for the workflow.
+
+          Access properties using dot notation. Properties are accessed directly
+          from the Inputs object (e.g., `Inputs.orderId`, `Inputs.userId`).
+        examples:
+          - title: Accessing workflow inputs
+            code: |
+              let orderId = Inputs.orderId
+              let amount = Inputs.amount
+
+              let result = await Task.run("process_payment", {
+                orderId: orderId,
+                amount: amount
+              })
+
+              return result
+          - title: Forwarding inputs to tasks
+            code: |
+              // Forward all inputs
+              let result = await Task.run("process_order", Inputs)
+
+              return result
+          - title: Nested property access
+            code: |
+              let userId = Inputs.user.id
+              let email = Inputs.user.email
+
+              await Task.run("send_notification", {
+                userId: userId,
+                email: email
+              })
+
+  - title: Task
+    description: |
+      The Task object provides methods for creating and executing tasks.
+
+      Tasks can be awaited for sequential execution, or run without await
+      for fire-and-forget behavior.
+    items:
+      - name: run
+        kind: method
+        signature: "Task.run(task_name: string, inputs: object): Task"
+        description: |
+          Queue a task for execution and return a Task handle.
+
+          Use `await` to wait for the task result, or omit `await` for
+          fire-and-forget execution.
+        parameters:
+          - name: task_name
+            type: string
+            description: Name of the task to execute (must match a @task decorated function)
+          - name: inputs
+            type: object
+            description: Input parameters passed to the task
+        returns: Task handle that can be awaited for the result
+        examples:
+          - title: Sequential execution with await
+            code: |
+              let result = await Task.run("process_payment", {
+                orderId: "order-123",
+                amount: 100
+              })
+
+              return result
+          - title: Fire-and-forget execution
+            code: |
+              Task.run("send_notification", {
+                userId: "user-456",
+                message: "Order confirmed"
+              })
+
+              return { success: true }
+          - title: Multiple sequential tasks
+            code: |
+              let payment = await Task.run("process_payment", { orderId: Inputs.orderId })
+              let inventory = await Task.run("update_inventory", { orderId: Inputs.orderId })
+              let email = await Task.run("send_email", { orderId: Inputs.orderId })
+
+              return { payment, inventory, email }
+
+  - title: Math
+    description: |
+      The Math object provides mathematical utility functions.
+    items:
+      - name: floor
+        kind: method
+        signature: "Math.floor(x: number): number"
+        description: Returns the largest integer less than or equal to x
+        parameters:
+          - name: x
+            type: number
+            description: A numeric value
+        returns: The floor of x
+        examples:
+          - code: |
+              let rounded = Math.floor(3.7)  // 3
+              return rounded
+
+      - name: ceil
+        kind: method
+        signature: "Math.ceil(x: number): number"
+        description: Returns the smallest integer greater than or equal to x
+        parameters:
+          - name: x
+            type: number
+            description: A numeric value
+        returns: The ceiling of x
+        examples:
+          - code: |
+              let rounded = Math.ceil(3.2)  // 4
+              return rounded
+
+      - name: abs
+        kind: method
+        signature: "Math.abs(x: number): number"
+        description: Returns the absolute value of x
+        parameters:
+          - name: x
+            type: number
+            description: A numeric value
+        returns: The absolute value of x
+        examples:
+          - code: |
+              let positive = Math.abs(-5)  // 5
+              return positive
+
+      - name: round
+        kind: method
+        signature: "Math.round(x: number): number"
+        description: |
+          Returns x rounded to the nearest integer.
+
+          Uses JavaScript-style rounding where half-way cases round towards +∞
+          (e.g., 2.5 → 3, -2.5 → -2).
+        parameters:
+          - name: x
+            type: number
+            description: A numeric value
+        returns: The rounded value of x
+        examples:
+          - code: |
+              let rounded = Math.round(3.5)  // 4
+              return rounded
+
+  - title: Data Types
+    description: |
+      Workflows support standard JSON data types.
+    items:
+      - name: string
+        kind: type
+        signature: "string"
+        description: Text values enclosed in double quotes
+        examples:
+          - code: |
+              "hello world"
+              "user@example.com"
+
+      - name: number
+        kind: type
+        signature: "number"
+        description: Numeric values (integers or floating-point)
+        examples:
+          - code: |
+              42
+              3.14159
+              -17
+
+      - name: boolean
+        kind: type
+        signature: "boolean"
+        description: Logical true or false values
+        examples:
+          - code: |
+              true
+              false
+
+      - name: "null"
+        kind: type
+        signature: "null"
+        description: Represents the absence of a value
+        examples:
+          - code: |
+              null
+
+      - name: array
+        kind: type
+        signature: "array"
+        description: Ordered lists of values enclosed in square brackets
+        examples:
+          - code: |
+              [1, 2, 3]
+              ["a", "b", "c"]
+              [1, "mixed", true, null]
+
+      - name: object
+        kind: type
+        signature: "object"
+        description: |
+          Key-value maps enclosed in curly braces.
+
+          Keys can be unquoted identifiers or quoted strings. Use shorthand
+          syntax when the key matches a variable name.
+        examples:
+          - code: |
+              // Quoted keys
+              { "name": "Alice", "age": 30 }
+
+              // Unquoted keys
+              { name: "Alice", age: 30 }
+
+              // Shorthand syntax
+              let orderId = "order-123"
+              { orderId, status: "pending" }  // Same as { orderId: orderId, status: "pending" }
