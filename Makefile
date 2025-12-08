@@ -28,4 +28,4 @@ python-docs:
 	python/.venv/bin/python docs/gen/render_api_docs.py python/docs/python-api.yml docs/python-api.md
 
 workflow-docs:
-	python/.venv/bin/python docs/gen/render_api_docs.py docs/workflow-api.yml docs/workflow-api.md
+	python/.venv/bin/python docs/gen/render_api_docs.py core/docs/workflow-api.yml docs/workflow-api.md

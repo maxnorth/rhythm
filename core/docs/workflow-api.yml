@@ -9,6 +9,49 @@ summary: |
   using async/await, loops, conditionals, and error handling.
 
 sections:
+  - title: Inputs
+    description: |
+      The Inputs object provides access to workflow input parameters.
+
+      Inputs are provided when queueing a workflow and are accessible
+      throughout the workflow execution.
+    items:
+      - name: Inputs
+        kind: type
+        signature: "Inputs: object"
+        description: |
+          User-provided input data for the workflow.
+
+          Access properties using dot notation. Properties are accessed directly
+          from the Inputs object (e.g., `Inputs.orderId`, `Inputs.userId`).
+        examples:
+          - title: Accessing workflow inputs
+            code: |
+              let orderId = Inputs.orderId
+              let amount = Inputs.amount
+
+              let result = await Task.run("process_payment", {
+                orderId: orderId,
+                amount: amount
+              })
+
+              return result
+          - title: Forwarding inputs to tasks
+            code: |
+              // Forward all inputs
+              let result = await Task.run("process_order", Inputs)
+
+              return result
+          - title: Nested property access
+            code: |
+              let userId = Inputs.user.id
+              let email = Inputs.user.email
+
+              await Task.run("send_notification", {
+                userId: userId,
+                email: email
+              })
+
   - title: Task
     description: |
       The Task object provides methods for creating and executing tasks.
@@ -120,49 +163,6 @@ sections:
           - code: |
               let rounded = Math.round(3.5)  // 4
               return rounded
-
-  - title: Inputs
-    description: |
-      The Inputs object provides access to workflow input parameters.
-
-      Inputs are provided when queueing a workflow and are accessible
-      throughout the workflow execution.
-    items:
-      - name: Inputs
-        kind: type
-        signature: "Inputs: object"
-        description: |
-          User-provided input data for the workflow.
-
-          Access properties using dot notation. Properties are accessed directly
-          from the Inputs object (e.g., `Inputs.orderId`, `Inputs.userId`).
-        examples:
-          - title: Accessing workflow inputs
-            code: |
-              let orderId = Inputs.orderId
-              let amount = Inputs.amount
-
-              let result = await Task.run("process_payment", {
-                orderId: orderId,
-                amount: amount
-              })
-
-              return result
-          - title: Forwarding inputs to tasks
-            code: |
-              // Forward all inputs
-              let result = await Task.run("process_order", Inputs)
-
-              return result
-          - title: Nested property access
-            code: |
-              let userId = Inputs.user.id
-              let email = Inputs.user.email
-
-              await Task.run("send_notification", {
-                userId: userId,
-                email: email
-              })
 
   - title: Data Types
     description: |
