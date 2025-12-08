@@ -25,7 +25,7 @@ core-test:
 
 python-docs:
 	python/.venv/bin/python python/scripts/generate_api_ref.py
-	python/.venv/bin/python docs/gen/render_api_docs.py python/docs/python-api.yml docs/python-api.md
+	python/.venv/bin/python docs/gen/render_api_docs.py python/docs/python-api.yml docs/python_reference.md
 
 workflow-docs:
-	python/.venv/bin/python docs/gen/render_api_docs.py core/docs/workflow-api.yml docs/workflow-api.md
+	python/.venv/bin/python docs/gen/render_api_docs.py core/docs/workflow-api.yml docs/workflow_reference.md
