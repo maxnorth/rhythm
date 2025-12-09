@@ -1,4 +1,4 @@
-name: Build Wheels
+name: Python Release
 
 on:
   workflow_dispatch:

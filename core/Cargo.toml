@@ -17,6 +17,7 @@ sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "postgres", "c
 tokio = { version = "1", features = ["full"] }
 tokio-postgres = "0.7"
 tokio-util = "0.7"
+openssl = { version = "0.10", features = ["vendored"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
