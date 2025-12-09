@@ -60,6 +60,9 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --find-interpreter
           manylinux: auto
+        env:
+          OPENSSL_STATIC: "1"
+          OPENSSL_VENDORED: "1"
 
       - name: Upload wheel Artifacts
         uses: actions/upload-artifact@v4
