@@ -46,6 +46,7 @@ dotenvy = "0.15"
 
 # Cryptography
 sha2 = "0.10"
+ring = "0.18"  # Force newer version for ARM64 cross-compilation support
 
 # Unix system calls
 libc = "0.2"
