@@ -79,7 +79,7 @@ pub fn parse_workflow(source: &str) -> ParseResult<WorkflowDef> {
         Rule::statement => {
             // Reject bare statements - must have at least one statement (bare_workflow requires statement+)
             Err(ParseError::BuildError(
-                "Workflow must contain top-level statements".to_string()
+                "Workflow must contain top-level statements".to_string(),
             ))
         }
         _ => Err(ParseError::BuildError(format!(
@@ -154,10 +154,7 @@ fn build_bare_workflow(pair: pest::iterators::Pair<Rule>) -> ParseResult<Workflo
     // Wrap all statements in a Block
     let body = Stmt::Block { body: statements };
 
-    Ok(WorkflowDef {
-        body,
-        front_matter,
-    })
+    Ok(WorkflowDef { body, front_matter })
 }
 
 fn build_main_function(pair: pest::iterators::Pair<Rule>) -> ParseResult<WorkflowDef> {
@@ -182,9 +179,7 @@ fn build_block(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
         .map(|stmt_pair| build_statement(stmt_pair))
         .collect();
 
-    Ok(Stmt::Block {
-        body: statements?,
-    })
+    Ok(Stmt::Block { body: statements? })
 }
 
 fn build_if_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
@@ -355,7 +350,9 @@ fn build_binary_expr(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
         // Get the right operand
         i += 1;
         if i >= inner_pairs.len() {
-            return Err(ParseError::BuildError(format!("Missing right operand after operator")));
+            return Err(ParseError::BuildError(format!(
+                "Missing right operand after operator"
+            )));
         }
 
         let right = build_expression(inner_pairs[i].clone())?;
@@ -564,12 +561,22 @@ fn build_expression(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
                 let (optional, property) = match access_inner.as_rule() {
                     Rule::optional_access => {
                         // optional_access = { "?." ~ identifier }
-                        let prop = access_inner.into_inner().next().unwrap().as_str().to_string();
+                        let prop = access_inner
+                            .into_inner()
+                            .next()
+                            .unwrap()
+                            .as_str()
+                            .to_string();
                         (true, prop)
                     }
                     Rule::regular_access => {
                         // regular_access = { "." ~ identifier }
-                        let prop = access_inner.into_inner().next().unwrap().as_str().to_string();
+                        let prop = access_inner
+                            .into_inner()
+                            .next()
+                            .unwrap()
+                            .as_str()
+                            .to_string();
                         (false, prop)
                     }
                     _ => unreachable!("Unexpected member access rule"),
@@ -682,9 +689,7 @@ fn build_property(pair: pest::iterators::Pair<Rule>) -> ParseResult<(String, Exp
             // property_shorthand = { identifier }
             // Expands to { key: key } where value is an identifier reference
             let key = inner.as_str().to_string();
-            let value = Expr::Ident {
-                name: key.clone(),
-            };
+            let value = Expr::Ident { name: key.clone() };
             Ok((key, value))
         }
         _ => Err(ParseError::BuildError(format!(

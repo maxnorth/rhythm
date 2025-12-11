@@ -6,9 +6,9 @@ use serde_json::Value as JsonValue;
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 
+use super::runner;
 use crate::db;
 use crate::types::ExecutionType;
-use super::runner;
 
 /// Delegated action returned to the client for cooperative execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,9 +23,7 @@ pub enum DelegatedAction {
     /// Continue immediately - workflow was executed, check for more work
     Continue,
     /// Wait for the specified duration before checking for more work
-    Wait {
-        duration_ms: u64,
-    },
+    Wait { duration_ms: u64 },
     /// Shutdown requested - worker should exit gracefully
     Shutdown,
 }
@@ -56,7 +54,9 @@ pub async fn run_cooperative_worker_loop(
         // Fetch the execution and mark it as running
         let execution = db::executions::start_execution(pool, &claimed_execution_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Claimed execution not found: {}", claimed_execution_id))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("Claimed execution not found: {}", claimed_execution_id)
+            })?;
 
         match execution.exec_type {
             ExecutionType::Workflow => {
@@ -80,4 +80,3 @@ pub async fn run_cooperative_worker_loop(
     // No work available, tell host to wait before retrying
     Ok(DelegatedAction::Wait { duration_ms: 5000 })
 }
-

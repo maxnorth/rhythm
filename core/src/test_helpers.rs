@@ -89,17 +89,20 @@ pub async fn setup_workflow_test_with_pool(
 ) -> (TestPool, Execution) {
     let pool = pool.unwrap_or_else(|| {
         tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                with_test_db().await
-            })
+            tokio::runtime::Handle::current().block_on(async { with_test_db().await })
         })
     });
 
     // Create workflow definition with a simple version hash
     let version_hash = format!("test-{}", workflow_name);
-    db::workflow_definitions::create_workflow_definition(&pool, workflow_name, &version_hash, workflow_source)
-        .await
-        .unwrap();
+    db::workflow_definitions::create_workflow_definition(
+        &pool,
+        workflow_name,
+        &version_hash,
+        workflow_source,
+    )
+    .await
+    .unwrap();
 
     // Create execution and enqueue work
     let params = CreateExecutionParams {
@@ -161,23 +164,20 @@ pub async fn enqueue_and_claim_execution(
 
 /// Helper to get work queue entry count for an execution
 pub async fn get_work_queue_count(pool: &PgPool, execution_id: &str) -> Result<i64> {
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM work_queue WHERE execution_id = $1",
-    )
-    .bind(execution_id)
-    .fetch_one(pool)
-    .await?;
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM work_queue WHERE execution_id = $1")
+        .bind(execution_id)
+        .fetch_one(pool)
+        .await?;
     Ok(count)
 }
 
 /// Helper to get child task count for a workflow
 pub async fn get_child_task_count(pool: &PgPool, parent_id: &str) -> Result<i64> {
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM executions WHERE parent_workflow_id = $1",
-    )
-    .bind(parent_id)
-    .fetch_one(pool)
-    .await?;
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM executions WHERE parent_workflow_id = $1")
+            .bind(parent_id)
+            .fetch_one(pool)
+            .await?;
     Ok(count)
 }
 

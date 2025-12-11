@@ -53,9 +53,7 @@ pub fn eval_expr(
     outbox: &mut Outbox,
 ) -> EvalResult {
     match expr {
-        Expr::LitBool { v } => EvalResult::Value {
-            v: Val::Bool(*v),
-        },
+        Expr::LitBool { v } => EvalResult::Value { v: Val::Bool(*v) },
 
         Expr::LitNum { v } => EvalResult::Value { v: Val::Num(*v) },
 
@@ -86,9 +84,7 @@ pub fn eval_expr(
                     }
                 }
             }
-            EvalResult::Value {
-                v: Val::List(vals),
-            }
+            EvalResult::Value { v: Val::List(vals) }
         }
 
         Expr::LitObj { properties } => {
@@ -130,7 +126,11 @@ pub fn eval_expr(
             },
         },
 
-        Expr::Member { object, property, optional } => {
+        Expr::Member {
+            object,
+            property,
+            optional,
+        } => {
             // First, evaluate the object expression
             let obj_result = eval_expr(object, env, resume_value, outbox);
 
@@ -240,7 +240,7 @@ pub fn eval_expr(
                     super::stdlib::call_stdlib_func(&func, &arg_vals, outbox)
                 }
             }
-        },
+        }
 
         Expr::Await { inner } => {
             // Check if we're resuming from a previous suspension

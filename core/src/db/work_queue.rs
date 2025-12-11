@@ -40,11 +40,7 @@ where
 ///
 /// Returns a list of execution IDs that were successfully claimed.
 /// Uses lease-based claiming with a 1-minute timeout.
-pub async fn claim_work<'e, E>(
-    executor: E,
-    queue: &str,
-    limit: i32,
-) -> Result<Vec<String>>
+pub async fn claim_work<'e, E>(executor: E, queue: &str, limit: i32) -> Result<Vec<String>>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
@@ -77,7 +73,10 @@ where
     .await
     .context("Failed to claim work")?;
 
-    Ok(rows.into_iter().map(|row| row.get("execution_id")).collect())
+    Ok(rows
+        .into_iter()
+        .map(|row| row.get("execution_id"))
+        .collect())
 }
 
 /// Claim work for a specific execution
@@ -85,10 +84,7 @@ where
 /// Claims the unclaimed work queue entry for a specific execution.
 /// Useful for testing or manual work claiming.
 /// Uses lease-based claiming with a 1-minute timeout.
-pub async fn claim_specific_execution(
-    pool: &sqlx::PgPool,
-    execution_id: &str,
-) -> Result<()> {
+pub async fn claim_specific_execution(pool: &sqlx::PgPool, execution_id: &str) -> Result<()> {
     sqlx::query(
         r#"
         UPDATE work_queue
@@ -108,10 +104,7 @@ pub async fn claim_specific_execution(
 ///
 /// Deletes the claimed work queue entry. Preserves any unclaimed entry that
 /// was queued while this work was in progress.
-pub async fn complete_work<'e, E>(
-    executor: E,
-    execution_id: &str,
-) -> Result<()>
+pub async fn complete_work<'e, E>(executor: E, execution_id: &str) -> Result<()>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {

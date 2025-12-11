@@ -30,10 +30,7 @@ fn test_let_with_string() {
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("hello".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("hello".to_string())));
 }
 
 #[test]
@@ -126,7 +123,10 @@ fn test_block_scope_cleanup() {
         Control::Throw(Val::Error(ref err)) => {
             assert!(err.message.contains("Undefined variable"));
         }
-        _ => panic!("Expected error for undefined variable, got {:?}", vm.control),
+        _ => panic!(
+            "Expected error for undefined variable, got {:?}",
+            vm.control
+        ),
     }
 }
 
@@ -213,10 +213,7 @@ fn test_let_with_object_literal() {
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("Alice".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("Alice".to_string())));
 }
 
 #[test]
@@ -231,11 +228,7 @@ fn test_let_with_array_literal() {
 
     assert_eq!(
         vm.control,
-        Control::Return(Val::List(vec![
-            Val::Num(1.0),
-            Val::Num(2.0),
-            Val::Num(3.0)
-        ]))
+        Control::Return(Val::List(vec![Val::Num(1.0), Val::Num(2.0), Val::Num(3.0)]))
     );
 }
 

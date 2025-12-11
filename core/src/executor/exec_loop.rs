@@ -59,9 +59,7 @@ pub fn step(vm: &mut VM) -> Step {
 
     // Dispatch to statement handler
     match (kind, node) {
-        (FrameKind::Return { phase }, Stmt::Return { value }) => {
-            execute_return(vm, phase, value)
-        }
+        (FrameKind::Return { phase }, Stmt::Return { value }) => execute_return(vm, phase, value),
 
         (
             FrameKind::Block {
@@ -87,10 +85,9 @@ pub fn step(vm: &mut VM) -> Step {
 
         (FrameKind::Expr { phase }, Stmt::Expr { expr }) => execute_expr(vm, phase, expr),
 
-        (
-            FrameKind::Assign { phase },
-            Stmt::Assign { var, path, value },
-        ) => execute_assign(vm, phase, var, path, value),
+        (FrameKind::Assign { phase }, Stmt::Assign { var, path, value }) => {
+            execute_assign(vm, phase, var, path, value)
+        }
 
         (
             FrameKind::If { phase },
@@ -162,10 +159,7 @@ fn unwind(vm: &mut VM) -> Step {
             // Walk the frame stack from top to bottom looking for Try frames
             while let Some(frame) = vm.frames.last() {
                 match &frame.kind {
-                    super::types::FrameKind::Try {
-                        phase,
-                        catch_var,
-                    } => {
+                    super::types::FrameKind::Try { phase, catch_var } => {
                         // Found a try/catch handler!
                         // Bind the error to the catch variable
                         vm.env.insert(catch_var.clone(), error.clone());

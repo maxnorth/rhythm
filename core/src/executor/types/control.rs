@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "t", content = "v")]
 pub enum Control {
     None,
-    Break(Option<String>),  // Optional loop label
+    Break(Option<String>),    // Optional loop label
     Continue(Option<String>), // Optional loop label
     Return(Val),
     Throw(Val),
@@ -32,20 +32,40 @@ pub enum Control {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "t")]
 pub enum FrameKind {
-    Return { phase: ReturnPhase },
+    Return {
+        phase: ReturnPhase,
+    },
     Block {
         phase: BlockPhase,
         idx: usize,
         declared_vars: Vec<String>,
     },
-    Try { phase: TryPhase, catch_var: String },
-    Expr { phase: ExprPhase },
-    Assign { phase: AssignPhase },
-    If { phase: IfPhase },
-    While { phase: WhilePhase, label: Option<String> },
-    Break { phase: BreakPhase },
-    Continue { phase: ContinuePhase },
-    Declare { phase: DeclarePhase },
+    Try {
+        phase: TryPhase,
+        catch_var: String,
+    },
+    Expr {
+        phase: ExprPhase,
+    },
+    Assign {
+        phase: AssignPhase,
+    },
+    If {
+        phase: IfPhase,
+    },
+    While {
+        phase: WhilePhase,
+        label: Option<String>,
+    },
+    Break {
+        phase: BreakPhase,
+    },
+    Continue {
+        phase: ContinuePhase,
+    },
+    Declare {
+        phase: DeclarePhase,
+    },
 }
 
 /// Execution frame - one per active statement

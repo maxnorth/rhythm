@@ -4,13 +4,13 @@ use anyhow::{Context, Result};
 use serde_json::Value as JsonValue;
 use sqlx::PgPool;
 
+use super::complete::finish_work;
 use crate::db;
-use crate::types::{CreateExecutionParams, ExecutionOutcome, ExecutionType};
 use crate::executor::{
     json_to_val, json_to_val_map, run_until_done, val_map_to_json, val_to_json, Control, VM,
 };
 use crate::parser::parse_workflow;
-use super::complete::finish_work;
+use crate::types::{CreateExecutionParams, ExecutionOutcome, ExecutionType};
 
 pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> Result<()> {
     let maybe_context = db::workflow_execution_context::get_context(&pool, &execution.id).await?;
@@ -18,7 +18,7 @@ pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> 
     let (mut vm, workflow_def_id) = if let Some(context) = maybe_context {
         (
             serde_json::from_value(context.vm_state).context("Failed to deserialize VM state")?,
-            context.workflow_definition_id
+            context.workflow_definition_id,
         )
     } else {
         initialize_workflow(&pool, &execution.target_name, &execution.inputs).await?
@@ -51,8 +51,10 @@ async fn try_resume_suspended_task(pool: &PgPool, vm: &mut VM) -> Result<bool> {
     if let Control::Suspend(task_id) = &vm.control {
         if let Some(task_execution) = db::executions::get_execution(&pool, task_id).await? {
             match task_execution.status {
-                crate::types::ExecutionStatus::Completed | crate::types::ExecutionStatus::Failed => {
-                    let task_result = task_execution.output
+                crate::types::ExecutionStatus::Completed
+                | crate::types::ExecutionStatus::Failed => {
+                    let task_result = task_execution
+                        .output
                         .map(|json| json_to_val(&json))
                         .transpose()?
                         .unwrap_or(crate::executor::Val::Null);
@@ -70,7 +72,10 @@ async fn try_resume_suspended_task(pool: &PgPool, vm: &mut VM) -> Result<bool> {
             if task_in_outbox {
                 Ok(false) // Task in outbox, break to save it
             } else {
-                Err(anyhow::anyhow!("Workflow suspended on non-existent task: {}", task_id))
+                Err(anyhow::anyhow!(
+                    "Workflow suspended on non-existent task: {}",
+                    task_id
+                ))
             }
         }
     } else {
@@ -89,7 +94,11 @@ fn should_continue_execution(control: &Control) -> Result<bool> {
     }
 }
 
-async fn initialize_workflow(pool: &PgPool, workflow_name: &str, inputs: &JsonValue) -> Result<(VM, i32)> {
+async fn initialize_workflow(
+    pool: &PgPool,
+    workflow_name: &str,
+    inputs: &JsonValue,
+) -> Result<(VM, i32)> {
     let (workflow_def_id, workflow_source) =
         db::workflow_definitions::get_workflow_by_name(&pool, workflow_name).await?;
 
@@ -152,25 +161,28 @@ async fn handle_workflow_result(
                 .context("Failed to delete workflow execution context")?;
 
             // Use helper to complete execution, complete work, and re-queue parent
-            finish_work(&mut *tx, &execution_id, ExecutionOutcome::Success(result_json))
-                .await?;
-        }
-        Control::Suspend(_task_id) => {
-            let vm_state = serde_json::to_value(&vm)
-                .context("Failed to serialize VM state")?;
-
-            // Upsert workflow execution context before suspending
-            db::workflow_execution_context::upsert_context(tx, &execution_id, workflow_def_id, &vm_state)
-                .await
-                .context("Failed to upsert workflow execution context")?;
-
-            // Use helper to suspend execution, complete work, and re-queue parent
             finish_work(
                 &mut *tx,
                 &execution_id,
-                ExecutionOutcome::Suspended
+                ExecutionOutcome::Success(result_json),
             )
             .await?;
+        }
+        Control::Suspend(_task_id) => {
+            let vm_state = serde_json::to_value(&vm).context("Failed to serialize VM state")?;
+
+            // Upsert workflow execution context before suspending
+            db::workflow_execution_context::upsert_context(
+                tx,
+                &execution_id,
+                workflow_def_id,
+                &vm_state,
+            )
+            .await
+            .context("Failed to upsert workflow execution context")?;
+
+            // Use helper to suspend execution, complete work, and re-queue parent
+            finish_work(&mut *tx, &execution_id, ExecutionOutcome::Suspended).await?;
         }
         Control::Throw(error_val) => {
             let error_json = val_to_json(&error_val)?;
@@ -181,8 +193,12 @@ async fn handle_workflow_result(
                 .context("Failed to delete workflow execution context")?;
 
             // Use helper to fail execution, complete work, and re-queue parent
-            finish_work(&mut *tx, &execution_id, ExecutionOutcome::Failure(error_json))
-                .await?;
+            finish_work(
+                &mut *tx,
+                &execution_id,
+                ExecutionOutcome::Failure(error_json),
+            )
+            .await?;
 
             return Err(anyhow::anyhow!("Workflow threw error: {:?}", error_val));
         }
@@ -198,10 +214,17 @@ async fn handle_workflow_result(
                 .context("Failed to delete workflow execution context")?;
 
             // Use helper to fail execution, complete work, and re-queue parent
-            finish_work(&mut *tx, &execution_id, ExecutionOutcome::Failure(error_json))
-                .await?;
+            finish_work(
+                &mut *tx,
+                &execution_id,
+                ExecutionOutcome::Failure(error_json),
+            )
+            .await?;
 
-            return Err(anyhow::anyhow!("Unexpected control state: {:?}", vm.control));
+            return Err(anyhow::anyhow!(
+                "Unexpected control state: {:?}",
+                vm.control
+            ));
         }
     }
 

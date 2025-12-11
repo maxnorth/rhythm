@@ -80,10 +80,7 @@ fn test_if_truthiness_number() {
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("truthy".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("truthy".to_string())));
 }
 
 #[test]
@@ -218,10 +215,7 @@ fn test_if_with_try_catch() {
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("caught".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("caught".to_string())));
 }
 
 /* ===================== Else-If Chain Tests ===================== */
@@ -246,10 +240,7 @@ fn test_else_if_chain() {
     };
     let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("first".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("first".to_string())));
 
     // Test second branch (else-if)
     let inputs = hashmap! {
@@ -258,10 +249,7 @@ fn test_else_if_chain() {
     };
     let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("second".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("second".to_string())));
 
     // Test third branch (else)
     let inputs = hashmap! {
@@ -270,10 +258,7 @@ fn test_else_if_chain() {
     };
     let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("third".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("third".to_string())));
 }
 
 #[test]

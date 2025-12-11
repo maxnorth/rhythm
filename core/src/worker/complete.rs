@@ -35,14 +35,13 @@ pub async fn finish_work(
                 .await
                 .context("Failed to fail execution")?
         }
-        ExecutionOutcome::Suspended => {
-            db::executions::suspend_execution(&mut **tx, execution_id)
-                .await
-                .context("Failed to suspend execution")?
-        }
+        ExecutionOutcome::Suspended => db::executions::suspend_execution(&mut **tx, execution_id)
+            .await
+            .context("Failed to suspend execution")?,
     };
 
-    let execution = execution.ok_or_else(|| anyhow::anyhow!("Execution not found: {}", execution_id))?;
+    let execution =
+        execution.ok_or_else(|| anyhow::anyhow!("Execution not found: {}", execution_id))?;
 
     // Complete the work queue entry
     db::work_queue::complete_work(&mut **tx, execution_id)

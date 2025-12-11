@@ -195,25 +195,25 @@ pub fn execute_assign(
             }
 
             // Step 2: Evaluate the value expression
-            let value_result = match eval_expr(&value, &vm.env, &mut vm.resume_value, &mut vm.outbox)
-            {
-                EvalResult::Value { v } => v,
-                EvalResult::Suspend { task_id } => {
-                    // Expression suspended (await encountered)
-                    // For simple assignment (empty path), this is allowed
-                    // For attribute assignment (non-empty path), semantic validator should prevent this
-                    if !path_segments.is_empty() {
-                        panic!("Internal error: await in attribute assignment value");
+            let value_result =
+                match eval_expr(&value, &vm.env, &mut vm.resume_value, &mut vm.outbox) {
+                    EvalResult::Value { v } => v,
+                    EvalResult::Suspend { task_id } => {
+                        // Expression suspended (await encountered)
+                        // For simple assignment (empty path), this is allowed
+                        // For attribute assignment (non-empty path), semantic validator should prevent this
+                        if !path_segments.is_empty() {
+                            panic!("Internal error: await in attribute assignment value");
+                        }
+                        vm.control = Control::Suspend(task_id);
+                        return Step::Done;
                     }
-                    vm.control = Control::Suspend(task_id);
-                    return Step::Done;
-                }
-                EvalResult::Throw { error } => {
-                    // Value expression threw an error
-                    vm.control = Control::Throw(error);
-                    return Step::Continue;
-                }
-            };
+                    EvalResult::Throw { error } => {
+                        // Value expression threw an error
+                        vm.control = Control::Throw(error);
+                        return Step::Continue;
+                    }
+                };
 
             // Step 3: Perform the assignment
             if path_segments.is_empty() {
@@ -243,7 +243,10 @@ pub fn execute_assign(
                         if !matches!(current, Val::Obj(_)) {
                             vm.control = Control::Throw(Val::Error(ErrorInfo {
                                 code: "TypeError".to_string(),
-                                message: format!("Cannot access property '{}' on non-object value", key),
+                                message: format!(
+                                    "Cannot access property '{}' on non-object value",
+                                    key
+                                ),
                             }));
                             return Step::Continue;
                         }
@@ -252,7 +255,9 @@ pub fn execute_assign(
                         if !matches!(current, Val::Obj(_) | Val::List(_)) {
                             vm.control = Control::Throw(Val::Error(ErrorInfo {
                                 code: "TypeError".to_string(),
-                                message: format!("Cannot use index access on non-object/non-array value"),
+                                message: format!(
+                                    "Cannot use index access on non-object/non-array value"
+                                ),
                             }));
                             return Step::Continue;
                         }
@@ -298,7 +303,10 @@ pub fn execute_assign(
                     if !matches!(current, Val::Obj(_)) {
                         vm.control = Control::Throw(Val::Error(ErrorInfo {
                             code: "TypeError".to_string(),
-                            message: format!("Cannot set property '{}' on non-object value", final_key),
+                            message: format!(
+                                "Cannot set property '{}' on non-object value",
+                                final_key
+                            ),
                         }));
                         return Step::Continue;
                     }
@@ -307,7 +315,9 @@ pub fn execute_assign(
                     if !matches!(current, Val::Obj(_) | Val::List(_)) {
                         vm.control = Control::Throw(Val::Error(ErrorInfo {
                             code: "TypeError".to_string(),
-                            message: format!("Cannot use index access on non-object/non-array value"),
+                            message: format!(
+                                "Cannot use index access on non-object/non-array value"
+                            ),
                         }));
                         return Step::Continue;
                     }

@@ -29,7 +29,10 @@ fn test_task_run_basic() {
             assert_eq!(task_id.len(), 36);
             assert!(task_id.contains('-'));
         }
-        _ => panic!("Expected Control::Return(Val::Task(_)), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Return(Val::Task(_)), got {:?}",
+            vm.control
+        ),
     }
 
     // Check outbox has one task creation
@@ -106,11 +109,13 @@ fn test_fire_and_forget_then_await() {
     // Manually add inputs1 and inputs2 to env (not parameters, just env variables)
     let mut inputs1 = HashMap::new();
     inputs1.insert("background".to_string(), Val::Bool(true));
-    vm.env.insert("inputs1".to_string(), Val::Obj(inputs1.clone()));
+    vm.env
+        .insert("inputs1".to_string(), Val::Obj(inputs1.clone()));
 
     let mut inputs2 = HashMap::new();
     inputs2.insert("foreground".to_string(), Val::Bool(true));
-    vm.env.insert("inputs2".to_string(), Val::Obj(inputs2.clone()));
+    vm.env
+        .insert("inputs2".to_string(), Val::Obj(inputs2.clone()));
 
     run_until_done(&mut vm);
 

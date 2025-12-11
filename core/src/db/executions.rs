@@ -110,10 +110,7 @@ pub async fn create_execution(
     }
 }
 
-pub async fn start_execution<'e, E>(
-    executor: E,
-    execution_id: &str,
-) -> Result<Option<Execution>>
+pub async fn start_execution<'e, E>(executor: E, execution_id: &str) -> Result<Option<Execution>>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
@@ -238,10 +235,7 @@ where
     Ok(None)
 }
 
-pub async fn suspend_execution<'e, E>(
-    executor: E,
-    execution_id: &str,
-) -> Result<Option<Execution>>
+pub async fn suspend_execution<'e, E>(executor: E, execution_id: &str) -> Result<Option<Execution>>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
@@ -282,10 +276,7 @@ where
 /// Query executions with filters
 ///
 /// Returns a list of executions matching the provided filters.
-pub async fn query_executions(
-    pool: &PgPool,
-    filters: ExecutionFilters,
-) -> Result<Vec<Execution>> {
+pub async fn query_executions(pool: &PgPool, filters: ExecutionFilters) -> Result<Vec<Execution>> {
     let mut query = String::from("SELECT * FROM executions WHERE 1=1");
     let mut bind_count = 0;
 

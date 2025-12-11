@@ -42,10 +42,7 @@ fn test_return_literal_str() {
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("hello".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("hello".to_string())));
 }
 
 #[test]
@@ -101,10 +98,7 @@ fn test_return_inputs() {
     run_until_done(&mut vm);
 
     // inputs should be an empty object
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Obj(hashmap! {}))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Obj(hashmap! {})));
 }
 
 #[test]
@@ -140,10 +134,7 @@ fn test_member_access() {
     run_until_done(&mut vm);
 
     // Should return Inputs.name
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("Alice".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("Alice".to_string())));
 }
 
 #[test]
@@ -180,10 +171,7 @@ fn test_expr_stmt_simple() {
     run_until_done(&mut vm);
 
     // Should return "done" (the expr statement result is discarded)
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("done".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("done".to_string())));
 }
 
 #[test]
@@ -314,10 +302,7 @@ fn test_workflow_custom_param_names() {
 
     let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("custom".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("custom".to_string())));
 }
 
 #[test]
@@ -554,10 +539,7 @@ fn test_execute_bare_return_string() {
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("test".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("test".to_string())));
 }
 
 #[test]

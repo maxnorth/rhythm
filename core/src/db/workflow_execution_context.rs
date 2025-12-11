@@ -68,10 +68,7 @@ pub async fn upsert_context(
 /// Delete workflow execution context
 ///
 /// Called when workflow completes or fails.
-pub async fn delete_context<'e, E>(
-    executor: E,
-    execution_id: &str,
-) -> Result<()>
+pub async fn delete_context<'e, E>(executor: E, execution_id: &str) -> Result<()>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {

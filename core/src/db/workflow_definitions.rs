@@ -59,10 +59,7 @@ pub async fn create_workflow_definition(
 ///
 /// Returns the workflow definition ID and source code for the most recently
 /// created workflow with the given name.
-pub async fn get_workflow_by_name(
-    pool: &PgPool,
-    workflow_name: &str,
-) -> Result<(i32, String)> {
+pub async fn get_workflow_by_name(pool: &PgPool, workflow_name: &str) -> Result<(i32, String)> {
     let row = sqlx::query(
         r#"
         SELECT id, source

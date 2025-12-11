@@ -215,7 +215,7 @@ impl ConfigBuilder {
             // Explicit path provided via builder
             if !path.exists() {
                 anyhow::bail!("Config file not found: {:?}", path);
-            } 
+            }
             Some(path.clone())
         } else if let Ok(path_str) = env::var("RHYTHM_CONFIG_PATH") {
             // Path from environment variable

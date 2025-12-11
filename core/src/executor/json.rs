@@ -51,11 +51,9 @@ pub fn val_to_json(val: &Val) -> Result<JsonValue> {
     let json = match val {
         Val::Null => JsonValue::Null,
         Val::Bool(b) => JsonValue::Bool(*b),
-        Val::Num(n) => {
-            serde_json::Number::from_f64(*n)
-                .map(JsonValue::Number)
-                .ok_or_else(|| anyhow::anyhow!("Invalid number"))?
-        }
+        Val::Num(n) => serde_json::Number::from_f64(*n)
+            .map(JsonValue::Number)
+            .ok_or_else(|| anyhow::anyhow!("Invalid number"))?,
         Val::Str(s) => JsonValue::String(s.clone()),
         Val::List(arr) => {
             let vals: Result<Vec<JsonValue>> = arr.iter().map(val_to_json).collect();

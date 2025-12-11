@@ -33,10 +33,7 @@ fn test_assign_string() {
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("Alice".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("Alice".to_string())));
     assert_eq!(vm.env.get("name"), Some(&Val::Str("Alice".to_string())));
 }
 
@@ -48,7 +45,6 @@ fn test_assign_array() {
             return items
         "#;
 
-    
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -65,7 +61,6 @@ fn test_assign_object() {
             return user
         "#;
 
-    
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -117,10 +112,7 @@ fn test_assign_with_member_access() {
 
     run_until_done(&mut vm);
 
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("Alice".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("Alice".to_string())));
     assert_eq!(vm.env.get("name"), Some(&Val::Str("Alice".to_string())));
 }
 
@@ -173,10 +165,7 @@ fn test_reassignment_different_type() {
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("hello".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("hello".to_string())));
     assert_eq!(vm.env.get("x"), Some(&Val::Str("hello".to_string())));
 }
 
@@ -276,10 +265,7 @@ fn test_assign_in_try_catch() {
     run_until_done(&mut vm);
 
     // Should return "error" from the catch block
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("error".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("error".to_string())));
     assert_eq!(vm.env.get("result"), Some(&Val::Str("error".to_string())));
 }
 
@@ -295,7 +281,6 @@ fn test_multiple_assignments() {
             return [a, b, c]
         "#;
 
-    
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -424,7 +409,9 @@ fn test_assign_prop_access_on_non_object_error() {
     match &vm.control {
         Control::Throw(Val::Error(err)) => {
             assert_eq!(err.code, "TypeError");
-            assert!(err.message.contains("Cannot set property 'foo' on non-object value"));
+            assert!(err
+                .message
+                .contains("Cannot set property 'foo' on non-object value"));
         }
         _ => panic!("Expected TypeError, got: {:?}", vm.control),
     }
@@ -445,7 +432,9 @@ fn test_assign_index_access_on_primitive_error() {
     match &vm.control {
         Control::Throw(Val::Error(err)) => {
             assert_eq!(err.code, "TypeError");
-            assert!(err.message.contains("Cannot use index access on non-object/non-array value"));
+            assert!(err
+                .message
+                .contains("Cannot use index access on non-object/non-array value"));
         }
         _ => panic!("Expected TypeError, got: {:?}", vm.control),
     }
@@ -466,7 +455,9 @@ fn test_assign_prop_access_on_array_error() {
     match &vm.control {
         Control::Throw(Val::Error(err)) => {
             assert_eq!(err.code, "TypeError");
-            assert!(err.message.contains("Cannot set property 'foo' on non-object value"));
+            assert!(err
+                .message
+                .contains("Cannot set property 'foo' on non-object value"));
         }
         _ => panic!("Expected TypeError, got: {:?}", vm.control),
     }
@@ -487,7 +478,9 @@ fn test_assign_nested_prop_access_on_non_object_error() {
     match &vm.control {
         Control::Throw(Val::Error(err)) => {
             assert_eq!(err.code, "TypeError");
-            assert!(err.message.contains("Cannot set property 'b' on non-object value"));
+            assert!(err
+                .message
+                .contains("Cannot set property 'b' on non-object value"));
         }
         _ => panic!("Expected TypeError, got: {:?}", vm.control),
     }
