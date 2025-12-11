@@ -53,8 +53,7 @@ jobs:
         if: inputs.install_from == 'local'
         working-directory: python
         run: |
-          pip install maturin
-          maturin develop --release
+          pip install -e .
         shell: bash
 
       - name: Install from PyPI
