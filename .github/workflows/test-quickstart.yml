@@ -37,21 +37,6 @@ jobs:
           - os: windows-11-arm
             target: aarch64-pc-windows-msvc
 
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: rhythm
-          POSTGRES_DB: rhythm
-          POSTGRES_HOST_AUTH_METHOD: trust
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
 
@@ -60,12 +45,29 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Start Postgres with Docker Compose
+        working-directory: python/examples/quickstart
+        run: docker compose up -d
+        shell: bash
+
+      - name: Wait for Postgres
+        run: |
+          timeout 30 bash -c 'until docker exec $(docker ps -q -f name=postgres) pg_isready -U rhythm; do sleep 1; done'
+        shell: bash
+
+      - name: Install Rust (for local build)
+        if: inputs.install_from == 'local'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
       - name: Install from local build
         if: inputs.install_from == 'local'
         working-directory: python
         run: |
           pip install maturin
           maturin develop --release
+        shell: bash
 
       - name: Install from PyPI
         if: inputs.install_from == 'pypi'
@@ -102,4 +104,10 @@ jobs:
           if [ -f worker.pid ]; then
             kill $(cat worker.pid) || true
           fi
+        shell: bash
+
+      - name: Stop Postgres
+        if: always()
+        working-directory: python/examples/quickstart
+        run: docker compose down
         shell: bash
