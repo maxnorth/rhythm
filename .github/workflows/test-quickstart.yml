@@ -21,9 +21,17 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          # Linux only (Docker Compose not available on macOS/Windows runners)
+          # Linux
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+          # macOS
+          - os: macos-13  # Intel
+            target: x86_64-apple-darwin
+          - os: macos-14  # Apple Silicon
+            target: aarch64-apple-darwin
+          # Windows
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@v4
@@ -33,15 +41,65 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Start Postgres with Docker Compose
+      # Linux: Use Docker Compose
+      - name: Start Postgres with Docker Compose (Linux)
+        if: runner.os == 'Linux'
         working-directory: python/examples/quickstart
         run: docker compose up -d
         shell: bash
 
-      - name: Wait for Postgres
+      - name: Wait for Postgres (Linux)
+        if: runner.os == 'Linux'
         run: |
           timeout 30 bash -c 'until docker exec $(docker ps -q -f name=postgres) pg_isready -U rhythm; do sleep 1; done'
         shell: bash
+
+      # macOS: Use Homebrew PostgreSQL
+      - name: Start Postgres (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew services start postgresql@14
+          # Create user and database
+          sleep 3
+          createuser -s rhythm || true
+          createdb rhythm || true
+        shell: bash
+
+      - name: Wait for Postgres (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          for i in {1..30}; do
+            pg_isready -U rhythm && break || sleep 1
+          done
+        shell: bash
+
+      # Windows: Use system PostgreSQL service
+      - name: Start Postgres (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          # Start PostgreSQL service
+          $pgService = Get-Service -Name postgresql*
+          Start-Service $pgService.Name
+          Start-Sleep -Seconds 5
+          # Create user and database using psql
+          & "C:\Program Files\PostgreSQL\14\bin\psql.exe" -U postgres -c "CREATE USER rhythm WITH SUPERUSER PASSWORD 'rhythm';" 2>$null
+          & "C:\Program Files\PostgreSQL\14\bin\psql.exe" -U postgres -c "CREATE DATABASE rhythm OWNER rhythm;" 2>$null
+        shell: pwsh
+
+      - name: Wait for Postgres (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $timeout = 30
+          $elapsed = 0
+          while ($elapsed -lt $timeout) {
+            try {
+              & "C:\Program Files\PostgreSQL\14\bin\pg_isready.exe" -U rhythm
+              if ($LASTEXITCODE -eq 0) { break }
+            } catch {}
+            Start-Sleep -Seconds 1
+            $elapsed++
+          }
+        shell: pwsh
 
       - name: Install Rust (for local build)
         if: inputs.install_from == 'local'
@@ -66,7 +124,8 @@ jobs:
           fi
         shell: bash
 
-      - name: Start worker in background
+      - name: Start worker in background (Unix)
+        if: runner.os != 'Windows'
         working-directory: python/examples/quickstart
         env:
           RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
@@ -77,15 +136,26 @@ jobs:
           sleep 5
         shell: bash
 
+      - name: Start worker in background (Windows)
+        if: runner.os == 'Windows'
+        working-directory: python/examples/quickstart
+        env:
+          RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
+        run: |
+          $job = Start-Process python -ArgumentList "worker.py" -PassThru -WindowStyle Hidden
+          $job.Id | Out-File -FilePath worker.pid
+          # Wait for worker to initialize
+          Start-Sleep -Seconds 5
+        shell: pwsh
+
       - name: Run quickstart app
         working-directory: python/examples/quickstart
         env:
           RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
         run: python app.py
-        shell: bash
 
-      - name: Stop worker
-        if: always()
+      - name: Stop worker (Unix)
+        if: always() && runner.os != 'Windows'
         working-directory: python/examples/quickstart
         run: |
           if [ -f worker.pid ]; then
@@ -93,8 +163,32 @@ jobs:
           fi
         shell: bash
 
-      - name: Stop Postgres
-        if: always()
+      - name: Stop worker (Windows)
+        if: always() && runner.os == 'Windows'
+        working-directory: python/examples/quickstart
+        run: |
+          if (Test-Path worker.pid) {
+            $pid = Get-Content worker.pid
+            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+          }
+        shell: pwsh
+
+      - name: Stop Postgres (Linux)
+        if: always() && runner.os == 'Linux'
         working-directory: python/examples/quickstart
         run: docker compose down
         shell: bash
+
+      - name: Stop Postgres (macOS)
+        if: always() && runner.os == 'macOS'
+        run: brew services stop postgresql@14
+        shell: bash
+
+      - name: Stop Postgres (Windows)
+        if: always() && runner.os == 'Windows'
+        run: |
+          $pgService = Get-Service -Name postgresql* -ErrorAction SilentlyContinue
+          if ($pgService) {
+            Stop-Service $pgService.Name -ErrorAction SilentlyContinue
+          }
+        shell: pwsh
