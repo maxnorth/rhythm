@@ -14,23 +14,15 @@ on:
         default: ""
 
 jobs:
-  test:
-    name: Test on ${{ matrix.platform.os }} (${{ matrix.platform.target }})
-    runs-on: ${{ matrix.platform.os }}
+  test-linux:
+    name: Test on Linux (${{ matrix.target }})
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        platform:
-          # Linux
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-          # macOS
-          - os: macos-15  # Intel (macos-15-intel)
-            target: x86_64-apple-darwin
-          - os: macos-latest  # Apple Silicon (macos-14)
-            target: aarch64-apple-darwin
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
 
     steps:
       - uses: actions/checkout@v4
@@ -40,54 +32,24 @@ jobs:
         with:
           python-version: '3.11'
 
-      # Linux: Use Docker Compose
-      - name: Start Postgres with Docker Compose (Linux)
-        if: runner.os == 'Linux'
+      - name: Start Postgres with Docker Compose
         working-directory: python/examples/quickstart
         run: docker compose up -d
-        shell: bash
 
-      - name: Wait for Postgres (Linux)
-        if: runner.os == 'Linux'
+      - name: Wait for Postgres
         run: |
           timeout 30 bash -c 'until docker exec $(docker ps -q -f name=postgres) pg_isready -U rhythm; do sleep 1; done'
-        shell: bash
-
-      # macOS: Install and use Homebrew PostgreSQL
-      - name: Install and start Postgres (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          # Install PostgreSQL
-          brew install postgresql@14
-          # Start PostgreSQL
-          brew services start postgresql@14
-          # Wait for service to start
-          sleep 5
-          # Create user and database
-          /opt/homebrew/opt/postgresql@14/bin/createuser -s rhythm 2>/dev/null || /usr/local/opt/postgresql@14/bin/createuser -s rhythm || true
-          /opt/homebrew/opt/postgresql@14/bin/createdb rhythm 2>/dev/null || /usr/local/opt/postgresql@14/bin/createdb rhythm || true
-        shell: bash
-
-      - name: Wait for Postgres (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          for i in {1..30}; do
-            (/opt/homebrew/opt/postgresql@14/bin/pg_isready 2>/dev/null || /usr/local/opt/postgresql@14/bin/pg_isready || pg_isready) && break || sleep 1
-          done
-        shell: bash
 
       - name: Install Rust (for local build)
         if: inputs.install_from == 'local'
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform.target }}
+          targets: ${{ matrix.target }}
 
       - name: Install from local build
         if: inputs.install_from == 'local'
         working-directory: python
-        run: |
-          pip install -e .
-        shell: bash
+        run: pip install -e .
 
       - name: Install from PyPI
         if: inputs.install_from == 'pypi'
@@ -97,7 +59,6 @@ jobs:
           else
             pip install rhythm-async
           fi
-        shell: bash
 
       - name: Start worker in background
         working-directory: python/examples/quickstart
@@ -106,9 +67,7 @@ jobs:
         run: |
           python worker.py &
           echo $! > worker.pid
-          # Wait for worker to initialize
           sleep 5
-        shell: bash
 
       - name: Run quickstart app
         working-directory: python/examples/quickstart
@@ -123,15 +82,89 @@ jobs:
           if [ -f worker.pid ]; then
             kill $(cat worker.pid) || true
           fi
-        shell: bash
 
-      - name: Stop Postgres (Linux)
-        if: always() && runner.os == 'Linux'
+      - name: Stop Postgres
+        if: always()
         working-directory: python/examples/quickstart
         run: docker compose down
-        shell: bash
 
-      - name: Stop Postgres (macOS)
-        if: always() && runner.os == 'macOS'
+  test-macos:
+    name: Test on macOS (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install and start Postgres
+        run: |
+          brew install postgresql@14
+          brew services start postgresql@14
+          sleep 5
+          /opt/homebrew/opt/postgresql@14/bin/createuser -s rhythm 2>/dev/null || /usr/local/opt/postgresql@14/bin/createuser -s rhythm || true
+          /opt/homebrew/opt/postgresql@14/bin/createdb rhythm 2>/dev/null || /usr/local/opt/postgresql@14/bin/createdb rhythm || true
+
+      - name: Wait for Postgres
+        run: |
+          for i in {1..30}; do
+            (/opt/homebrew/opt/postgresql@14/bin/pg_isready 2>/dev/null || /usr/local/opt/postgresql@14/bin/pg_isready || pg_isready) && break || sleep 1
+          done
+
+      - name: Install Rust (for local build)
+        if: inputs.install_from == 'local'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install from local build
+        if: inputs.install_from == 'local'
+        working-directory: python
+        run: pip install -e .
+
+      - name: Install from PyPI
+        if: inputs.install_from == 'pypi'
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            pip install rhythm-async==${{ inputs.version }}
+          else
+            pip install rhythm-async
+          fi
+
+      - name: Start worker in background
+        working-directory: python/examples/quickstart
+        env:
+          RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
+        run: |
+          python worker.py &
+          echo $! > worker.pid
+          sleep 5
+
+      - name: Run quickstart app
+        working-directory: python/examples/quickstart
+        env:
+          RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
+        run: python app.py
+
+      - name: Stop worker
+        if: always()
+        working-directory: python/examples/quickstart
+        run: |
+          if [ -f worker.pid ]; then
+            kill $(cat worker.pid) || true
+          fi
+
+      - name: Stop Postgres
+        if: always()
         run: brew services stop postgresql@14
-        shell: bash
