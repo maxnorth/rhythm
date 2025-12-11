@@ -24,6 +24,8 @@ jobs:
           # Linux
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
           # macOS
           - os: macos-15  # Intel (macos-15-intel)
             target: x86_64-apple-darwin
@@ -77,34 +79,19 @@ jobs:
           done
         shell: bash
 
-      # Windows: Use GitHub Actions built-in PostgreSQL
-      - name: Start Postgres (Windows)
+      # Windows: Install PostgreSQL with Chocolatey
+      - name: Install and start Postgres (Windows)
         if: runner.os == 'Windows'
         run: |
-          # Start PostgreSQL service (comes pre-installed on GitHub Actions runners)
-          Set-Service -Name postgresql* -StartupType Manual -ErrorAction SilentlyContinue
-          $pgService = Get-Service -Name postgresql* -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($pgService) {
-            Start-Service $pgService.Name
-            Start-Sleep -Seconds 5
-          }
-          # Try common PostgreSQL paths
-          $pgPaths = @(
-            "C:\Program Files\PostgreSQL\14\bin",
-            "C:\Program Files\PostgreSQL\15\bin",
-            "C:\Program Files\PostgreSQL\16\bin"
-          )
-          $psqlPath = $null
-          foreach ($path in $pgPaths) {
-            if (Test-Path "$path\psql.exe") {
-              $psqlPath = $path
-              break
-            }
-          }
-          if ($psqlPath) {
-            & "$psqlPath\psql.exe" -U postgres -c "CREATE USER rhythm WITH SUPERUSER;" 2>$null
-            & "$psqlPath\psql.exe" -U postgres -c "CREATE DATABASE rhythm OWNER rhythm;" 2>$null
-          }
+          # Install PostgreSQL using Chocolatey
+          choco install postgresql14 --params '/Password:postgres' -y
+          # Add PostgreSQL to PATH
+          $env:PATH += ";C:\Program Files\PostgreSQL\14\bin"
+          # Wait for service to start
+          Start-Sleep -Seconds 10
+          # Create user and database
+          & "C:\Program Files\PostgreSQL\14\bin\psql.exe" -U postgres -c "CREATE USER rhythm WITH SUPERUSER PASSWORD 'rhythm';" 2>$null
+          & "C:\Program Files\PostgreSQL\14\bin\createdb.exe" -U postgres rhythm 2>$null
         shell: pwsh
 
       - name: Wait for Postgres (Windows)
@@ -112,27 +99,13 @@ jobs:
         run: |
           $timeout = 30
           $elapsed = 0
-          $pgPaths = @(
-            "C:\Program Files\PostgreSQL\14\bin",
-            "C:\Program Files\PostgreSQL\15\bin",
-            "C:\Program Files\PostgreSQL\16\bin"
-          )
-          $pgReadyPath = $null
-          foreach ($path in $pgPaths) {
-            if (Test-Path "$path\pg_isready.exe") {
-              $pgReadyPath = "$path\pg_isready.exe"
-              break
-            }
-          }
-          if ($pgReadyPath) {
-            while ($elapsed -lt $timeout) {
-              try {
-                & $pgReadyPath
-                if ($LASTEXITCODE -eq 0) { break }
-              } catch {}
-              Start-Sleep -Seconds 1
-              $elapsed++
-            }
+          while ($elapsed -lt $timeout) {
+            try {
+              & "C:\Program Files\PostgreSQL\14\bin\pg_isready.exe"
+              if ($LASTEXITCODE -eq 0) { break }
+            } catch {}
+            Start-Sleep -Seconds 1
+            $elapsed++
           }
         shell: pwsh
 
@@ -222,8 +195,6 @@ jobs:
       - name: Stop Postgres (Windows)
         if: always() && runner.os == 'Windows'
         run: |
-          $pgService = Get-Service -Name postgresql* -ErrorAction SilentlyContinue
-          if ($pgService) {
-            Stop-Service $pgService.Name -ErrorAction SilentlyContinue
-          }
+          # Stop PostgreSQL service
+          Stop-Service -Name postgresql* -Force -ErrorAction SilentlyContinue
         shell: pwsh
