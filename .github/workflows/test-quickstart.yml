@@ -31,9 +31,6 @@ jobs:
             target: x86_64-apple-darwin
           - os: macos-latest  # Apple Silicon (macos-14)
             target: aarch64-apple-darwin
-          # Windows
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@v4
@@ -79,36 +76,6 @@ jobs:
           done
         shell: bash
 
-      # Windows: Install PostgreSQL with Chocolatey
-      - name: Install and start Postgres (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          # Install PostgreSQL using Chocolatey
-          choco install postgresql14 --params '/Password:postgres' -y
-          # Add PostgreSQL to PATH
-          $env:PATH += ";C:\Program Files\PostgreSQL\14\bin"
-          # Wait for service to start
-          Start-Sleep -Seconds 10
-          # Create user and database
-          & "C:\Program Files\PostgreSQL\14\bin\psql.exe" -U postgres -c "CREATE USER rhythm WITH SUPERUSER PASSWORD 'rhythm';" 2>$null
-          & "C:\Program Files\PostgreSQL\14\bin\createdb.exe" -U postgres rhythm 2>$null
-        shell: pwsh
-
-      - name: Wait for Postgres (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          $timeout = 30
-          $elapsed = 0
-          while ($elapsed -lt $timeout) {
-            try {
-              & "C:\Program Files\PostgreSQL\14\bin\pg_isready.exe"
-              if ($LASTEXITCODE -eq 0) { break }
-            } catch {}
-            Start-Sleep -Seconds 1
-            $elapsed++
-          }
-        shell: pwsh
-
       - name: Install Rust (for local build)
         if: inputs.install_from == 'local'
         uses: dtolnay/rust-toolchain@stable
@@ -132,8 +99,7 @@ jobs:
           fi
         shell: bash
 
-      - name: Start worker in background (Unix)
-        if: runner.os != 'Windows'
+      - name: Start worker in background
         working-directory: python/examples/quickstart
         env:
           RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
@@ -144,42 +110,20 @@ jobs:
           sleep 5
         shell: bash
 
-      - name: Start worker in background (Windows)
-        if: runner.os == 'Windows'
-        working-directory: python/examples/quickstart
-        env:
-          RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
-        run: |
-          $job = Start-Process python -ArgumentList "worker.py" -PassThru -WindowStyle Hidden
-          $job.Id | Out-File -FilePath worker.pid
-          # Wait for worker to initialize
-          Start-Sleep -Seconds 5
-        shell: pwsh
-
       - name: Run quickstart app
         working-directory: python/examples/quickstart
         env:
           RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
         run: python app.py
 
-      - name: Stop worker (Unix)
-        if: always() && runner.os != 'Windows'
+      - name: Stop worker
+        if: always()
         working-directory: python/examples/quickstart
         run: |
           if [ -f worker.pid ]; then
             kill $(cat worker.pid) || true
           fi
         shell: bash
-
-      - name: Stop worker (Windows)
-        if: always() && runner.os == 'Windows'
-        working-directory: python/examples/quickstart
-        run: |
-          if (Test-Path worker.pid) {
-            $pid = Get-Content worker.pid
-            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-          }
-        shell: pwsh
 
       - name: Stop Postgres (Linux)
         if: always() && runner.os == 'Linux'
@@ -191,10 +135,3 @@ jobs:
         if: always() && runner.os == 'macOS'
         run: brew services stop postgresql@14
         shell: bash
-
-      - name: Stop Postgres (Windows)
-        if: always() && runner.os == 'Windows'
-        run: |
-          # Stop PostgreSQL service
-          Stop-Service -Name postgresql* -Force -ErrorAction SilentlyContinue
-        shell: pwsh
