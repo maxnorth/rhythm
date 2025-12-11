@@ -21,21 +21,9 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          # Linux
+          # Linux only (Docker Compose not available on macOS/Windows runners)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-          # macOS
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-          - os: macos-14
-            target: aarch64-apple-darwin
-          # Windows
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-          - os: windows-11-arm
-            target: aarch64-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@v4
