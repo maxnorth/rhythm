@@ -117,4 +117,10 @@ jobs:
         with:
           packages-dir: dist/
 
-          
+  test-quickstart:
+    name: Test quickstart from PyPI
+    needs: publish
+    uses: ./.github/workflows/test-quickstart.yml
+    with:
+      install_from: pypi
+      version: ${{ github.event.inputs.version }}

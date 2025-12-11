@@ -1,0 +1,105 @@
+name: Test Quickstart
+
+on:
+  workflow_call:
+    inputs:
+      install_from:
+        description: 'Install from "local" build or "pypi"'
+        required: true
+        type: string
+      version:
+        description: 'Version to install from PyPI (only used when install_from=pypi)'
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  test:
+    name: Test on ${{ matrix.platform.os }} (${{ matrix.platform.target }})
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          # Linux
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+          # macOS
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: macos-14
+            target: aarch64-apple-darwin
+          # Windows
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: rhythm
+          POSTGRES_DB: rhythm
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install from local build
+        if: inputs.install_from == 'local'
+        working-directory: python
+        run: |
+          pip install maturin
+          maturin develop --release
+
+      - name: Install from PyPI
+        if: inputs.install_from == 'pypi'
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            pip install rhythm-async==${{ inputs.version }}
+          else
+            pip install rhythm-async
+          fi
+        shell: bash
+
+      - name: Start worker in background
+        working-directory: python/examples/quickstart
+        env:
+          RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
+        run: |
+          python worker.py &
+          echo $! > worker.pid
+          # Wait for worker to initialize
+          sleep 5
+        shell: bash
+
+      - name: Run quickstart app
+        working-directory: python/examples/quickstart
+        env:
+          RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
+        run: python app.py
+        shell: bash
+
+      - name: Stop worker
+        if: always()
+        working-directory: python/examples/quickstart
+        run: |
+          if [ -f worker.pid ]; then
+            kill $(cat worker.pid) || true
+          fi
+        shell: bash

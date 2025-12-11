@@ -1,0 +1,22 @@
+name: Test Quickstart (PR)
+
+on:
+  pull_request:
+    paths:
+      - 'python/**'
+      - 'core/**'
+      - '.github/workflows/test-quickstart*.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'python/**'
+      - 'core/**'
+      - '.github/workflows/test-quickstart*.yml'
+
+jobs:
+  test-local:
+    name: Test with local build
+    uses: ./.github/workflows/test-quickstart.yml
+    with:
+      install_from: local
