@@ -8,17 +8,13 @@ Starts a worker that processes tasks and workflows.
 import asyncio
 import logging
 import os
-import sys
+
+import rhythm
+from rhythm.config import settings
 
 # Configure worker settings
 os.environ.setdefault("WORKFLOWS_WORKER_MAX_CONCURRENT", "1")
 os.environ.setdefault("WORKFLOWS_WORKER_VERBOSE", "true")
-
-# Add rhythm to path (for development)
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
-
-import rhythm
-from rhythm.config import settings
 
 # Import tasks to register them
 import tasks  # noqa: F401
