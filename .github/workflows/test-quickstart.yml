@@ -25,9 +25,9 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
           # macOS
-          - os: macos-13  # Intel
+          - os: macos-15  # Intel (macos-15-intel)
             target: x86_64-apple-darwin
-          - os: macos-14  # Apple Silicon
+          - os: macos-latest  # Apple Silicon (macos-14)
             target: aarch64-apple-darwin
           # Windows
           - os: windows-latest
@@ -54,36 +54,57 @@ jobs:
           timeout 30 bash -c 'until docker exec $(docker ps -q -f name=postgres) pg_isready -U rhythm; do sleep 1; done'
         shell: bash
 
-      # macOS: Use Homebrew PostgreSQL
-      - name: Start Postgres (macOS)
+      # macOS: Install and use Homebrew PostgreSQL
+      - name: Install and start Postgres (macOS)
         if: runner.os == 'macOS'
         run: |
+          # Install PostgreSQL
+          brew install postgresql@14
+          # Start PostgreSQL
           brew services start postgresql@14
+          # Wait for service to start
+          sleep 5
           # Create user and database
-          sleep 3
-          createuser -s rhythm || true
-          createdb rhythm || true
+          /opt/homebrew/opt/postgresql@14/bin/createuser -s rhythm 2>/dev/null || /usr/local/opt/postgresql@14/bin/createuser -s rhythm || true
+          /opt/homebrew/opt/postgresql@14/bin/createdb rhythm 2>/dev/null || /usr/local/opt/postgresql@14/bin/createdb rhythm || true
         shell: bash
 
       - name: Wait for Postgres (macOS)
         if: runner.os == 'macOS'
         run: |
           for i in {1..30}; do
-            pg_isready -U rhythm && break || sleep 1
+            (/opt/homebrew/opt/postgresql@14/bin/pg_isready 2>/dev/null || /usr/local/opt/postgresql@14/bin/pg_isready || pg_isready) && break || sleep 1
           done
         shell: bash
 
-      # Windows: Use system PostgreSQL service
+      # Windows: Use GitHub Actions built-in PostgreSQL
       - name: Start Postgres (Windows)
         if: runner.os == 'Windows'
         run: |
-          # Start PostgreSQL service
-          $pgService = Get-Service -Name postgresql*
-          Start-Service $pgService.Name
-          Start-Sleep -Seconds 5
-          # Create user and database using psql
-          & "C:\Program Files\PostgreSQL\14\bin\psql.exe" -U postgres -c "CREATE USER rhythm WITH SUPERUSER PASSWORD 'rhythm';" 2>$null
-          & "C:\Program Files\PostgreSQL\14\bin\psql.exe" -U postgres -c "CREATE DATABASE rhythm OWNER rhythm;" 2>$null
+          # Start PostgreSQL service (comes pre-installed on GitHub Actions runners)
+          Set-Service -Name postgresql* -StartupType Manual -ErrorAction SilentlyContinue
+          $pgService = Get-Service -Name postgresql* -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($pgService) {
+            Start-Service $pgService.Name
+            Start-Sleep -Seconds 5
+          }
+          # Try common PostgreSQL paths
+          $pgPaths = @(
+            "C:\Program Files\PostgreSQL\14\bin",
+            "C:\Program Files\PostgreSQL\15\bin",
+            "C:\Program Files\PostgreSQL\16\bin"
+          )
+          $psqlPath = $null
+          foreach ($path in $pgPaths) {
+            if (Test-Path "$path\psql.exe") {
+              $psqlPath = $path
+              break
+            }
+          }
+          if ($psqlPath) {
+            & "$psqlPath\psql.exe" -U postgres -c "CREATE USER rhythm WITH SUPERUSER;" 2>$null
+            & "$psqlPath\psql.exe" -U postgres -c "CREATE DATABASE rhythm OWNER rhythm;" 2>$null
+          }
         shell: pwsh
 
       - name: Wait for Postgres (Windows)
@@ -91,13 +112,27 @@ jobs:
         run: |
           $timeout = 30
           $elapsed = 0
-          while ($elapsed -lt $timeout) {
-            try {
-              & "C:\Program Files\PostgreSQL\14\bin\pg_isready.exe" -U rhythm
-              if ($LASTEXITCODE -eq 0) { break }
-            } catch {}
-            Start-Sleep -Seconds 1
-            $elapsed++
+          $pgPaths = @(
+            "C:\Program Files\PostgreSQL\14\bin",
+            "C:\Program Files\PostgreSQL\15\bin",
+            "C:\Program Files\PostgreSQL\16\bin"
+          )
+          $pgReadyPath = $null
+          foreach ($path in $pgPaths) {
+            if (Test-Path "$path\pg_isready.exe") {
+              $pgReadyPath = "$path\pg_isready.exe"
+              break
+            }
+          }
+          if ($pgReadyPath) {
+            while ($elapsed -lt $timeout) {
+              try {
+                & $pgReadyPath
+                if ($LASTEXITCODE -eq 0) { break }
+              } catch {}
+              Start-Sleep -Seconds 1
+              $elapsed++
+            }
           }
         shell: pwsh
 
