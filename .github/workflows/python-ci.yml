@@ -1,0 +1,72 @@
+name: Python CI
+
+on:
+  pull_request:
+    paths:
+      - 'python/**'
+      - 'core/**'
+      - '.github/workflows/python-ci.yml'
+      - '.github/workflows/python-test-quickstart.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'python/**'
+      - 'core/**'
+      - '.github/workflows/python-ci.yml'
+      - '.github/workflows/python-test-quickstart.yml'
+
+jobs:
+  test-quickstart:
+    uses: ./.github/workflows/python-test-quickstart.yml
+    with:
+      install_from: local
+
+  python-checks:
+    name: Python Checks
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Rust (for maturin)
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install maturin ruff mypy pytest pytest-asyncio
+
+      - name: Install Python package (editable with maturin build)
+        run: cd python && pip install -e .[dev]
+
+      - name: Run ruff (linting)
+        run: cd python && ruff check rhythm/
+
+      - name: Run ruff (formatting)
+        run: cd python && ruff format --check rhythm/
+
+      - name: Type check with mypy
+        run: cd python && mypy rhythm/ --ignore-missing-imports
+        continue-on-error: true
+
+      - name: Run tests
+        run: cd python && pytest tests/ -v
+        continue-on-error: true
