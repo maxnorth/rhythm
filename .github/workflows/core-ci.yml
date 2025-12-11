@@ -1,0 +1,50 @@
+name: Core CI
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'core/**'
+      - '.github/workflows/core-ci.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'core/**'
+      - '.github/workflows/core-ci.yml'
+
+jobs:
+  rust-checks:
+    name: Rust Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            core/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check formatting
+        run: cd core && cargo fmt --check
+
+      - name: Run clippy
+        run: cd core && cargo clippy -- -D warnings
+
+      - name: Build Rust
+        run: cd core && cargo build --release
+
+      - name: Run tests
+        run: cd core && cargo test --release

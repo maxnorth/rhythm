@@ -1,0 +1,168 @@
+name: Test Quickstart
+
+on:
+  workflow_call:
+    inputs:
+      install_from:
+        description: 'Install from "local" build or "pypi"'
+        required: true
+        type: string
+      version:
+        description: 'Version to install from PyPI (only used when install_from=pypi)'
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Start Postgres with Docker Compose
+        working-directory: python/examples/quickstart
+        run: docker compose up -d
+
+      - name: Wait for Postgres
+        run: |
+          timeout 30 bash -c 'until docker exec $(docker ps -q -f name=postgres) pg_isready -U rhythm; do sleep 1; done'
+
+      - name: Install Rust (for local build)
+        if: inputs.install_from == 'local'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install from local build
+        if: inputs.install_from == 'local'
+        working-directory: python
+        run: pip install -e .
+
+      - name: Install from PyPI
+        if: inputs.install_from == 'pypi'
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            pip install rhythm-async==${{ inputs.version }}
+          else
+            pip install rhythm-async
+          fi
+
+      - name: Start worker in background
+        working-directory: python/examples/quickstart
+        env:
+          RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
+        run: |
+          python worker.py &
+          echo $! > worker.pid
+          sleep 5
+
+      - name: Run quickstart app
+        working-directory: python/examples/quickstart
+        env:
+          RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
+        run: python app.py
+
+      - name: Stop worker
+        if: always()
+        working-directory: python/examples/quickstart
+        run: |
+          if [ -f worker.pid ]; then
+            kill $(cat worker.pid) || true
+          fi
+
+      - name: Stop Postgres
+        if: always()
+        working-directory: python/examples/quickstart
+        run: docker compose down
+
+  macos:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install and start Postgres
+        run: |
+          brew install postgresql@14
+          brew services start postgresql@14
+          sleep 5
+          /opt/homebrew/opt/postgresql@14/bin/createuser -s rhythm 2>/dev/null || /usr/local/opt/postgresql@14/bin/createuser -s rhythm || true
+          /opt/homebrew/opt/postgresql@14/bin/createdb rhythm 2>/dev/null || /usr/local/opt/postgresql@14/bin/createdb rhythm || true
+
+      - name: Wait for Postgres
+        run: |
+          for i in {1..30}; do
+            (/opt/homebrew/opt/postgresql@14/bin/pg_isready 2>/dev/null || /usr/local/opt/postgresql@14/bin/pg_isready || pg_isready) && break || sleep 1
+          done
+
+      - name: Install Rust (for local build)
+        if: inputs.install_from == 'local'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install from local build
+        if: inputs.install_from == 'local'
+        working-directory: python
+        run: pip install -e .
+
+      - name: Install from PyPI
+        if: inputs.install_from == 'pypi'
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            pip install rhythm-async==${{ inputs.version }}
+          else
+            pip install rhythm-async
+          fi
+
+      - name: Start worker in background
+        working-directory: python/examples/quickstart
+        env:
+          RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
+        run: |
+          python worker.py &
+          echo $! > worker.pid
+          sleep 5
+
+      - name: Run quickstart app
+        working-directory: python/examples/quickstart
+        env:
+          RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
+        run: python app.py
+
+      - name: Stop worker
+        if: always()
+        working-directory: python/examples/quickstart
+        run: |
+          if [ -f worker.pid ]; then
+            kill $(cat worker.pid) || true
+          fi
+
+      - name: Stop Postgres
+        if: always()
+        run: brew services stop postgresql@14
