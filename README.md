@@ -18,7 +18,7 @@ See below for setup instructions and examples in your chosen app language.
 - Rhythm uses an embedded scripting language for workflows. The runtime has been specially designed to allow execution to pause when you `await`, persist runtime state to the DB, and later resume exactly where it left off, avoiding the need for event replay.
 - Workflows are written in `.flow` files and use a custom syntax based on a simplified subset of JavaScript. Each workflow runs in a sandboxed, intentially limited context to keep logic focused on task orchestration.
 - Tasks are written in your application's language. These run when invoked by a workflow, or they can be run directly as a standalone queued task. Both workflows and tasks support the same set of features for scheduling, prioritization, etc.
-- Workflow scripts are self-versioning and immutable. They are persisted to the database at startup and are versioned by their content hash. In-progress workflows are guaranteed to resume with the same version they started with, allowing you to safely modify and re-deploy workflow code even while workflows are mid-execution.
+- Workflow scripts are self-versioning and immutable. They are persisted to the database at startup and are versioned by their content hash. In-progress workflows are guaranteed to resume with the same version they started with, allowing you to safely modify and re-deploy workflows even while they are executing.
 - Because workflows don't use event replay to restore state, they don't have the same event limits or determinism requirements that other durable execution platforms do.
 
 ## Workflow Example
