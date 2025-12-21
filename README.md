@@ -1,11 +1,11 @@
 # Rhythm - Intuitive Durable Execution
 
-Rhythm is a Durable Execution framework that aims to make writing Workflows-as-Code intuitive and effortless. It’s easy to setup and use, and only requires Postgres as the single hosted dependency. It supports multiple programming languages, each using Rhythm's embedded core engine written in rust.
+Rhythm is an experimental Durable Execution framework without replay execution. It aims to make writing durable workflows intuitive and effortless. It has minimal hosting requirements, and only requires Postgres. It supports multiple programming languages, each using Rhythm's embedded core engine written in rust.
 
 Rhythm may appeal to you if:
-- You have experienced how replay-based durable execution complicates maintainability and reliability
-- You want a free, low-maintenance platform designed for developers, without commercial constraints
-- You don't want to monitor and maintain separate platforms for durable workflows *and* queued tasks
+- You have experienced how replay-based durable execution complicates development and causes errors
+- You want a developer-friendly platform with minimal hosting requirements
+- You would like a unified platform that supports both durable workflows *and* simple queued tasks
 
 > [!WARNING]
 > This project is in early access. It's usable but missing many features, and is not battle tested for production. Backwards compatibility is not guaranteed. It's exclusively recommended for evaluation or hobby projects at this time. [Learn more.](./docs/release_status.md)
@@ -15,11 +15,11 @@ See below for setup instructions and examples in your chosen app language.
 - [Python](./python/README.md)
 
 ## How it Works
-- You write workflows in `.flow` files, which use a JS-like, sandboxed scripting language to run tasks asynchronously and wait on external signals or timers of any duration.
-- Rhythm's rust-based interpreter runs your workflows. When you `await`, it pauses and saves state, and when the result is resolved, the workflow restores state and resumes exactly where it left off, like normal code.
-- You define tasks in your application's language. These run when invoked by a workflow, or they can be run directly as a standalone queued task.
-- Workflow files are persisted and automatically versioned by their content hash. In-progress workflows are guaranteed to resume with the same version they started with, making file changes safe and effortless.
-- Because workflows do not use event replay to restore state like other durable execution platforms, they do not have the same event limits or determinism requirements.
+- Rhythm uses an embedded scripting language for workflows. The runtime has been specially designed to allow execution to pause when you `await`, persist runtime state to the DB, and later resume exactly where it left off, avoiding the need for event replay.
+- Workflows are written in `.flow` files and use a custom syntax based on a simplified subset of JavaScript. Each workflow runs in a sandboxed, intentially limited context to keep logic focused on task orchestration.
+- Tasks are written in your application's language. These run when invoked by a workflow, or they can be run directly as a standalone queued task. Both workflows and tasks support the same set of features for scheduling, prioritization, etc.
+- Workflow scripts are self-versioning and immutable. They are persisted to the database at startup and are versioned by their content hash. In-progress workflows are guaranteed to resume with the same version they started with, allowing you to safely modify and re-deploy workflow code even while workflows are mid-execution.
+- Because workflows don't use event replay to restore state, they don't have the same event limits or determinism requirements that other durable execution platforms do.
 
 ## Workflow Example
 ```js
@@ -46,7 +46,7 @@ try {
   })
 }
 
-// capture outputs, to fetch via API, or returned to parent workflow
+// capture outputs to read later, or returned to a parent workflow
 return {
   example: 'whatever'
 }
@@ -54,10 +54,9 @@ return {
 
 ## Learn More
 
-- **[FAQ](FAQ.md)**
-- **[Workflow Syntax and API Reference](WORKFLOW_DSL_FEATURES.md)**
+- **[Workflow Syntax and API Reference](docs/workflow-api.md)**
 - **[Supported Languages](docs/languages.md)**
-- **[Technical Architecture](TECHNICAL_DEEP_DIVE.md)**
+- **[Ready vs. Planned Functionality](docs/release_status.md)**
 
 ---
 
@@ -66,8 +65,8 @@ return {
 Not seeking contributions yet (pre-release, rapid changes).
 
 Feedback welcome:
-- Does the snapshot model make sense?
-- Is the DSL trade-off acceptable?
+- Does the runtime model make sense?
+- Is the custom scripting language trade-off worth it?
 - What's blocking you from trying this?
 
-[Open an issue](https://github.com/yourusername/rhythm/issues) or [discussion](https://github.com/yourusername/rhythm/discussions)
+[Open an issue](https://github.com/maxnorth/rhythm/issues) or [discussion](https://github.com/maxnorth/rhythm/discussions)
