@@ -46,5 +46,19 @@ jobs:
       - name: Build Rust
         run: cd core && cargo build --release
 
+      - name: Start PostgreSQL
+        run: docker compose up -d --wait
+
+      - name: Run migrations
+        run: cd core && cargo run --release --bin rhythm -- migrate
+        env:
+          RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
+
       - name: Run tests
         run: cd core && cargo test --release
+        env:
+          RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
+
+      - name: Stop PostgreSQL
+        if: always()
+        run: docker compose down
