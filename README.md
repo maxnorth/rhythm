@@ -1,6 +1,6 @@
 # Rhythm - Intuitive Durable Execution
 
-Rhythm is an experimental Durable Execution framework that can resume without replaying event history. It aims to make writing durable workflows intuitive and effortless. It has minimal hosting requirements, and only requires Postgres. It supports multiple programming languages, each using Rhythm's embedded core engine written in rust.
+Rhythm is an experimental Durable Execution framework that can resume without replaying event history. It aims to make writing durable workflows intuitive and effortless. It has minimal hosting requirements and only needs Postgres. It supports multiple programming languages, each using Rhythm's embedded core engine written in rust.
 
 Rhythm may appeal to you if:
 - You have experienced how replay-based durable execution complicates development and causes errors
