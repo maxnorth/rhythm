@@ -54,9 +54,9 @@ jobs:
         if: inputs.install_from == 'pypi'
         run: |
           if [ -n "${{ inputs.version }}" ]; then
-            pip install rhythm-async==${{ inputs.version }}
+            pip install rhythm-py==${{ inputs.version }}
           else
-            pip install rhythm-async
+            pip install rhythm-py
           fi
 
       - name: Start worker in background
@@ -135,9 +135,9 @@ jobs:
         if: inputs.install_from == 'pypi'
         run: |
           if [ -n "${{ inputs.version }}" ]; then
-            pip install rhythm-async==${{ inputs.version }}
+            pip install rhythm-py==${{ inputs.version }}
           else
-            pip install rhythm-async
+            pip install rhythm-py
           fi
 
       - name: Start worker in background

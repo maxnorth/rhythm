@@ -95,7 +95,7 @@ jobs:
     needs: [build-wheels, build-sdist]
     environment:
       name: pypi
-      url: https://pypi.org/p/rhythm-async
+      url: https://pypi.org/p/rhythm-py
     permissions:
       id-token: write
 
