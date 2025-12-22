@@ -42,7 +42,9 @@ fn test_member_access_on_non_object_throws() {
         unreachable!("Expected Control::Throw with Error, got {:?}", vm.control);
     };
     assert_eq!(err.code, errors::TYPE_ERROR);
-    assert!(err.message.contains("Cannot access property 'foo' on non-object value"));
+    assert!(err
+        .message
+        .contains("Cannot access property 'foo' on non-object value"));
 }
 
 #[test]
@@ -172,10 +174,7 @@ fn test_try_catch_basic() {
 
     // Should return the error (not throw it)
     let Control::Return(Val::Error(err)) = vm.control else {
-        unreachable!(
-            "Expected Control::Return with Error, got {:?}",
-            vm.control
-        );
+        unreachable!("Expected Control::Return with Error, got {:?}", vm.control);
     };
     assert_eq!(err.code, errors::PROPERTY_NOT_FOUND);
     assert!(err.message.contains("Property 'missing' not found"));
@@ -219,10 +218,7 @@ fn test_nested_try_catch() {
     run_until_done(&mut vm);
 
     // Inner catch should handle the error
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("inner".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("inner".to_string())));
 }
 
 #[test]
@@ -247,10 +243,7 @@ fn test_try_catch_propagates_to_outer() {
 
     // Outer catch should handle the error from the inner catch block
     let Control::Return(Val::Error(err)) = vm.control else {
-        unreachable!(
-            "Expected Control::Return with Error, got {:?}",
-            vm.control
-        );
+        unreachable!("Expected Control::Return with Error, got {:?}", vm.control);
     };
     assert_eq!(err.code, errors::PROPERTY_NOT_FOUND);
     assert!(err.message.contains("Property 'also_missing' not found"));
@@ -276,10 +269,7 @@ fn test_try_catch_with_blocks() {
     run_until_done(&mut vm);
 
     // Should return "caught" from the catch block
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("caught".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("caught".to_string())));
 }
 
 #[test]

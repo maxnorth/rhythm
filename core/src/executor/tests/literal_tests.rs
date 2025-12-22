@@ -58,7 +58,6 @@ fn test_array_literal_nested() {
             return [[1, 2], [3, 4]]
         "#;
 
-    
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -99,7 +98,6 @@ fn test_object_literal_empty() {
             return {}
         "#;
 
-    
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -112,7 +110,6 @@ fn test_object_literal_simple() {
             return {name: "Alice", age: 30}
         "#;
 
-    
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -129,7 +126,6 @@ fn test_object_literal_nested() {
             return {user: {name: "Bob", id: 123}}
         "#;
 
-    
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -170,7 +166,6 @@ fn test_object_literal_with_array() {
             return {items: [1, 2, 3]}
         "#;
 
-    
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
@@ -192,7 +187,6 @@ fn test_array_in_task_run() {
             return Task.run("my_task", {items: [1, 2, 3]})
         "#;
 
-    
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 

@@ -8,11 +8,7 @@ use crate::types::{CreateExecutionParams, ExecutionType};
 use sqlx::PgPool;
 
 /// Helper to create test executions
-async fn create_test_execution(
-    pool: &PgPool,
-    id: &str,
-    queue: &str,
-) -> anyhow::Result<()> {
+async fn create_test_execution(pool: &PgPool, id: &str, queue: &str) -> anyhow::Result<()> {
     let mut tx = pool.begin().await?;
     let params = CreateExecutionParams {
         id: Some(id.to_string()),
@@ -30,7 +26,7 @@ async fn create_test_execution(
 /// Helper to count unclaimed work items in queue
 async fn count_unclaimed(pool: &PgPool, queue: &str) -> anyhow::Result<i64> {
     let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM work_queue WHERE queue = $1 AND claimed_until IS NULL"
+        "SELECT COUNT(*) FROM work_queue WHERE queue = $1 AND claimed_until IS NULL",
     )
     .bind(queue)
     .fetch_one(pool)
@@ -103,9 +99,9 @@ async fn test_claim_work_respects_priority(pool: PgPool) -> anyhow::Result<()> {
     create_test_execution(&pool, "high", "default").await?;
     create_test_execution(&pool, "medium", "default").await?;
 
-    enqueue_work(&pool, "low", "default", 0).await?;      // priority 0
-    enqueue_work(&pool, "high", "default", 100).await?;   // priority 100
-    enqueue_work(&pool, "medium", "default", 50).await?;  // priority 50
+    enqueue_work(&pool, "low", "default", 0).await?; // priority 0
+    enqueue_work(&pool, "high", "default", 100).await?; // priority 100
+    enqueue_work(&pool, "medium", "default", 50).await?; // priority 50
 
     // Claim 1 - should get highest priority
     let claimed = claim_work(&pool, "default", 1).await?;
@@ -159,10 +155,12 @@ async fn test_claim_work_reclaims_expired(pool: PgPool) -> anyhow::Result<()> {
     assert_eq!(claimed.len(), 1);
 
     // Manually expire the claim by setting claimed_until to the past
-    sqlx::query("UPDATE work_queue SET claimed_until = NOW() - INTERVAL '1 minute' WHERE execution_id = $1")
-        .bind("exec1")
-        .execute(&pool)
-        .await?;
+    sqlx::query(
+        "UPDATE work_queue SET claimed_until = NOW() - INTERVAL '1 minute' WHERE execution_id = $1",
+    )
+    .bind("exec1")
+    .execute(&pool)
+    .await?;
 
     // Should be able to claim again
     let claimed = claim_work(&pool, "default", 1).await?;
@@ -227,7 +225,9 @@ async fn test_claim_work_respects_queue(pool: PgPool) -> anyhow::Result<()> {
 }
 
 #[sqlx::test]
-async fn test_claim_work_prevents_claiming_execution_with_active_claim(pool: PgPool) -> anyhow::Result<()> {
+async fn test_claim_work_prevents_claiming_execution_with_active_claim(
+    pool: PgPool,
+) -> anyhow::Result<()> {
     // This tests the NOT EXISTS clause that prevents claiming an execution
     // if it already has an active claim in the work queue
 
@@ -243,18 +243,20 @@ async fn test_claim_work_prevents_claiming_execution_with_active_claim(pool: PgP
     enqueue_work(&pool, "exec1", "default", 0).await?;
 
     // We should have 1 claimed and 1 unclaimed entry for the same execution
-    let total: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM work_queue WHERE execution_id = $1"
-    )
-    .bind("exec1")
-    .fetch_one(&pool)
-    .await?;
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM work_queue WHERE execution_id = $1")
+        .bind("exec1")
+        .fetch_one(&pool)
+        .await?;
     assert_eq!(total, 2);
 
     // Trying to claim more work should NOT claim the unclaimed entry
     // because the execution already has an active claim
     let claimed2 = claim_work(&pool, "default", 10).await?;
-    assert_eq!(claimed2.len(), 0, "Should not claim execution with active claim");
+    assert_eq!(
+        claimed2.len(),
+        0,
+        "Should not claim execution with active claim"
+    );
 
     Ok(())
 }

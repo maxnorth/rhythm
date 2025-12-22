@@ -17,10 +17,7 @@ fn test_if_with_number_truthy() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("truthy".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("truthy".to_string())));
 }
 
 #[test]
@@ -62,10 +59,7 @@ fn test_if_with_non_empty_string_truthy() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("truthy".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("truthy".to_string())));
 }
 
 #[test]
@@ -79,10 +73,7 @@ fn test_if_with_string_zero_truthy() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("truthy".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("truthy".to_string())));
 }
 
 #[test]
@@ -110,10 +101,7 @@ fn test_if_with_empty_array_truthy() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("truthy".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("truthy".to_string())));
 }
 
 #[test]
@@ -127,10 +115,7 @@ fn test_if_with_empty_object_truthy() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("truthy".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("truthy".to_string())));
 }
 
 /* ===================== Truthiness in while statements ===================== */
@@ -291,10 +276,7 @@ fn test_truthiness_with_comparison() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("truthy".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("truthy".to_string())));
 }
 
 /* ===================== NOT Operator Tests ===================== */

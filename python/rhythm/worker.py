@@ -3,10 +3,8 @@
 import asyncio
 import logging
 import signal
-import uuid
-from typing import Optional
-import traceback
 import time
+import traceback
 
 from rhythm.core import RhythmCore
 from rhythm.registry import get_function
@@ -33,7 +31,7 @@ def run():
     Meta:
         section: Worker
     """
-    logger.info(f"Worker starting...")
+    logger.info("Worker starting...")
 
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, _handle_shutdown_signal)
@@ -70,7 +68,9 @@ def run():
                 try:
                     result = fn(**action.inputs)
                 except Exception as e:
-                    logger.error(f"Error executing {action.execution_id}: {e}\n{traceback.format_exc()}")
+                    logger.error(
+                        f"Error executing {action.execution_id}: {e}\n{traceback.format_exc()}"
+                    )
 
                     error_data = {
                         "message": str(e),

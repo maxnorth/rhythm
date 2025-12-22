@@ -41,9 +41,7 @@ async fn migrate() -> Result<()> {
         .connect(&database_url)
         .await?;
 
-    sqlx::migrate!("./migrations")
-        .run(&pool)
-        .await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
 
     println!("Migrations completed successfully");
 

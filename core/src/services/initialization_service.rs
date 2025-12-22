@@ -16,11 +16,7 @@ impl InitializationService {
     }
 
     /// Run initialization tasks (migrations, workflow registration)
-    pub async fn initialize(
-        &self,
-        auto_migrate: bool,
-        workflows: Vec<WorkflowFile>,
-    ) -> Result<()> {
+    pub async fn initialize(&self, auto_migrate: bool, workflows: Vec<WorkflowFile>) -> Result<()> {
         // Run migrations if requested
         if auto_migrate {
             self.run_migrations()
@@ -72,10 +68,7 @@ impl InitializationService {
             )
             .await
             .with_context(|| {
-                format!(
-                    "Failed to check for existing workflow '{}'",
-                    workflow.name
-                )
+                format!("Failed to check for existing workflow '{}'", workflow.name)
             })?;
 
             if existing_id.is_some() {

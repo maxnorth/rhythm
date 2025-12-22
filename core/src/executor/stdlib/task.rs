@@ -51,11 +51,7 @@ pub fn run(args: &[Val], outbox: &mut Outbox) -> EvalResult {
     let task_id = Uuid::new_v4().to_string();
 
     // Record side effect in outbox
-    outbox.push(TaskCreation::new(
-        task_id.clone(),
-        task_name,
-        inputs,
-    ));
+    outbox.push(TaskCreation::new(task_id.clone(), task_name, inputs));
 
     // Return Task value with the UUID
     EvalResult::Value {

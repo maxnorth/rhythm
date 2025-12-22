@@ -120,10 +120,7 @@ fn test_await_non_task_string() {
     run_until_done(&mut vm);
 
     // Should NOT suspend
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("hello".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("hello".to_string())));
 }
 
 #[test]

@@ -28,10 +28,28 @@ pub type ValidationResult<T> = Result<T, ValidationError>;
 /* ===================== Public API ===================== */
 
 /// Reserved identifiers that cannot be used as parameter names
+#[allow(dead_code)]
 const RESERVED_IDENTIFIERS: &[&str] = &[
-    "await", "async", "let", "const", "var", "function", "return",
-    "if", "else", "for", "while", "break", "continue", "throw", "try", "catch",
-    "true", "false", "null", "undefined",
+    "await",
+    "async",
+    "let",
+    "const",
+    "var",
+    "function",
+    "return",
+    "if",
+    "else",
+    "for",
+    "while",
+    "break",
+    "continue",
+    "throw",
+    "try",
+    "catch",
+    "true",
+    "false",
+    "null",
+    "undefined",
 ];
 
 /// Validate a workflow definition

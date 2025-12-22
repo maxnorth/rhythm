@@ -123,7 +123,6 @@ impl InitBuilder {
         self
     }
 
-
     /// Add workflow files to register during initialization
     pub fn workflows(mut self, workflows: Vec<WorkflowFile>) -> Self {
         self.options.workflows = workflows;

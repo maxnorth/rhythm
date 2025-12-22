@@ -70,20 +70,37 @@ pub enum BinaryOp {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "t")]
 pub enum Expr {
-    LitBool { v: bool },
-    LitNum { v: f64 },
-    LitStr { v: String },
+    LitBool {
+        v: bool,
+    },
+    LitNum {
+        v: f64,
+    },
+    LitStr {
+        v: String,
+    },
     LitNull,
-    LitList { elements: Vec<Expr> },
-    LitObj { properties: Vec<(String, Expr)> },
-    Ident { name: String },
+    LitList {
+        elements: Vec<Expr>,
+    },
+    LitObj {
+        properties: Vec<(String, Expr)>,
+    },
+    Ident {
+        name: String,
+    },
     Member {
         object: Box<Expr>,
         property: String,
         optional: bool,
     },
-    Call { callee: Box<Expr>, args: Vec<Expr> },
-    Await { inner: Box<Expr> },
+    Call {
+        callee: Box<Expr>,
+        args: Vec<Expr>,
+    },
+    Await {
+        inner: Box<Expr>,
+    },
     BinaryOp {
         op: BinaryOp,
         left: Box<Expr>,

@@ -27,10 +27,7 @@ fn test_optional_chaining_with_object() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("value".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("value".to_string())));
 }
 
 #[test]
@@ -81,10 +78,7 @@ fn test_chained_optional_access_all_present() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("success".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("success".to_string())));
 }
 
 #[test]
@@ -122,10 +116,7 @@ fn test_mixed_regular_then_optional() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("mixed".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("mixed".to_string())));
 }
 
 #[test]
@@ -137,10 +128,7 @@ fn test_mixed_optional_then_regular() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("mixed2".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("mixed2".to_string())));
 }
 
 #[test]
@@ -174,10 +162,7 @@ fn test_optional_chaining_with_default_value() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("default".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("default".to_string())));
 }
 
 #[test]

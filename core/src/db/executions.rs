@@ -47,8 +47,7 @@ pub async fn create_execution(
     loop {
         let id = current_params
             .id
-            .as_ref()
-            .map(|s| s.clone())
+            .clone()
             .unwrap_or_else(|| Uuid::new_v4().to_string());
 
         let result: Option<(String, bool)> = sqlx::query_as(
@@ -110,10 +109,7 @@ pub async fn create_execution(
     }
 }
 
-pub async fn start_execution<'e, E>(
-    executor: E,
-    execution_id: &str,
-) -> Result<Option<Execution>>
+pub async fn start_execution<'e, E>(executor: E, execution_id: &str) -> Result<Option<Execution>>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
@@ -238,10 +234,7 @@ where
     Ok(None)
 }
 
-pub async fn suspend_execution<'e, E>(
-    executor: E,
-    execution_id: &str,
-) -> Result<Option<Execution>>
+pub async fn suspend_execution<'e, E>(executor: E, execution_id: &str) -> Result<Option<Execution>>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
@@ -282,10 +275,7 @@ where
 /// Query executions with filters
 ///
 /// Returns a list of executions matching the provided filters.
-pub async fn query_executions(
-    pool: &PgPool,
-    filters: ExecutionFilters,
-) -> Result<Vec<Execution>> {
+pub async fn query_executions(pool: &PgPool, filters: ExecutionFilters) -> Result<Vec<Execution>> {
     let mut query = String::from("SELECT * FROM executions WHERE 1=1");
     let mut bind_count = 0;
 
@@ -307,12 +297,12 @@ pub async fn query_executions(
 
     query.push_str(" ORDER BY created_at DESC");
 
-    if let Some(limit) = filters.limit {
+    if filters.limit.is_some() {
         bind_count += 1;
         query.push_str(&format!(" LIMIT ${}", bind_count));
     }
 
-    if let Some(offset) = filters.offset {
+    if filters.offset.is_some() {
         bind_count += 1;
         query.push_str(&format!(" OFFSET ${}", bind_count));
     }

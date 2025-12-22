@@ -22,12 +22,7 @@ use super::vm::{Step, VM};
 /// This is the top-level driver that repeatedly calls step() until execution finishes.
 /// After completion, inspect `vm.control` for the final state and `vm.outbox` for side effects.
 pub fn run_until_done(vm: &mut VM) {
-    loop {
-        match step(vm) {
-            Step::Continue => continue,
-            Step::Done => break,
-        }
-    }
+    while let Step::Continue = step(vm) {}
 }
 
 /// Execute one step of the VM
@@ -59,9 +54,7 @@ pub fn step(vm: &mut VM) -> Step {
 
     // Dispatch to statement handler
     match (kind, node) {
-        (FrameKind::Return { phase }, Stmt::Return { value }) => {
-            execute_return(vm, phase, value)
-        }
+        (FrameKind::Return { phase }, Stmt::Return { value }) => execute_return(vm, phase, value),
 
         (
             FrameKind::Block {
@@ -87,10 +80,9 @@ pub fn step(vm: &mut VM) -> Step {
 
         (FrameKind::Expr { phase }, Stmt::Expr { expr }) => execute_expr(vm, phase, expr),
 
-        (
-            FrameKind::Assign { phase },
-            Stmt::Assign { var, path, value },
-        ) => execute_assign(vm, phase, var, path, value),
+        (FrameKind::Assign { phase }, Stmt::Assign { var, path, value }) => {
+            execute_assign(vm, phase, var, path, value)
+        }
 
         (
             FrameKind::If { phase },
@@ -163,7 +155,7 @@ fn unwind(vm: &mut VM) -> Step {
             while let Some(frame) = vm.frames.last() {
                 match &frame.kind {
                     super::types::FrameKind::Try {
-                        phase,
+                        phase: _,
                         catch_var,
                     } => {
                         // Found a try/catch handler!

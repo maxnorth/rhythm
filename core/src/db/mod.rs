@@ -6,9 +6,9 @@
 pub mod executions;
 pub mod migration;
 pub mod pool;
+pub mod work_queue;
 pub mod workflow_definitions;
 pub mod workflow_execution_context;
-pub mod work_queue;
 
 #[cfg(test)]
 mod tests;
@@ -17,6 +17,6 @@ mod tests;
 pub use executions::*;
 pub use migration::*;
 pub use pool::*;
+pub use work_queue::*;
 pub use workflow_definitions::*;
 pub use workflow_execution_context::*;
-pub use work_queue::*;

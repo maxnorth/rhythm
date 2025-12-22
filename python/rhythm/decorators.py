@@ -2,8 +2,8 @@
 
 from typing import Callable, Optional
 
-from rhythm.registry import register_function
 from rhythm.client import queue_execution
+from rhythm.registry import register_function
 
 
 def task(fn: Optional[Callable] = None, *, queue: str = "default"):

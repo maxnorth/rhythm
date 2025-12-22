@@ -15,10 +15,7 @@ fn test_nullish_with_null() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("default".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("default".to_string())));
 }
 
 #[test]
@@ -107,7 +104,8 @@ fn test_nullish_vs_or_with_empty_string() {
     match vm.control {
         Control::Return(Val::Obj(map)) => {
             assert_eq!(map.get("coalesce"), Some(&Val::Str("".to_string()))); // ?? returns ""
-            assert_eq!(map.get("orOp"), Some(&Val::Str("default".to_string()))); // || returns "default"
+            assert_eq!(map.get("orOp"), Some(&Val::Str("default".to_string())));
+            // || returns "default"
         }
         _ => panic!("Expected object with nullish and or results"),
     }
@@ -127,10 +125,7 @@ fn test_nullish_vs_or_with_null() {
 
     match vm.control {
         Control::Return(Val::Obj(map)) => {
-            assert_eq!(
-                map.get("coalesce"),
-                Some(&Val::Str("default".to_string()))
-            );
+            assert_eq!(map.get("coalesce"), Some(&Val::Str("default".to_string())));
             assert_eq!(map.get("orOp"), Some(&Val::Str("default".to_string())));
         }
         _ => panic!("Expected object with nullish and or results"),
@@ -169,10 +164,7 @@ fn test_chained_nullish_middle_value() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("middle".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("middle".to_string())));
 }
 
 /* ===================== Nullish with Optional Chaining ===================== */
@@ -186,10 +178,7 @@ fn test_nullish_with_optional_chaining() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("default".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("default".to_string())));
 }
 
 #[test]
@@ -247,10 +236,7 @@ fn test_nullish_in_assignment() {
         "#;
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("default".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("default".to_string())));
 }
 
 #[test]

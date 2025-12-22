@@ -62,7 +62,13 @@ impl WorkflowService {
         let version_hash = format!("{:x}", hasher.finish());
 
         // Register the workflow definition (stores raw source)
-        db::workflow_definitions::create_workflow_definition(&self.pool, name, &version_hash, source).await
+        db::workflow_definitions::create_workflow_definition(
+            &self.pool,
+            name,
+            &version_hash,
+            source,
+        )
+        .await
     }
 
     /// Get all child task executions for a workflow

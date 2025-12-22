@@ -146,11 +146,19 @@ fn eq(args: &[Val]) -> EvalResult {
         };
     }
     match (&args[0], &args[1]) {
-        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Bool(a == b) },
-        (Val::Bool(a), Val::Bool(b)) => EvalResult::Value { v: Val::Bool(a == b) },
-        (Val::Str(a), Val::Str(b)) => EvalResult::Value { v: Val::Bool(a == b) },
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value {
+            v: Val::Bool(a == b),
+        },
+        (Val::Bool(a), Val::Bool(b)) => EvalResult::Value {
+            v: Val::Bool(a == b),
+        },
+        (Val::Str(a), Val::Str(b)) => EvalResult::Value {
+            v: Val::Bool(a == b),
+        },
         (Val::Null, Val::Null) => EvalResult::Value { v: Val::Bool(true) },
-        _ => EvalResult::Value { v: Val::Bool(false) },
+        _ => EvalResult::Value {
+            v: Val::Bool(false),
+        },
     }
 }
 
@@ -161,10 +169,18 @@ fn ne(args: &[Val]) -> EvalResult {
         };
     }
     match (&args[0], &args[1]) {
-        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Bool(a != b) },
-        (Val::Bool(a), Val::Bool(b)) => EvalResult::Value { v: Val::Bool(a != b) },
-        (Val::Str(a), Val::Str(b)) => EvalResult::Value { v: Val::Bool(a != b) },
-        (Val::Null, Val::Null) => EvalResult::Value { v: Val::Bool(false) },
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value {
+            v: Val::Bool(a != b),
+        },
+        (Val::Bool(a), Val::Bool(b)) => EvalResult::Value {
+            v: Val::Bool(a != b),
+        },
+        (Val::Str(a), Val::Str(b)) => EvalResult::Value {
+            v: Val::Bool(a != b),
+        },
+        (Val::Null, Val::Null) => EvalResult::Value {
+            v: Val::Bool(false),
+        },
         _ => EvalResult::Value { v: Val::Bool(true) },
     }
 }
@@ -176,7 +192,9 @@ fn lt(args: &[Val]) -> EvalResult {
         };
     }
     match (&args[0], &args[1]) {
-        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Bool(a < b) },
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value {
+            v: Val::Bool(a < b),
+        },
         _ => EvalResult::Throw {
             error: Val::Error(ErrorInfo::new("TypeError", "lt expects two numbers")),
         },
@@ -190,7 +208,9 @@ fn lte(args: &[Val]) -> EvalResult {
         };
     }
     match (&args[0], &args[1]) {
-        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Bool(a <= b) },
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value {
+            v: Val::Bool(a <= b),
+        },
         _ => EvalResult::Throw {
             error: Val::Error(ErrorInfo::new("TypeError", "lte expects two numbers")),
         },
@@ -204,7 +224,9 @@ fn gt(args: &[Val]) -> EvalResult {
         };
     }
     match (&args[0], &args[1]) {
-        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Bool(a > b) },
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value {
+            v: Val::Bool(a > b),
+        },
         _ => EvalResult::Throw {
             error: Val::Error(ErrorInfo::new("TypeError", "gt expects two numbers")),
         },
@@ -218,7 +240,9 @@ fn gte(args: &[Val]) -> EvalResult {
         };
     }
     match (&args[0], &args[1]) {
-        (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Bool(a >= b) },
+        (Val::Num(a), Val::Num(b)) => EvalResult::Value {
+            v: Val::Bool(a >= b),
+        },
         _ => EvalResult::Throw {
             error: Val::Error(ErrorInfo::new("TypeError", "gte expects two numbers")),
         },
@@ -263,9 +287,7 @@ fn not(args: &[Val]) -> EvalResult {
     }
     // JavaScript-style truthiness: convert to boolean using truthiness rules, then negate
     let val = args[0].to_bool();
-    EvalResult::Value {
-        v: Val::Bool(!val),
-    }
+    EvalResult::Value { v: Val::Bool(!val) }
 }
 
 /* ===================== Utilities ===================== */
@@ -318,16 +340,10 @@ pub fn to_string(val: &Val) -> String {
 pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     // Create Math object with methods
     let mut math_obj = std::collections::HashMap::new();
-    math_obj.insert(
-        "floor".to_string(),
-        Val::NativeFunc(StdlibFunc::MathFloor),
-    );
+    math_obj.insert("floor".to_string(), Val::NativeFunc(StdlibFunc::MathFloor));
     math_obj.insert("ceil".to_string(), Val::NativeFunc(StdlibFunc::MathCeil));
     math_obj.insert("abs".to_string(), Val::NativeFunc(StdlibFunc::MathAbs));
-    math_obj.insert(
-        "round".to_string(),
-        Val::NativeFunc(StdlibFunc::MathRound),
-    );
+    math_obj.insert("round".to_string(), Val::NativeFunc(StdlibFunc::MathRound));
 
     // Create Task object with methods
     let mut task_obj = std::collections::HashMap::new();

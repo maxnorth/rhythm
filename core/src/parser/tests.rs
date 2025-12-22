@@ -28,7 +28,9 @@ fn test_parse_return_number() {
 
     // Verify AST structure
     match stmt {
-        Stmt::Return { value: Some(Expr::LitNum { v }) } => {
+        Stmt::Return {
+            value: Some(Expr::LitNum { v }),
+        } => {
             assert_eq!(v, 42.0);
         }
         _ => panic!("Expected Return with LitNum, got {:?}", stmt),
@@ -41,7 +43,9 @@ fn test_parse_return_negative_number() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::LitNum { v }) } => {
+        Stmt::Return {
+            value: Some(Expr::LitNum { v }),
+        } => {
             assert_eq!(v, -3.14);
         }
         _ => panic!("Expected Return with LitNum, got {:?}", stmt),
@@ -54,7 +58,9 @@ fn test_parse_return_boolean_true() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::LitBool { v }) } => {
+        Stmt::Return {
+            value: Some(Expr::LitBool { v }),
+        } => {
             assert!(v);
         }
         _ => panic!("Expected Return with LitBool, got {:?}", stmt),
@@ -67,7 +73,9 @@ fn test_parse_return_boolean_false() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::LitBool { v }) } => {
+        Stmt::Return {
+            value: Some(Expr::LitBool { v }),
+        } => {
             assert!(!v);
         }
         _ => panic!("Expected Return with LitBool, got {:?}", stmt),
@@ -80,7 +88,9 @@ fn test_parse_return_string() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::LitStr { v }) } => {
+        Stmt::Return {
+            value: Some(Expr::LitStr { v }),
+        } => {
             assert_eq!(v, "hello world");
         }
         _ => panic!("Expected Return with LitStr, got {:?}", stmt),
@@ -93,7 +103,9 @@ fn test_parse_return_empty_string() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::LitStr { v }) } => {
+        Stmt::Return {
+            value: Some(Expr::LitStr { v }),
+        } => {
             assert_eq!(v, "");
         }
         _ => panic!("Expected Return with LitStr, got {:?}", stmt),
@@ -108,7 +120,9 @@ fn test_parse_with_whitespace() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::LitNum { v }) } => {
+        Stmt::Return {
+            value: Some(Expr::LitNum { v }),
+        } => {
             assert_eq!(v, 42.0);
         }
         _ => panic!("Expected Return with LitNum, got {:?}", stmt),
@@ -121,7 +135,9 @@ fn test_parse_with_line_comment() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::LitNum { v }) } => {
+        Stmt::Return {
+            value: Some(Expr::LitNum { v }),
+        } => {
             assert_eq!(v, 42.0);
         }
         _ => panic!("Expected Return with LitNum, got {:?}", stmt),
@@ -134,7 +150,9 @@ fn test_parse_with_block_comment() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::LitNum { v }) } => {
+        Stmt::Return {
+            value: Some(Expr::LitNum { v }),
+        } => {
             assert_eq!(v, 42.0);
         }
         _ => panic!("Expected Return with LitNum, got {:?}", stmt),
@@ -149,7 +167,9 @@ fn test_parse_zero() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::LitNum { v }) } => {
+        Stmt::Return {
+            value: Some(Expr::LitNum { v }),
+        } => {
             assert_eq!(v, 0.0);
         }
         _ => panic!("Expected Return with LitNum, got {:?}", stmt),
@@ -162,7 +182,9 @@ fn test_parse_decimal_number() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::LitNum { v }) } => {
+        Stmt::Return {
+            value: Some(Expr::LitNum { v }),
+        } => {
             assert_eq!(v, 123.456);
         }
         _ => panic!("Expected Return with LitNum, got {:?}", stmt),
@@ -171,11 +193,14 @@ fn test_parse_decimal_number() {
 
 #[test]
 fn test_parse_string_with_spaces() {
-    let ast = crate::parser::parse(r#"return "hello   world   with   spaces""#).expect("Should parse");
+    let ast =
+        crate::parser::parse(r#"return "hello   world   with   spaces""#).expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::LitStr { v }) } => {
+        Stmt::Return {
+            value: Some(Expr::LitStr { v }),
+        } => {
             assert_eq!(v, "hello   world   with   spaces");
         }
         _ => panic!("Expected Return with LitStr, got {:?}", stmt),
@@ -190,7 +215,9 @@ fn test_parse_identifier() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::Ident { name }) } => {
+        Stmt::Return {
+            value: Some(Expr::Ident { name }),
+        } => {
             assert_eq!(name, "x");
         }
         _ => panic!("Expected Return with Ident, got {:?}", stmt),
@@ -203,7 +230,9 @@ fn test_parse_identifier_inputs() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::Ident { name }) } => {
+        Stmt::Return {
+            value: Some(Expr::Ident { name }),
+        } => {
             assert_eq!(name, "inputs");
         }
         _ => panic!("Expected Return with Ident, got {:?}", stmt),
@@ -218,7 +247,11 @@ fn test_parse_member_access_simple() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::Member { object, property, .. }) } => {
+        Stmt::Return {
+            value: Some(Expr::Member {
+                object, property, ..
+            }),
+        } => {
             // Verify object is an identifier
             match *object {
                 Expr::Ident { name } => assert_eq!(name, "inputs"),
@@ -236,12 +269,20 @@ fn test_parse_member_access_nested() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(Expr::Member { object, property, .. }) } => {
+        Stmt::Return {
+            value: Some(Expr::Member {
+                object, property, ..
+            }),
+        } => {
             assert_eq!(property, "id");
 
             // object should be ctx.user
             match *object {
-                Expr::Member { object: inner_object, property: inner_property, .. } => {
+                Expr::Member {
+                    object: inner_object,
+                    property: inner_property,
+                    ..
+                } => {
                     assert_eq!(inner_property, "user");
 
                     // inner_object should be ctx
@@ -264,7 +305,9 @@ fn test_parse_member_access_deeply_nested() {
 
     // Verify it's a return statement with nested member access
     match stmt {
-        Stmt::Return { value: Some(Expr::Member { property, .. }) } => {
+        Stmt::Return {
+            value: Some(Expr::Member { property, .. }),
+        } => {
             assert_eq!(property, "city");
             // The nesting structure is correct if parsing succeeds
         }
@@ -288,7 +331,9 @@ fn test_parse_workflow_minimal() {
             assert_eq!(body.len(), 1);
             // First statement should be return 42
             match &body[0] {
-                Stmt::Return { value: Some(Expr::LitNum { v }) } => {
+                Stmt::Return {
+                    value: Some(Expr::LitNum { v }),
+                } => {
                     assert_eq!(*v, 42.0);
                 }
                 _ => panic!("Expected Return with LitNum"),
@@ -322,7 +367,9 @@ fn test_parse_workflow_with_ctx_and_inputs() {
         Stmt::Block { body } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(Expr::LitNum { v }) } => {
+                Stmt::Return {
+                    value: Some(Expr::LitNum { v }),
+                } => {
                     assert_eq!(*v, 123.0);
                 }
                 _ => panic!("Expected Return with LitNum"),
@@ -349,7 +396,9 @@ fn test_parse_workflow_multiline_body() {
             // Verify each is a return statement
             for (i, stmt) in body.iter().enumerate() {
                 match stmt {
-                    Stmt::Return { value: Some(Expr::LitNum { v }) } => {
+                    Stmt::Return {
+                        value: Some(Expr::LitNum { v }),
+                    } => {
                         assert_eq!(*v, (i + 1) as f64);
                     }
                     _ => panic!("Expected Return with LitNum at index {}", i),
@@ -384,7 +433,12 @@ fn test_parse_workflow_with_member_access() {
         Stmt::Block { body } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(Expr::Member { object, property, .. }) } => {
+                Stmt::Return {
+                    value:
+                        Some(Expr::Member {
+                            object, property, ..
+                        }),
+                } => {
                     assert_eq!(*property, "userId");
                     match &**object {
                         Expr::Ident { name } => assert_eq!(name, "inputs"),
@@ -412,7 +466,8 @@ fn test_workflow_serialization_roundtrip() {
     let json = serde_json::to_string(&workflow).expect("Serialization should succeed");
 
     // Deserialize back
-    let workflow2: WorkflowDef = serde_json::from_str(&json).expect("Deserialization should succeed");
+    let workflow2: WorkflowDef =
+        serde_json::from_str(&json).expect("Deserialization should succeed");
 
     // Verify body structure matches (we can't do deep equality without implementing PartialEq)
     match (&workflow.body, &workflow2.body) {
@@ -440,7 +495,9 @@ fn test_statement_serialization_roundtrip() {
         Stmt::Block { body } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(Expr::LitNum { v }) } => {
+                Stmt::Return {
+                    value: Some(Expr::LitNum { v }),
+                } => {
                     assert_eq!(*v, 42.0);
                 }
                 _ => panic!("Expected Return with LitNum"),
@@ -646,7 +703,10 @@ fn test_parse_while_loop() {
         Stmt::Block { body } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::While { test, body: while_body } => {
+                Stmt::While {
+                    test,
+                    body: while_body,
+                } => {
                     // Test should be true
                     match test {
                         Expr::LitBool { v } => assert_eq!(*v, true),
@@ -683,15 +743,15 @@ fn test_parse_while_with_break() {
         Stmt::Block { body } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::While { body: while_body, .. } => {
-                    match &**while_body {
-                        Stmt::Block { body } => {
-                            assert_eq!(body.len(), 1);
-                            assert!(matches!(&body[0], Stmt::Break));
-                        }
-                        _ => panic!("Expected Block for while body"),
+                Stmt::While {
+                    body: while_body, ..
+                } => match &**while_body {
+                    Stmt::Block { body } => {
+                        assert_eq!(body.len(), 1);
+                        assert!(matches!(&body[0], Stmt::Break));
                     }
-                }
+                    _ => panic!("Expected Block for while body"),
+                },
                 _ => panic!("Expected While statement"),
             }
         }
@@ -714,15 +774,15 @@ fn test_parse_while_with_continue() {
         Stmt::Block { body } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::While { body: while_body, .. } => {
-                    match &**while_body {
-                        Stmt::Block { body } => {
-                            assert_eq!(body.len(), 1);
-                            assert!(matches!(&body[0], Stmt::Continue));
-                        }
-                        _ => panic!("Expected Block for while body"),
+                Stmt::While {
+                    body: while_body, ..
+                } => match &**while_body {
+                    Stmt::Block { body } => {
+                        assert_eq!(body.len(), 1);
+                        assert!(matches!(&body[0], Stmt::Continue));
                     }
-                }
+                    _ => panic!("Expected Block for while body"),
+                },
                 _ => panic!("Expected While statement"),
             }
         }
@@ -747,7 +807,9 @@ fn test_parse_nested_while() {
         Stmt::Block { body } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::While { body: outer_body, .. } => {
+                Stmt::While {
+                    body: outer_body, ..
+                } => {
                     match &**outer_body {
                         Stmt::Block { body } => {
                             assert_eq!(body.len(), 1);
@@ -1114,10 +1176,14 @@ fn test_parse_object_literal_nested() {
                         assert_eq!(properties.len(), 1);
                         assert_eq!(properties[0].0, "outer");
                         match &properties[0].1 {
-                            Expr::LitObj { properties: inner_props } => {
+                            Expr::LitObj {
+                                properties: inner_props,
+                            } => {
                                 assert_eq!(inner_props.len(), 1);
                                 assert_eq!(inner_props[0].0, "inner");
-                                assert!(matches!(&inner_props[0].1, Expr::LitNum { v } if *v == 42.0));
+                                assert!(
+                                    matches!(&inner_props[0].1, Expr::LitNum { v } if *v == 42.0)
+                                );
                             }
                             _ => panic!("Expected nested LitObj"),
                         }
