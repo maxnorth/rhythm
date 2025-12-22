@@ -101,7 +101,7 @@ pub fn execute_return(vm: &mut VM, phase: ReturnPhase, value: Option<Expr>) -> S
 pub fn execute_try(
     vm: &mut VM,
     phase: TryPhase,
-    catch_var: String,
+    _catch_var: String,
     body: Box<Stmt>,
     catch_body: Box<Stmt>,
 ) -> Step {
@@ -255,9 +255,8 @@ pub fn execute_assign(
                         if !matches!(current, Val::Obj(_) | Val::List(_)) {
                             vm.control = Control::Throw(Val::Error(ErrorInfo {
                                 code: "TypeError".to_string(),
-                                message: format!(
-                                    "Cannot use index access on non-object/non-array value"
-                                ),
+                                message: "Cannot use index access on non-object/non-array value"
+                                    .to_string(),
                             }));
                             return Step::Continue;
                         }
@@ -315,9 +314,8 @@ pub fn execute_assign(
                     if !matches!(current, Val::Obj(_) | Val::List(_)) {
                         vm.control = Control::Throw(Val::Error(ErrorInfo {
                             code: "TypeError".to_string(),
-                            message: format!(
-                                "Cannot use index access on non-object/non-array value"
-                            ),
+                            message: "Cannot use index access on non-object/non-array value"
+                                .to_string(),
                         }));
                         return Step::Continue;
                     }
@@ -392,7 +390,7 @@ pub fn execute_if(
                 push_stmt(vm, &then_s);
             } else if let Some(else_stmt) = &else_s {
                 // Execute else branch if it exists
-                push_stmt(vm, &else_stmt);
+                push_stmt(vm, else_stmt);
             }
             // If not truthy and no else branch, we just continue (nothing to execute)
 

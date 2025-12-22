@@ -13,7 +13,7 @@ use crate::parser::parse_workflow;
 use crate::types::{CreateExecutionParams, ExecutionOutcome, ExecutionType};
 
 pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> Result<()> {
-    let maybe_context = db::workflow_execution_context::get_context(&pool, &execution.id).await?;
+    let maybe_context = db::workflow_execution_context::get_context(pool, &execution.id).await?;
 
     let (mut vm, workflow_def_id) = if let Some(context) = maybe_context {
         (
@@ -21,12 +21,12 @@ pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> 
             context.workflow_definition_id,
         )
     } else {
-        initialize_workflow(&pool, &execution.target_name, &execution.inputs).await?
+        initialize_workflow(pool, &execution.target_name, &execution.inputs).await?
     };
 
     loop {
         // if suspended and has result, or any other status
-        if !try_resume_suspended_task(&pool, &mut vm).await? {
+        if !try_resume_suspended_task(pool, &mut vm).await? {
             break; // Task not ready, suspend and save state
         }
 
@@ -49,7 +49,7 @@ pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> 
 /// Returns true if execution should continue, false if it should break.
 async fn try_resume_suspended_task(pool: &PgPool, vm: &mut VM) -> Result<bool> {
     if let Control::Suspend(task_id) = &vm.control {
-        if let Some(task_execution) = db::executions::get_execution(&pool, task_id).await? {
+        if let Some(task_execution) = db::executions::get_execution(pool, task_id).await? {
             match task_execution.status {
                 crate::types::ExecutionStatus::Completed
                 | crate::types::ExecutionStatus::Failed => {
@@ -100,7 +100,7 @@ async fn initialize_workflow(
     inputs: &JsonValue,
 ) -> Result<(VM, i32)> {
     let (workflow_def_id, workflow_source) =
-        db::workflow_definitions::get_workflow_by_name(&pool, workflow_name).await?;
+        db::workflow_definitions::get_workflow_by_name(pool, workflow_name).await?;
 
     let workflow_def = parse_workflow(&workflow_source)
         .map_err(|e| anyhow::anyhow!("Failed to parse workflow: {:?}", e))?;
@@ -153,28 +153,28 @@ async fn handle_workflow_result(
 ) -> Result<()> {
     match &vm.control {
         Control::Return(val) => {
-            let result_json = val_to_json(&val)?;
+            let result_json = val_to_json(val)?;
 
             // Delete workflow execution context before finishing
-            db::workflow_execution_context::delete_context(&mut **tx, &execution_id)
+            db::workflow_execution_context::delete_context(&mut **tx, execution_id)
                 .await
                 .context("Failed to delete workflow execution context")?;
 
             // Use helper to complete execution, complete work, and re-queue parent
             finish_work(
                 &mut *tx,
-                &execution_id,
+                execution_id,
                 ExecutionOutcome::Success(result_json),
             )
             .await?;
         }
         Control::Suspend(_task_id) => {
-            let vm_state = serde_json::to_value(&vm).context("Failed to serialize VM state")?;
+            let vm_state = serde_json::to_value(vm).context("Failed to serialize VM state")?;
 
             // Upsert workflow execution context before suspending
             db::workflow_execution_context::upsert_context(
                 tx,
-                &execution_id,
+                execution_id,
                 workflow_def_id,
                 &vm_state,
             )
@@ -182,20 +182,20 @@ async fn handle_workflow_result(
             .context("Failed to upsert workflow execution context")?;
 
             // Use helper to suspend execution, complete work, and re-queue parent
-            finish_work(&mut *tx, &execution_id, ExecutionOutcome::Suspended).await?;
+            finish_work(&mut *tx, execution_id, ExecutionOutcome::Suspended).await?;
         }
         Control::Throw(error_val) => {
-            let error_json = val_to_json(&error_val)?;
+            let error_json = val_to_json(error_val)?;
 
             // Delete workflow execution context before finishing
-            db::workflow_execution_context::delete_context(&mut **tx, &execution_id)
+            db::workflow_execution_context::delete_context(&mut **tx, execution_id)
                 .await
                 .context("Failed to delete workflow execution context")?;
 
             // Use helper to fail execution, complete work, and re-queue parent
             finish_work(
                 &mut *tx,
-                &execution_id,
+                execution_id,
                 ExecutionOutcome::Failure(error_json),
             )
             .await?;
@@ -209,14 +209,14 @@ async fn handle_workflow_result(
             });
 
             // Delete workflow execution context before finishing
-            db::workflow_execution_context::delete_context(&mut **tx, &execution_id)
+            db::workflow_execution_context::delete_context(&mut **tx, execution_id)
                 .await
                 .context("Failed to delete workflow execution context")?;
 
             // Use helper to fail execution, complete work, and re-queue parent
             finish_work(
                 &mut *tx,
-                &execution_id,
+                execution_id,
                 ExecutionOutcome::Failure(error_json),
             )
             .await?;

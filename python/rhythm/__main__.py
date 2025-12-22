@@ -13,20 +13,20 @@ import click
 
 
 @click.group()
-@click.option('--database-url', envvar='RHYTHM_DATABASE_URL', help='Database URL')
-@click.option('--config', envvar='RHYTHM_CONFIG_PATH', help='Config file path')
+@click.option("--database-url", envvar="RHYTHM_DATABASE_URL", help="Database URL")
+@click.option("--config", envvar="RHYTHM_CONFIG_PATH", help="Config file path")
 def main(database_url, config):
     """Rhythm workflow engine"""
     if database_url:
-        os.environ['RHYTHM_DATABASE_URL'] = database_url
+        os.environ["RHYTHM_DATABASE_URL"] = database_url
     if config:
-        os.environ['RHYTHM_CONFIG_PATH'] = config
+        os.environ["RHYTHM_CONFIG_PATH"] = config
 
 
 @main.command()
-@click.option('-q', '--queue', 'queues', multiple=True, required=True, help='Queue to process')
-@click.option('--worker-id', help='Unique worker ID')
-@click.option('-m', '--import', 'import_modules', multiple=True, help='Module to import')
+@click.option("-q", "--queue", "queues", multiple=True, required=True, help="Queue to process")
+@click.option("--worker-id", help="Unique worker ID")
+@click.option("-m", "--import", "import_modules", multiple=True, help="Module to import")
 def worker(queues, worker_id, import_modules):
     """Run a worker to process tasks"""
     # Import modules to register decorated functions

@@ -6,11 +6,9 @@ from typing import Any, Dict, List, Optional
 try:
     from rhythm import rhythm_core as rust
 except ImportError:
-    raise ImportError(
-        "rhythm_core Rust extension not found."
-    )
+    raise ImportError("rhythm_core Rust extension not found.")
 
-from rhythm.models import Execution, DelegatedAction
+from rhythm.models import DelegatedAction, Execution
 
 
 class RhythmCore:
@@ -131,4 +129,3 @@ class RhythmCore:
             workflow_name=workflow_name,
             inputs_json=inputs_json,
         )
-

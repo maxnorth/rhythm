@@ -28,6 +28,7 @@ pub type ValidationResult<T> = Result<T, ValidationError>;
 /* ===================== Public API ===================== */
 
 /// Reserved identifiers that cannot be used as parameter names
+#[allow(dead_code)]
 const RESERVED_IDENTIFIERS: &[&str] = &[
     "await",
     "async",

@@ -125,7 +125,7 @@ pub fn parse(source: &str) -> ParseResult<Stmt> {
 
 fn build_bare_workflow(pair: pest::iterators::Pair<Rule>) -> ParseResult<WorkflowDef> {
     // bare_workflow = { front_matter? ~ statement+ }
-    let mut inner = pair.into_inner();
+    let inner = pair.into_inner();
 
     // Check for optional front matter
     let mut front_matter = None;
@@ -335,7 +335,9 @@ fn build_binary_expr(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
     let inner_pairs: Vec<_> = pair.into_inner().collect();
 
     if inner_pairs.is_empty() {
-        return Err(ParseError::BuildError(format!("Empty binary expression")));
+        return Err(ParseError::BuildError(
+            "Empty binary expression".to_string(),
+        ));
     }
 
     // Get the first operand
@@ -350,9 +352,9 @@ fn build_binary_expr(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
         // Get the right operand
         i += 1;
         if i >= inner_pairs.len() {
-            return Err(ParseError::BuildError(format!(
-                "Missing right operand after operator"
-            )));
+            return Err(ParseError::BuildError(
+                "Missing right operand after operator".to_string(),
+            ));
         }
 
         let right = build_expression(inner_pairs[i].clone())?;

@@ -22,12 +22,7 @@ use super::vm::{Step, VM};
 /// This is the top-level driver that repeatedly calls step() until execution finishes.
 /// After completion, inspect `vm.control` for the final state and `vm.outbox` for side effects.
 pub fn run_until_done(vm: &mut VM) {
-    loop {
-        match step(vm) {
-            Step::Continue => continue,
-            Step::Done => break,
-        }
-    }
+    while let Step::Continue = step(vm) {}
 }
 
 /// Execute one step of the VM
@@ -159,7 +154,10 @@ fn unwind(vm: &mut VM) -> Step {
             // Walk the frame stack from top to bottom looking for Try frames
             while let Some(frame) = vm.frames.last() {
                 match &frame.kind {
-                    super::types::FrameKind::Try { phase, catch_var } => {
+                    super::types::FrameKind::Try {
+                        phase: _,
+                        catch_var,
+                    } => {
                         // Found a try/catch handler!
                         // Bind the error to the catch variable
                         vm.env.insert(catch_var.clone(), error.clone());

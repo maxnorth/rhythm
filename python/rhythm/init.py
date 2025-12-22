@@ -2,8 +2,8 @@
 Initialization for Rhythm workflows
 """
 
-from typing import List, Optional
 from pathlib import Path
+from typing import List, Optional
 
 from rhythm.core import RhythmCore
 
@@ -46,11 +46,13 @@ def init(
             for flow_file in path.rglob("*.flow"):
                 workflow_name = flow_file.stem  # filename without extension
                 workflow_source = flow_file.read_text()
-                workflows.append({
-                    "name": workflow_name,
-                    "source": workflow_source,
-                    "file_path": str(flow_file),
-                })
+                workflows.append(
+                    {
+                        "name": workflow_name,
+                        "source": workflow_source,
+                        "file_path": str(flow_file),
+                    }
+                )
 
         if workflows:
             print(f"Found {len(workflows)} workflow(s)")
