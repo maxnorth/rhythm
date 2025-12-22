@@ -55,7 +55,7 @@ jobs:
           RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
 
       - name: Run tests
-        run: cd core && cargo test --release
+        run: cd core && cargo test --release -- --test-threads=1
         env:
           RHYTHM_DATABASE_URL: postgresql://rhythm@localhost/rhythm
 
