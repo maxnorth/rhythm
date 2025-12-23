@@ -9,7 +9,7 @@
 
 use serde_json::json;
 
-use super::run_workflow;
+use super::super::run_workflow;
 use crate::db;
 use crate::test_helpers::{
     enqueue_and_claim_execution, get_child_task_count, get_child_tasks, get_task_by_target_name,

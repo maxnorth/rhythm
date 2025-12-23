@@ -6,6 +6,9 @@ pub mod claim;
 pub mod complete;
 pub mod runner;
 
+#[cfg(test)]
+mod tests;
+
 // Re-export public API
 pub use claim::{run_cooperative_worker_loop, DelegatedAction};
 pub use complete::complete_work;

@@ -230,7 +230,3 @@ async fn handle_workflow_result(
 
     Ok(())
 }
-
-#[cfg(test)]
-#[path = "runner_tests.rs"]
-mod tests;
