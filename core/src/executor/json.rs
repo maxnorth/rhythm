@@ -72,15 +72,8 @@ pub fn val_to_json(val: &Val) -> Result<JsonValue> {
                 task_id
             ));
         }
-        Val::Error(error_info) => {
-            return Err(anyhow::anyhow!(
-                "Cannot convert Error value to JSON: {}",
-                error_info.message
-            ));
-        }
-        Val::NativeFunc(_) => {
-            return Err(anyhow::anyhow!("Cannot convert function to JSON"));
-        }
+        Val::Error(error_info) => serde_json::to_value(error_info)?,
+        Val::NativeFunc(_) => JsonValue::Null,
     };
     Ok(json)
 }

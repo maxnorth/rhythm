@@ -118,10 +118,7 @@ pub fn eval_expr(
             None => EvalResult::Throw {
                 error: Val::Error(ErrorInfo::new(
                     errors::INTERNAL_ERROR,
-                    format!(
-                        "Undefined variable '{}' (should be caught by parser/validator)",
-                        name
-                    ),
+                    format!("Undefined variable '{}'", name),
                 )),
             },
         },

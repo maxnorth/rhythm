@@ -648,3 +648,33 @@ async fn test_awaited_task_is_enqueued_to_work_queue() {
         task_name, task_id
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_workflow_runtime_error_sets_failed_status() {
+    // Workflow that throws a runtime error by accessing undefined variable
+    let workflow_source = r#"
+        return undefined_variable
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("runtime_error_workflow", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // Run workflow - should complete (not error) but set status to Failed
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify workflow is in Failed status
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Failed);
+
+    // Verify error output contains expected error info
+    let output = workflow_execution.output.unwrap();
+    assert_eq!(output.get("code").unwrap(), "INTERNAL_ERROR");
+    assert_eq!(
+        output.get("message").unwrap(),
+        "Undefined variable 'undefined_variable'"
+    );
+}

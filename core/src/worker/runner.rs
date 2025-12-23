@@ -26,7 +26,7 @@ pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> 
 
     loop {
         // if suspended and has result, or any other status
-        if !try_resume_suspended_task(pool, &mut vm).await? {
+        if !try_resume_suspended_state(pool, &mut vm).await? {
             break; // Task not ready, suspend and save state
         }
 
@@ -47,7 +47,7 @@ pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> 
 
 /// Checks if VM is suspended on a completed task and resumes if so.
 /// Returns true if execution should continue, false if it should break.
-async fn try_resume_suspended_task(pool: &PgPool, vm: &mut VM) -> Result<bool> {
+async fn try_resume_suspended_state(pool: &PgPool, vm: &mut VM) -> Result<bool> {
     if let Control::Suspend(task_id) = &vm.control {
         if let Some(task_execution) = db::executions::get_execution(pool, task_id).await? {
             match task_execution.status {
@@ -199,8 +199,6 @@ async fn handle_workflow_result(
                 ExecutionOutcome::Failure(error_json),
             )
             .await?;
-
-            return Err(anyhow::anyhow!("Workflow threw error: {:?}", error_val));
         }
         _ => {
             let error_json = serde_json::json!({
