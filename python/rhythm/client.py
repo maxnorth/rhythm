@@ -198,6 +198,74 @@ def list_executions(
     )
 
 
+def schedule_task(
+    name: str,
+    inputs: dict,
+    run_at: str,
+    queue: str = "default",
+) -> str:
+    """Schedule a task for execution at a future time.
+
+    Creates the execution immediately in Pending status, then schedules
+    it to be enqueued at the specified time.
+
+    Args:
+        name: Task function name
+        inputs: Input parameters as a dictionary
+        run_at: ISO 8601 datetime string (e.g., "2024-01-15T10:30:00")
+        queue: Queue name (default: "default")
+
+    Returns:
+        Execution ID
+
+    Meta:
+        section: Client
+    """
+    execution_id = RhythmCore.schedule_task(
+        task_name=name,
+        inputs=inputs,
+        run_at=run_at,
+        queue=queue,
+    )
+
+    logger.info(f"Scheduled task {execution_id}: {name} to run at {run_at}")
+    return execution_id
+
+
+def schedule_workflow(
+    name: str,
+    inputs: dict,
+    run_at: str,
+    queue: str = "default",
+) -> str:
+    """Schedule a workflow for execution at a future time.
+
+    Creates the execution immediately in Pending status, then schedules
+    it to be enqueued at the specified time.
+
+    Args:
+        name: Workflow name
+        inputs: Input parameters as a dictionary
+        run_at: ISO 8601 datetime string (e.g., "2024-01-15T10:30:00")
+        queue: Queue name (default: "default")
+
+    Returns:
+        Execution ID
+
+    Meta:
+        section: Client
+    """
+    execution_id = RhythmCore.schedule_workflow(
+        workflow_name=name,
+        inputs=inputs,
+        run_at=run_at,
+        queue=queue,
+    )
+
+    logger.info(f"Scheduled workflow {execution_id}: {name} to run at {run_at}")
+    return execution_id
+
+
 def wait_for_execution(
     execution_id: str,
     timeout: float = 60.0,

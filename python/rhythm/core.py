@@ -88,6 +88,16 @@ class RhythmCore:
         rust.request_shutdown()
 
     @staticmethod
+    def start_internal_worker() -> None:
+        """
+        Start the internal worker (scheduler queue processor).
+
+        This should be called when starting a worker process.
+        Not intended for public API use.
+        """
+        rust.start_internal_worker()
+
+    @staticmethod
     def complete_execution(execution_id: str, result: Any) -> None:
         """Complete an execution"""
         rust.complete_execution_sync(execution_id=execution_id, result=json.dumps(result))
@@ -128,4 +138,64 @@ class RhythmCore:
         return rust.start_workflow_sync(
             workflow_name=workflow_name,
             inputs_json=inputs_json,
+        )
+
+    @staticmethod
+    def schedule_workflow(
+        workflow_name: str,
+        inputs: dict,
+        run_at: str,
+        queue: str = "default",
+    ) -> str:
+        """
+        Schedule a workflow to start at a future time.
+
+        Creates the execution immediately in Pending status, then schedules
+        it to be enqueued at the specified time.
+
+        Args:
+            workflow_name: Name of the workflow to execute
+            inputs: Input parameters for the workflow
+            run_at: ISO 8601 datetime string (e.g., "2024-01-15T10:30:00")
+            queue: Queue name (defaults to "default")
+
+        Returns:
+            Workflow execution ID
+        """
+        return rust.schedule_execution_sync(
+            exec_type="workflow",
+            target_name=workflow_name,
+            inputs_json=json.dumps(inputs),
+            run_at_iso=run_at,
+            queue=queue,
+        )
+
+    @staticmethod
+    def schedule_task(
+        task_name: str,
+        inputs: dict,
+        run_at: str,
+        queue: str = "default",
+    ) -> str:
+        """
+        Schedule a task to start at a future time.
+
+        Creates the execution immediately in Pending status, then schedules
+        it to be enqueued at the specified time.
+
+        Args:
+            task_name: Name of the task to execute
+            inputs: Input parameters for the task
+            run_at: ISO 8601 datetime string (e.g., "2024-01-15T10:30:00")
+            queue: Queue name (defaults to "default")
+
+        Returns:
+            Task execution ID
+        """
+        return rust.schedule_execution_sync(
+            exec_type="task",
+            target_name=task_name,
+            inputs_json=json.dumps(inputs),
+            run_at_iso=run_at,
+            queue=queue,
         )

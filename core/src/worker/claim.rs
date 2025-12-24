@@ -51,11 +51,12 @@ pub async fn run_cooperative_worker_loop(
     // Try to claim work (one attempt)
     let claimed_ids = db::work_queue::claim_work(pool, queue, 1).await?;
     if let Some(claimed_execution_id) = claimed_ids.into_iter().next() {
-        let execution = db::executions::start_execution_unless_finished(pool, &claimed_execution_id)
-            .await?
-            .ok_or_else(|| {
-                anyhow::anyhow!("Claimed execution not found: {}", claimed_execution_id)
-            })?;
+        let execution =
+            db::executions::start_execution_unless_finished(pool, &claimed_execution_id)
+                .await?
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Claimed execution not found: {}", claimed_execution_id)
+                })?;
 
         let is_finished = matches!(
             execution.status,

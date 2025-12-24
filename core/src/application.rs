@@ -4,12 +4,15 @@
 //! with all configured services. The client module is responsible for
 //! storing the singleton.
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use sqlx::PgPool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio_util::sync::CancellationToken;
 
 use crate::config::Config;
-use crate::services::{ExecutionService, InitializationService, WorkerService, WorkflowService};
+use crate::services::{
+    ExecutionService, InitializationService, SchedulerService, WorkerService, WorkflowService,
+};
 
 /// The Rhythm application instance with all services
 pub struct Application {
@@ -19,7 +22,9 @@ pub struct Application {
     pub execution_service: ExecutionService,
     pub workflow_service: WorkflowService,
     pub worker_service: WorkerService,
+    pub scheduler_service: SchedulerService,
     pub initialization_service: InitializationService,
+    internal_worker_started: AtomicBool,
 }
 
 impl Application {
@@ -30,6 +35,8 @@ impl Application {
 
         let shutdown_token = CancellationToken::new();
 
+        let scheduler_service = SchedulerService::new(pool.clone());
+
         Ok(Self {
             config,
             pool: pool.clone(),
@@ -37,7 +44,9 @@ impl Application {
             execution_service: ExecutionService::new(pool.clone()),
             workflow_service: WorkflowService::new(pool.clone()),
             worker_service: WorkerService::new(pool.clone(), shutdown_token),
+            scheduler_service,
             initialization_service: InitializationService::new(pool),
+            internal_worker_started: AtomicBool::new(false),
         })
     }
 
@@ -54,6 +63,28 @@ impl Application {
     /// Request graceful shutdown
     pub fn request_shutdown(&self) {
         self.shutdown_token.cancel();
+    }
+
+    /// Start the internal worker (scheduler queue processor)
+    ///
+    /// This should be called when starting a worker process. The internal worker
+    /// handles background tasks like processing the scheduled queue.
+    ///
+    /// Returns an error if the internal worker has already been started.
+    pub fn start_internal_worker(&self) -> Result<()> {
+        if self
+            .internal_worker_started
+            .swap(true, Ordering::SeqCst)
+        {
+            bail!("Internal worker has already been started");
+        }
+
+        let internal_worker = crate::internal_worker::InternalWorker::new(
+            self.scheduler_service.clone(),
+            self.shutdown_token.clone(),
+        );
+        tokio::spawn(internal_worker.run());
+        Ok(())
     }
 }
 

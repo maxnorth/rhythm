@@ -19,6 +19,12 @@ pub enum ScheduledParams {
         queue: String,
         priority: i32,
     },
+    /// Start a scheduled execution (workflow or task)
+    ScheduledExecution {
+        execution_id: String,
+        queue: String,
+        priority: i32,
+    },
 }
 
 /// Service for scheduler operations
@@ -55,6 +61,44 @@ impl SchedulerService {
         Ok(())
     }
 
+    /// Schedule a new execution (workflow or task) to start at a future time.
+    ///
+    /// Creates the execution immediately in Pending status, then schedules
+    /// it to be enqueued in the work queue at the specified time.
+    pub async fn schedule_execution(
+        &self,
+        params: crate::types::ScheduleExecutionParams,
+    ) -> Result<String> {
+        let mut tx = self.pool.begin().await?;
+
+        // Create the execution immediately in Pending status
+        let create_params = crate::types::CreateExecutionParams {
+            id: None,
+            exec_type: params.exec_type,
+            target_name: params.target_name,
+            queue: params.queue.clone(),
+            inputs: params.inputs,
+            parent_workflow_id: None,
+        };
+        let execution_id = db::executions::create_execution(&mut tx, create_params).await?;
+
+        // Schedule it to be enqueued later
+        let scheduled_params = ScheduledParams::ScheduledExecution {
+            execution_id: execution_id.clone(),
+            queue: params.queue,
+            priority: 0,
+        };
+
+        let params_json = serde_json::to_value(&scheduled_params)
+            .context("Failed to serialize scheduled params")?;
+
+        db::scheduled_queue::schedule_item(&mut *tx, params.run_at, &params_json).await?;
+
+        tx.commit().await?;
+
+        Ok(execution_id)
+    }
+
     /// Process ready items from the scheduled queue
     ///
     /// Claims items that are ready to run, enqueues them in the work queue,
@@ -82,6 +126,13 @@ impl SchedulerService {
 
             match params {
                 ScheduledParams::WorkflowContinuation {
+                    execution_id,
+                    queue,
+                    priority,
+                } => {
+                    db::work_queue::enqueue_work(&mut *tx, &execution_id, &queue, priority).await?;
+                }
+                ScheduledParams::ScheduledExecution {
                     execution_id,
                     queue,
                     priority,

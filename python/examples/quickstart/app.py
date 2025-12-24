@@ -6,6 +6,8 @@ Run this after starting the worker to see tasks get executed.
 """
 
 import os
+import time
+from datetime import datetime, timedelta, timezone
 
 import rhythm
 
@@ -55,6 +57,19 @@ def main():
     )
     print(f"✓ Notification task queued: {notification_id}")
 
+    # Schedule a task to run 15 seconds from now (using UTC)
+    run_at = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%S")
+    scheduled_id = rhythm.client.schedule_task(
+        name="send_email",
+        inputs={
+            "to": "scheduled@example.com",
+            "subject": "Scheduled Email",
+            "body": "This email was scheduled to run in the future!",
+        },
+        run_at=run_at,
+    )
+    print(f"✓ Scheduled task queued (will run at {run_at}): {scheduled_id}")
+
     # Step 2: Wait for all work to complete
     print("\n=== Waiting for results ===")
 
@@ -72,6 +87,12 @@ def main():
 
     notification_result = rhythm.client.wait_for_execution(notification_id, timeout=10.0)
     print(f"✓ Notification task completed: {notification_result.output}")
+
+    print("\nWaiting for scheduled task (may take a few seconds)...")
+    scheduled_start = time.time()
+    scheduled_result = rhythm.client.wait_for_execution(scheduled_id, timeout=600.0)
+    scheduled_elapsed = time.time() - scheduled_start
+    print(f"✓ Scheduled task completed in {scheduled_elapsed:.1f}s: {scheduled_result.output}")
 
     print("\n✓ All work completed successfully!")
 

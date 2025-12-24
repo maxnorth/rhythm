@@ -3,6 +3,7 @@ pub mod client;
 pub mod config;
 pub mod db;
 pub mod executor;
+pub mod internal_worker;
 pub mod parser;
 pub mod services;
 pub mod types;

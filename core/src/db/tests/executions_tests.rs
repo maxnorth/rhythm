@@ -1,8 +1,6 @@
 //! Tests for execution operations
 
-use crate::db::executions::{
-    complete_execution, fail_execution, start_execution_unless_finished,
-};
+use crate::db::executions::{complete_execution, fail_execution, start_execution_unless_finished};
 use crate::types::{CreateExecutionParams, ExecutionStatus, ExecutionType};
 use sqlx::PgPool;
 

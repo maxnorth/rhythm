@@ -55,6 +55,15 @@ pub struct CreateExecutionParams {
     pub parent_workflow_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScheduleExecutionParams {
+    pub exec_type: ExecutionType,
+    pub target_name: String,
+    pub queue: String,
+    pub inputs: JsonValue,
+    pub run_at: chrono::NaiveDateTime,
+}
+
 /// Filters for querying executions
 #[derive(Default, Debug, Clone)]
 pub struct ExecutionFilters {
