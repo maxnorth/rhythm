@@ -4,6 +4,9 @@ pub mod scheduler_service;
 pub mod worker_service;
 pub mod workflow_service;
 
+#[cfg(test)]
+mod tests;
+
 pub use execution_service::ExecutionService;
 pub use initialization_service::InitializationService;
 pub use scheduler_service::{ScheduledParams, SchedulerService};

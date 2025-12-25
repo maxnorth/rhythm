@@ -35,7 +35,7 @@ impl Drop for TestPool {
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(async {
                     let _ = sqlx::query(
-                        "TRUNCATE TABLE executions, workflow_definitions, workflow_execution_context, work_queue CASCADE"
+                        "TRUNCATE TABLE executions, workflow_definitions, workflow_execution_context, work_queue, scheduled_queue CASCADE"
                     )
                     .execute(&pool)
                     .await;
@@ -56,7 +56,7 @@ pub async fn with_test_db() -> TestPool {
 
     // Clean up any leftover data from previous runs
     sqlx::query(
-        "TRUNCATE TABLE executions, workflow_definitions, workflow_execution_context, work_queue CASCADE"
+        "TRUNCATE TABLE executions, workflow_definitions, workflow_execution_context, work_queue, scheduled_queue CASCADE"
     )
     .execute(&pool)
     .await

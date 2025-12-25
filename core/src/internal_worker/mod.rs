@@ -9,6 +9,9 @@ use tracing::{debug, error};
 
 use crate::services::SchedulerService;
 
+#[cfg(test)]
+mod tests;
+
 const POLL_INTERVAL: Duration = Duration::from_millis(1000);
 const BATCH_SIZE: i32 = 100;
 
