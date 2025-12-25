@@ -184,10 +184,10 @@ fn test_assign_with_await() {
 
     // Should be suspended on the awaited task
     match &vm.control {
-        Control::Suspend(task_id) => {
+        Control::Suspend(crate::executor::Awaitable::Task(task_id)) => {
             assert_eq!(task_id.len(), 36); // UUID format
         }
-        _ => panic!("Expected Control::Suspend, got {:?}", vm.control),
+        _ => panic!("Expected Control::Suspend(Awaitable::Task(_)), got {:?}", vm.control),
     }
 
     // The assignment should NOT have completed yet (variable not in env)

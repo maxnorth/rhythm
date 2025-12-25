@@ -3,26 +3,26 @@
 //! Tests for await expressions, suspension, and resumption
 
 use super::helpers::parse_workflow_and_build_vm;
-use crate::executor::{run_until_done, step, Control, Step, Val, VM};
+use crate::executor::{run_until_done, step, Awaitable, Control, Step, Val, VM};
 use maplit::hashmap;
 use std::collections::HashMap;
 
 #[test]
 fn test_await_suspend_basic() {
-    // Test that awaiting a Task value suspends execution
+    // Test that awaiting a Promise value suspends execution
     let source = r#"
             return await Inputs.task
         "#;
 
     let inputs = hashmap! {
-        "task".to_string() => Val::Task("task-123".to_string()),
+        "task".to_string() => Val::Promise(Awaitable::Task("task-123".to_string())),
     };
 
     let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
 
     // Should suspend on the task
-    assert_eq!(vm.control, Control::Suspend("task-123".to_string()));
+    assert_eq!(vm.control, Control::Suspend(Awaitable::Task("task-123".to_string())));
 
     // Frame should still be on the stack (not popped)
     assert_eq!(vm.frames.len(), 2); // Block + Return frames
@@ -36,14 +36,14 @@ fn test_await_resume() {
         "#;
 
     let inputs = hashmap! {
-        "task".to_string() => Val::Task("task-123".to_string()),
+        "task".to_string() => Val::Promise(Awaitable::Task("task-123".to_string())),
     };
 
     let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
 
     // Should suspend on the task
-    assert_eq!(vm.control, Control::Suspend("task-123".to_string()));
+    assert_eq!(vm.control, Control::Suspend(Awaitable::Task("task-123".to_string())));
 
     // Serialize the suspended VM
     let serialized = serde_json::to_string(&vm).unwrap();
@@ -52,7 +52,7 @@ fn test_await_resume() {
     let mut vm2: VM = serde_json::from_str(&serialized).unwrap();
 
     // Should still be suspended
-    assert_eq!(vm2.control, Control::Suspend("task-123".to_string()));
+    assert_eq!(vm2.control, Control::Suspend(Awaitable::Task("task-123".to_string())));
 
     // Resume with a result
     let result = Val::Str("task result".to_string());
@@ -76,13 +76,13 @@ fn test_await_resume_with_num() {
         "#;
 
     let inputs = hashmap! {
-        "task".to_string() => Val::Task("task-456".to_string()),
+        "task".to_string() => Val::Promise(Awaitable::Task("task-456".to_string())),
     };
 
     let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
 
-    assert_eq!(vm.control, Control::Suspend("task-456".to_string()));
+    assert_eq!(vm.control, Control::Suspend(Awaitable::Task("task-456".to_string())));
 
     // Serialize and deserialize
     let serialized = serde_json::to_string(&vm).unwrap();
@@ -153,14 +153,14 @@ fn test_await_preserves_frames() {
         "#;
 
     let inputs = hashmap! {
-        "task".to_string() => Val::Task("task-789".to_string()),
+        "task".to_string() => Val::Promise(Awaitable::Task("task-789".to_string())),
     };
 
     let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
 
     // Should suspend
-    assert_eq!(vm.control, Control::Suspend("task-789".to_string()));
+    assert_eq!(vm.control, Control::Suspend(Awaitable::Task("task-789".to_string())));
 
     // Should have 4 frames: workflow body Block, outer nested Block, inner nested Block, Return
     assert_eq!(vm.frames.len(), 4);
@@ -191,14 +191,14 @@ fn test_serialization_with_suspend() {
         "#;
 
     let inputs = hashmap! {
-        "task".to_string() => Val::Task("task-serial".to_string()),
+        "task".to_string() => Val::Promise(Awaitable::Task("task-serial".to_string())),
     };
 
     let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
 
     // Should suspend
-    assert_eq!(vm.control, Control::Suspend("task-serial".to_string()));
+    assert_eq!(vm.control, Control::Suspend(Awaitable::Task("task-serial".to_string())));
 
     // Serialize the VM
     let serialized = serde_json::to_string(&vm).unwrap();
@@ -207,7 +207,7 @@ fn test_serialization_with_suspend() {
     let mut vm2: VM = serde_json::from_str(&serialized).unwrap();
 
     // Should still be suspended
-    assert_eq!(vm2.control, Control::Suspend("task-serial".to_string()));
+    assert_eq!(vm2.control, Control::Suspend(Awaitable::Task("task-serial".to_string())));
 
     // Resume and finish
     assert!(vm2.resume(Val::Num(99.0)));
@@ -225,7 +225,7 @@ fn test_step_by_step_suspension() {
         "#;
 
     let inputs = hashmap! {
-        "task".to_string() => Val::Task("task-step".to_string()),
+        "task".to_string() => Val::Promise(Awaitable::Task("task-step".to_string())),
     };
 
     let mut vm = parse_workflow_and_build_vm(source, inputs);
@@ -242,7 +242,7 @@ fn test_step_by_step_suspension() {
     }
 
     // Should have suspended
-    assert_eq!(vm.control, Control::Suspend("task-step".to_string()));
+    assert_eq!(vm.control, Control::Suspend(Awaitable::Task("task-step".to_string())));
     assert!(step_count > 0);
 
     // Serialize and deserialize
@@ -283,16 +283,16 @@ fn test_await_task_run_with_multiline_object() {
     run_until_done(&mut vm);
 
     // Should suspend on the task
-    let Control::Suspend(task_id) = &vm.control else {
-        panic!("Expected Suspend, got {:?}", vm.control);
+    let Control::Suspend(Awaitable::Task(task_id)) = &vm.control else {
+        panic!("Expected Suspend on Task, got {:?}", vm.control);
     };
 
     // Check outbox has the task with correct inputs
-    assert_eq!(vm.outbox.len(), 1);
-    assert_eq!(vm.outbox[0].task_name, "processOrder");
-    assert_eq!(&vm.outbox[0].task_id, task_id);
+    assert_eq!(vm.outbox.tasks.len(), 1);
+    assert_eq!(vm.outbox.tasks[0].task_name, "processOrder");
+    assert_eq!(&vm.outbox.tasks[0].task_id, task_id);
 
-    let inputs = &vm.outbox[0].inputs;
+    let inputs = &vm.outbox.tasks[0].inputs;
     assert_eq!(inputs.get("orderId").unwrap(), &Val::Num(123.0));
     assert_eq!(inputs.get("userId").unwrap(), &Val::Num(456.0));
     assert_eq!(inputs.get("total").unwrap(), &Val::Num(99.99));

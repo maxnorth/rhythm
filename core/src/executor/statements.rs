@@ -68,11 +68,11 @@ pub fn execute_return(vm: &mut VM, phase: ReturnPhase, value: Option<Expr>) -> S
             let val = if let Some(expr) = value {
                 match eval_expr(&expr, &vm.env, &mut vm.resume_value, &mut vm.outbox) {
                     EvalResult::Value { v } => v,
-                    EvalResult::Suspend { task_id } => {
+                    EvalResult::Suspend { awaitable } => {
                         // Expression suspended (await encountered)
                         // Set control to Suspend and stop execution
                         // DO NOT pop the frame - we need to preserve state for resumption
-                        vm.control = Control::Suspend(task_id);
+                        vm.control = Control::Suspend(awaitable);
                         return Step::Done;
                     }
                     EvalResult::Throw { error } => {
@@ -137,11 +137,11 @@ pub fn execute_expr(vm: &mut VM, phase: ExprPhase, expr: Expr) -> Step {
                     vm.frames.pop();
                     Step::Continue
                 }
-                EvalResult::Suspend { task_id } => {
+                EvalResult::Suspend { awaitable } => {
                     // Expression suspended (await encountered)
                     // Set control to Suspend and stop execution
                     // DO NOT pop the frame - we need to preserve state for resumption
-                    vm.control = Control::Suspend(task_id);
+                    vm.control = Control::Suspend(awaitable);
                     Step::Done
                 }
                 EvalResult::Throw { error } => {
@@ -198,14 +198,14 @@ pub fn execute_assign(
             let value_result =
                 match eval_expr(&value, &vm.env, &mut vm.resume_value, &mut vm.outbox) {
                     EvalResult::Value { v } => v,
-                    EvalResult::Suspend { task_id } => {
+                    EvalResult::Suspend { awaitable } => {
                         // Expression suspended (await encountered)
                         // For simple assignment (empty path), this is allowed
                         // For attribute assignment (non-empty path), semantic validator should prevent this
                         if !path_segments.is_empty() {
                             panic!("Internal error: await in attribute assignment value");
                         }
-                        vm.control = Control::Suspend(task_id);
+                        vm.control = Control::Suspend(awaitable);
                         return Step::Done;
                     }
                     EvalResult::Throw { error } => {
@@ -465,11 +465,11 @@ pub fn execute_declare(
             let value = if let Some(expr) = init {
                 match eval_expr(&expr, &vm.env, &mut vm.resume_value, &mut vm.outbox) {
                     EvalResult::Value { v } => v,
-                    EvalResult::Suspend { task_id } => {
+                    EvalResult::Suspend { awaitable } => {
                         // Expression suspended (await encountered)
                         // Set control to Suspend and stop execution
                         // DO NOT pop the frame - we need to preserve state for resumption
-                        vm.control = Control::Suspend(task_id);
+                        vm.control = Control::Suspend(awaitable);
                         return Step::Done;
                     }
                     EvalResult::Throw { error } => {

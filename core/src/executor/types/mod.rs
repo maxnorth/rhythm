@@ -17,4 +17,4 @@ pub use super::stdlib::StdlibFunc;
 pub use ast::{Expr, MemberAccess, Stmt, VarKind};
 pub use control::{Control, Frame, FrameKind};
 pub use phase::*;
-pub use values::Val;
+pub use values::{Awaitable, Val};

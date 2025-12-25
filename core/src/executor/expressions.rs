@@ -6,7 +6,7 @@
 use super::errors;
 use super::outbox::Outbox;
 use super::types::ast::BinaryOp;
-use super::types::{ErrorInfo, Expr, Val};
+use super::types::{Awaitable, ErrorInfo, Expr, Val};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -22,7 +22,7 @@ pub enum EvalResult {
     /// Expression evaluated to a value
     Value { v: Val },
     /// Expression requires suspension (await encountered)
-    Suspend { task_id: String },
+    Suspend { awaitable: Awaitable },
     /// Expression evaluation failed (throw)
     Throw { error: Val },
 }
@@ -268,12 +268,12 @@ pub fn eval_expr(
                 EvalResult::Value { v } => {
                     // Inner expression evaluated to a value
                     match v {
-                        Val::Task(task_id) => {
-                            // This is a Task value - signal suspension
-                            EvalResult::Suspend { task_id }
+                        Val::Promise(awaitable) => {
+                            // This is a Promise value - signal suspension
+                            EvalResult::Suspend { awaitable }
                         }
                         _ => {
-                            // Like JavaScript, awaiting a non-task value just returns that value
+                            // Like JavaScript, awaiting a non-promise value just returns that value
                             EvalResult::Value { v }
                         }
                     }

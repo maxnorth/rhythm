@@ -5,7 +5,7 @@ use super::phase::{
     AssignPhase, BlockPhase, BreakPhase, ContinuePhase, DeclarePhase, ExprPhase, IfPhase,
     ReturnPhase, TryPhase, WhilePhase,
 };
-use super::values::Val;
+use super::values::{Awaitable, Val};
 use serde::{Deserialize, Serialize};
 
 /* ===================== Control Flow ===================== */
@@ -23,7 +23,7 @@ pub enum Control {
     Continue(Option<String>), // Optional loop label
     Return(Val),
     Throw(Val),
-    Suspend(String), // Task ID to suspend on
+    Suspend(Awaitable), // What we're waiting on (task or timer)
 }
 
 /* ===================== Frames ===================== */

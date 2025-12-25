@@ -455,13 +455,13 @@ fn test_expression_without_await() {
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
-    // Should return a Task value (not suspend)
-    // Task ID is a UUID, so we can't predict it - just verify it's a Task
+    // Should return a Promise(Task) value (not suspend)
+    // Task ID is a UUID, so we can't predict it - just verify it's a Promise(Task)
     match vm.control {
-        Control::Return(Val::Task(_task_id)) => {
-            // Success - we got a Task value
+        Control::Return(Val::Promise(crate::executor::Awaitable::Task(_task_id))) => {
+            // Success - we got a Promise(Task) value
         }
-        _ => panic!("Expected Return with Task value, got {:?}", vm.control),
+        _ => panic!("Expected Return with Promise(Task) value, got {:?}", vm.control),
     }
 }
 

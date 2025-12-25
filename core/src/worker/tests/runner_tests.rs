@@ -678,3 +678,282 @@ async fn test_workflow_runtime_error_sets_failed_status() {
         "Undefined variable 'undefined_variable'"
     );
 }
+
+/* ===================== Timer Integration Tests ===================== */
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_workflow_suspends_on_timer() {
+    // Workflow that awaits a timer
+    let workflow_source = r#"
+        await Time.sleep(60000)
+        return "timer_done"
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("timer_workflow", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // Run workflow - should suspend on timer
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify workflow suspended
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Suspended);
+
+    // Verify workflow execution context exists (timer state saved)
+    let context = db::workflow_execution_context::get_context(&pool, &workflow_id)
+        .await
+        .unwrap();
+    assert!(context.is_some());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_timer_schedules_to_scheduled_queue() {
+    // Workflow that awaits a timer
+    let workflow_source = r#"
+        await Time.sleep(5000)
+        return "done"
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("timer_schedule_workflow", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+    let queue = execution.queue.clone();
+
+    let before = chrono::Utc::now();
+
+    // Run workflow - should suspend and schedule timer
+    run_workflow(&pool, execution).await.unwrap();
+
+    let after = chrono::Utc::now();
+
+    // Verify timer was scheduled in scheduled_queue with correct params
+    let scheduled: (chrono::NaiveDateTime, serde_json::Value) = sqlx::query_as(
+        "SELECT run_at, params FROM scheduled_queue WHERE params->>'execution_id' = $1",
+    )
+    .bind(&workflow_id)
+    .fetch_one(pool.as_ref())
+    .await
+    .unwrap();
+
+    let (run_at, params) = scheduled;
+
+    // Verify run_at is approximately 5 seconds in the future
+    let expected_min = (before + chrono::Duration::milliseconds(5000)).naive_utc();
+    let expected_max = (after + chrono::Duration::milliseconds(5000)).naive_utc();
+    assert!(
+        run_at >= expected_min && run_at <= expected_max,
+        "run_at {:?} should be between {:?} and {:?}",
+        run_at,
+        expected_min,
+        expected_max
+    );
+
+    // Verify params contain correct execution_id, queue, and priority
+    assert_eq!(params.get("execution_id").unwrap(), &workflow_id);
+    assert_eq!(params.get("queue").unwrap(), &queue);
+    assert_eq!(params.get("priority").unwrap(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_timer_resumes_when_ready() {
+    // Workflow that awaits a very short timer (0ms - fires immediately)
+    let workflow_source = r#"
+        await Time.sleep(0)
+        return "timer_fired"
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("immediate_timer_workflow", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // First run - suspends on timer
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify suspended
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Suspended);
+
+    // Re-enqueue and run again - timer should be ready (fire_at <= now)
+    enqueue_and_claim_execution(&pool, &workflow_id, "default")
+        .await
+        .unwrap();
+
+    let execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .expect("Execution should exist");
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify workflow completed
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
+    assert_eq!(workflow_execution.output, Some(json!("timer_fired")));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_timer_stays_suspended_when_not_ready() {
+    // Workflow that awaits a long timer (1 hour)
+    let workflow_source = r#"
+        await Time.sleep(3600000)
+        return "timer_fired"
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("long_timer_workflow", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // First run - suspends on timer
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify suspended
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Suspended);
+
+    // Re-enqueue and run again - timer should NOT be ready (fire_at > now)
+    enqueue_and_claim_execution(&pool, &workflow_id, "default")
+        .await
+        .unwrap();
+
+    let execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .expect("Execution should exist");
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify workflow is STILL suspended (timer not fired yet)
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Suspended);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_task_then_timer_workflow() {
+    // Workflow that awaits a task, then a timer
+    let workflow_source = r#"
+        task_result = await Task.run("process", {value: 42})
+        await Time.sleep(0)
+        return task_result * 2
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("task_then_timer_workflow", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // First run - suspends on task
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify suspended on task
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Suspended);
+
+    // Complete the task
+    let tasks = get_child_tasks(&pool, &workflow_id).await.unwrap();
+    assert_eq!(tasks.len(), 1);
+    db::executions::complete_execution(pool.as_ref(), &tasks[0].0, json!(100))
+        .await
+        .unwrap();
+
+    // Second run - should suspend on timer
+    enqueue_and_claim_execution(&pool, &workflow_id, "default")
+        .await
+        .unwrap();
+
+    let execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .expect("Execution should exist");
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Still suspended (on timer now)
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Suspended);
+
+    // Third run - timer should be ready (0ms timer)
+    enqueue_and_claim_execution(&pool, &workflow_id, "default")
+        .await
+        .unwrap();
+
+    let execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .expect("Execution should exist");
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify workflow completed
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
+    assert_eq!(workflow_execution.output, Some(json!(200.0)));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_multiple_sequential_timers() {
+    // Workflow with multiple sequential timers (all 0ms for immediate firing)
+    let workflow_source = r#"
+        await Time.sleep(0)
+        await Time.sleep(0)
+        await Time.sleep(0)
+        return "all_timers_done"
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("multi_timer_workflow", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // Run through all 3 timers
+    for i in 0..3 {
+        if i > 0 {
+            enqueue_and_claim_execution(&pool, &workflow_id, "default")
+                .await
+                .unwrap();
+        }
+
+        let execution = db::executions::get_execution(&pool, &workflow_id)
+            .await
+            .unwrap()
+            .expect("Execution should exist");
+        run_workflow(&pool, execution).await.unwrap();
+    }
+
+    // Fourth run - should complete
+    enqueue_and_claim_execution(&pool, &workflow_id, "default")
+        .await
+        .unwrap();
+
+    let execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .expect("Execution should exist");
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify workflow completed
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
+    assert_eq!(workflow_execution.output, Some(json!("all_timers_done")));
+}

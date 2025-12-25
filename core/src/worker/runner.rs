@@ -1,19 +1,24 @@
 //! V2 Workflow Runner
 
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use serde_json::Value as JsonValue;
 use sqlx::PgPool;
 
 use super::complete::finish_work;
 use crate::db;
 use crate::executor::{
-    json_to_val, json_to_val_map, run_until_done, val_map_to_json, val_to_json, Control, VM,
+    json_to_val, json_to_val_map, run_until_done, val_map_to_json, val_to_json, Awaitable, Control,
+    VM,
 };
 use crate::parser::parse_workflow;
 use crate::types::{CreateExecutionParams, ExecutionOutcome, ExecutionType};
 
 pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> Result<()> {
     let maybe_context = db::workflow_execution_context::get_context(pool, &execution.id).await?;
+
+    // Fetch DB time eagerly for timer resolution checks
+    let db_now = db::get_db_time(pool).await?;
 
     let (mut vm, workflow_def_id) = if let Some(context) = maybe_context {
         (
@@ -26,8 +31,8 @@ pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> 
 
     loop {
         // if suspended and has result, or any other status
-        if !try_resume_suspended_state(pool, &mut vm).await? {
-            break; // Task not ready, suspend and save state
+        if !try_resume_suspended_state(pool, &mut vm, db_now).await? {
+            break; // Awaitable not ready, suspend and save state
         }
 
         run_until_done(&mut vm);
@@ -39,43 +44,64 @@ pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> 
 
     let mut tx = pool.begin().await?;
     create_child_tasks(&mut tx, &vm.outbox, &execution.id, &execution.queue).await?;
+    schedule_timers(&mut tx, &vm.outbox, &execution.id, &execution.queue).await?;
     handle_workflow_result(&mut tx, &vm, &execution.id, workflow_def_id).await?;
     tx.commit().await?;
 
     Ok(())
 }
 
-/// Checks if VM is suspended on a completed task and resumes if so.
+/// Checks if VM is suspended on a completed awaitable and resumes if so.
 /// Returns true if execution should continue, false if it should break.
-async fn try_resume_suspended_state(pool: &PgPool, vm: &mut VM) -> Result<bool> {
-    if let Control::Suspend(task_id) = &vm.control {
-        if let Some(task_execution) = db::executions::get_execution(pool, task_id).await? {
-            match task_execution.status {
-                crate::types::ExecutionStatus::Completed
-                | crate::types::ExecutionStatus::Failed => {
-                    let task_result = task_execution
-                        .output
-                        .map(|json| json_to_val(&json))
-                        .transpose()?
-                        .unwrap_or(crate::executor::Val::Null);
+async fn try_resume_suspended_state(
+    pool: &PgPool,
+    vm: &mut VM,
+    db_now: DateTime<Utc>,
+) -> Result<bool> {
+    if let Control::Suspend(awaitable) = &vm.control {
+        match awaitable {
+            Awaitable::Task(task_id) => {
+                if let Some(task_execution) =
+                    db::executions::get_execution(pool, task_id).await?
+                {
+                    match task_execution.status {
+                        crate::types::ExecutionStatus::Completed
+                        | crate::types::ExecutionStatus::Failed => {
+                            let task_result = task_execution
+                                .output
+                                .map(|json| json_to_val(&json))
+                                .transpose()?
+                                .unwrap_or(crate::executor::Val::Null);
 
-                    vm.resume(task_result);
-                    Ok(true) // Continue execution
-                }
-                _ => {
-                    Ok(false) // Task still pending, break
+                            vm.resume(task_result);
+                            Ok(true) // Continue execution
+                        }
+                        _ => {
+                            Ok(false) // Task still pending, break
+                        }
+                    }
+                } else {
+                    // Task doesn't exist in database - check if it's in the outbox (just created)
+                    if vm.outbox.has_task(task_id) {
+                        Ok(false) // Task in outbox, break to save it
+                    } else {
+                        Err(anyhow::anyhow!(
+                            "Workflow suspended on non-existent task: {}",
+                            task_id
+                        ))
+                    }
                 }
             }
-        } else {
-            // Task doesn't exist in database - check if it's in the outbox (just created)
-            let task_in_outbox = vm.outbox.iter().any(|t| t.task_id == *task_id);
-            if task_in_outbox {
-                Ok(false) // Task in outbox, break to save it
-            } else {
-                Err(anyhow::anyhow!(
-                    "Workflow suspended on non-existent task: {}",
-                    task_id
-                ))
+            Awaitable::Timer { fire_at } => {
+                // Check if timer has fired by comparing fire_at with DB time (to avoid clock skew)
+                if *fire_at <= db_now {
+                    // Timer has fired - resume with null
+                    vm.resume(crate::executor::Val::Null);
+                    Ok(true) // Continue execution
+                } else {
+                    // Timer not yet ready
+                    Ok(false)
+                }
             }
         }
     } else {
@@ -113,15 +139,15 @@ async fn initialize_workflow(
 
 async fn create_child_tasks(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    outbox: &[crate::executor::TaskCreation],
+    outbox: &crate::executor::Outbox,
     execution_id: &str,
     queue: &str,
 ) -> Result<()> {
-    if outbox.is_empty() {
+    if outbox.tasks.is_empty() {
         return Ok(());
     }
 
-    for task_creation in outbox {
+    for task_creation in &outbox.tasks {
         let task_inputs = val_map_to_json(&task_creation.inputs)?;
 
         let params = CreateExecutionParams {
@@ -140,6 +166,39 @@ async fn create_child_tasks(
         db::work_queue::enqueue_work(&mut **tx, &task_creation.task_id, queue, 0)
             .await
             .context("Failed to enqueue work")?;
+    }
+
+    Ok(())
+}
+
+async fn schedule_timers(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    outbox: &crate::executor::Outbox,
+    execution_id: &str,
+    queue: &str,
+) -> Result<()> {
+    use crate::services::scheduler_service::ScheduledParams;
+
+    if outbox.timers.is_empty() {
+        return Ok(());
+    }
+
+    for timer in &outbox.timers {
+        let params = ScheduledParams::WorkflowContinuation {
+            execution_id: execution_id.to_string(),
+            queue: queue.to_string(),
+            priority: 0,
+        };
+
+        let params_json =
+            serde_json::to_value(&params).context("Failed to serialize scheduled params")?;
+
+        // Convert DateTime<Utc> to NaiveDateTime for the DB
+        let run_at = timer.fire_at.naive_utc();
+
+        db::scheduled_queue::schedule_item(&mut **tx, run_at, &params_json)
+            .await
+            .context("Failed to schedule timer")?;
     }
 
     Ok(())
@@ -168,7 +227,7 @@ async fn handle_workflow_result(
             )
             .await?;
         }
-        Control::Suspend(_task_id) => {
+        Control::Suspend(_awaitable) => {
             let vm_state = serde_json::to_value(vm).context("Failed to serialize VM state")?;
 
             // Upsert workflow execution context before suspending

@@ -4,6 +4,7 @@
 
 pub mod math;
 pub mod task;
+pub mod time;
 
 use super::expressions::EvalResult;
 use super::outbox::Outbox;
@@ -25,6 +26,8 @@ pub enum StdlibFunc {
     MathRound,
     // Task functions
     TaskRun,
+    // Time functions
+    TimeSleep,
     // Arithmetic operators
     Add,
     Sub,
@@ -58,6 +61,8 @@ pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val], outbox: &mut Outbox) ->
         StdlibFunc::MathRound => math::round(args),
         // Task functions have side effects - outbox required
         StdlibFunc::TaskRun => task::run(args, outbox),
+        // Time functions have side effects - outbox required
+        StdlibFunc::TimeSleep => time::sleep(args, outbox),
         // Arithmetic operators
         StdlibFunc::Add => add(args),
         StdlibFunc::Sub => sub(args),
@@ -325,7 +330,12 @@ pub fn to_string(val: &Val) -> String {
         Val::Str(s) => s.clone(),
         Val::List(_) => "[object Array]".to_string(),
         Val::Obj(_) => "[object Object]".to_string(),
-        Val::Task(id) => format!("[Task {}]", id),
+        Val::Promise(awaitable) => match awaitable {
+            super::types::Awaitable::Task(id) => format!("[Promise Task({})]", id),
+            super::types::Awaitable::Timer { fire_at } => {
+                format!("[Promise Timer({})]", fire_at)
+            }
+        },
         Val::Error(err) => format!("[Error: {}]", err.message),
         Val::NativeFunc(_) => "[Function]".to_string(),
     }
@@ -349,9 +359,14 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     let mut task_obj = std::collections::HashMap::new();
     task_obj.insert("run".to_string(), Val::NativeFunc(StdlibFunc::TaskRun));
 
+    // Create Time object with methods
+    let mut time_obj = std::collections::HashMap::new();
+    time_obj.insert("sleep".to_string(), Val::NativeFunc(StdlibFunc::TimeSleep));
+
     // Add stdlib objects to environment
     env.insert("Math".to_string(), Val::Obj(math_obj));
     env.insert("Task".to_string(), Val::Obj(task_obj));
+    env.insert("Time".to_string(), Val::Obj(time_obj));
 
     // Add global operator functions
     env.insert("add".to_string(), Val::NativeFunc(StdlibFunc::Add));
