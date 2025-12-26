@@ -11,6 +11,7 @@ use std::collections::HashMap;
 /// This is the identity of what a workflow is waiting on:
 /// - Task: waiting for a child task to complete (identified by task_id for DB lookup)
 /// - Timer: waiting for a specific time to pass (identified by fire_at timestamp)
+/// - All/Any/Race: composite awaitables that combine multiple awaitables
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "t", content = "v")]
 pub enum Awaitable {
@@ -18,6 +19,24 @@ pub enum Awaitable {
     Task(String),
     /// A timer that fires at a specific time
     Timer { fire_at: DateTime<Utc> },
+    /// Wait for all awaitables to complete. Fail-fast on first error.
+    /// Returns array (if is_object=false) or object (if is_object=true) of values.
+    All {
+        items: Vec<(String, Awaitable)>,
+        is_object: bool,
+    },
+    /// Wait for first awaitable to succeed. Fail only if all fail.
+    /// Returns { key, value } where key is the winning item's key.
+    Any {
+        items: Vec<(String, Awaitable)>,
+        is_object: bool,
+    },
+    /// Wait for first awaitable to settle (success or error).
+    /// Returns { key, value } where key is the winning item's key.
+    Race {
+        items: Vec<(String, Awaitable)>,
+        is_object: bool,
+    },
 }
 
 /// Runtime value type

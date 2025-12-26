@@ -5,12 +5,10 @@ use chrono::{DateTime, Utc};
 use serde_json::Value as JsonValue;
 use sqlx::PgPool;
 
+use super::awaitable::{resolve_awaitable, AwaitableStatus};
 use super::complete::finish_work;
 use crate::db;
-use crate::executor::{
-    json_to_val, json_to_val_map, run_until_done, val_map_to_json, val_to_json, Awaitable, Control,
-    VM,
-};
+use crate::executor::{json_to_val_map, run_until_done, val_map_to_json, val_to_json, Control, VM};
 use crate::parser::parse_workflow;
 use crate::types::{CreateExecutionParams, ExecutionOutcome, ExecutionType};
 
@@ -59,47 +57,14 @@ async fn try_resume_suspended_state(
     db_now: DateTime<Utc>,
 ) -> Result<bool> {
     if let Control::Suspend(awaitable) = &vm.control {
-        match awaitable {
-            Awaitable::Task(task_id) => {
-                if let Some(task_execution) = db::executions::get_execution(pool, task_id).await? {
-                    match task_execution.status {
-                        crate::types::ExecutionStatus::Completed
-                        | crate::types::ExecutionStatus::Failed => {
-                            let task_result = task_execution
-                                .output
-                                .map(|json| json_to_val(&json))
-                                .transpose()?
-                                .unwrap_or(crate::executor::Val::Null);
+        // Clone to avoid borrow issues
+        let awaitable = awaitable.clone();
 
-                            vm.resume(task_result);
-                            Ok(true) // Continue execution
-                        }
-                        _ => {
-                            Ok(false) // Task still pending, break
-                        }
-                    }
-                } else {
-                    // Task doesn't exist in database - check if it's in the outbox (just created)
-                    if vm.outbox.has_task(task_id) {
-                        Ok(false) // Task in outbox, break to save it
-                    } else {
-                        Err(anyhow::anyhow!(
-                            "Workflow suspended on non-existent task: {}",
-                            task_id
-                        ))
-                    }
-                }
-            }
-            Awaitable::Timer { fire_at } => {
-                // Check if timer has fired by comparing fire_at with DB time (to avoid clock skew)
-                if *fire_at <= db_now {
-                    // Timer has fired - resume with null
-                    vm.resume(crate::executor::Val::Null);
-                    Ok(true) // Continue execution
-                } else {
-                    // Timer not yet ready
-                    Ok(false)
-                }
+        match resolve_awaitable(pool, &awaitable, db_now).await? {
+            AwaitableStatus::Pending => Ok(false),
+            AwaitableStatus::Success(val) | AwaitableStatus::Error(val) => {
+                vm.resume(val);
+                Ok(true)
             }
         }
     } else {

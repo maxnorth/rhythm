@@ -5,6 +5,7 @@
 mod assign_tests;
 mod await_tests;
 mod basic_tests;
+mod composite_tests;
 mod declare_tests;
 mod error_tests;
 pub mod helpers; // Public helper utilities for tests
