@@ -1,8 +1,11 @@
-.PHONY: test-core help migrate python-docs workflow-docs
+.PHONY: core-test core-fmt core-fmt-check core-lint help migrate python-docs workflow-docs
 
 help:
 	@echo "Available targets:"
-	@echo "  test-core      Run tests for the Rust core library"
+	@echo "  core-test      Run tests for the Rust core library"
+	@echo "  core-fmt       Fix Rust formatting"
+	@echo "  core-fmt-check Check Rust formatting (for CI)"
+	@echo "  core-lint      Run clippy linter"
 	@echo "  migrate        Run database migrations"
 	@echo "  python-docs    Generate Python API documentation (YAML + Markdown)"
 	@echo "  workflow-docs  Generate Workflow API documentation (Markdown)"
@@ -19,6 +22,15 @@ migrate:
 
 core-test:
 	cd core && cargo test -- --test-threads=1
+
+core-fmt:
+	cd core && cargo fmt
+
+core-fmt-check:
+	cd core && cargo fmt --check
+
+core-lint:
+	cd core && cargo clippy --all-targets --all-features -- -D warnings
 
 python-docs:
 	python/.venv/bin/python python/scripts/generate_api_ref.py

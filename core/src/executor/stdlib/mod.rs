@@ -26,6 +26,10 @@ pub enum StdlibFunc {
     MathRound,
     // Task functions
     TaskRun,
+    // Promise functions
+    PromiseAll,
+    PromiseAny,
+    PromiseRace,
     // Time functions
     TimeDelay,
     // Arithmetic operators
@@ -61,6 +65,10 @@ pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val], outbox: &mut Outbox) ->
         StdlibFunc::MathRound => math::round(args),
         // Task functions have side effects - outbox required
         StdlibFunc::TaskRun => task::run(args, outbox),
+        // Promise functions (pure - no outbox needed)
+        StdlibFunc::PromiseAll => task::all(args),
+        StdlibFunc::PromiseAny => task::any(args),
+        StdlibFunc::PromiseRace => task::race(args),
         // Time functions have side effects - outbox required
         StdlibFunc::TimeDelay => time::delay(args, outbox),
         // Arithmetic operators
@@ -335,6 +343,15 @@ pub fn to_string(val: &Val) -> String {
             super::types::Awaitable::Timer { fire_at } => {
                 format!("[Promise Timer({})]", fire_at)
             }
+            super::types::Awaitable::All { items, .. } => {
+                format!("[Promise All({})]", items.len())
+            }
+            super::types::Awaitable::Any { items, .. } => {
+                format!("[Promise Any({})]", items.len())
+            }
+            super::types::Awaitable::Race { items, .. } => {
+                format!("[Promise Race({})]", items.len())
+            }
         },
         Val::Error(err) => format!("[Error: {}]", err.message),
         Val::NativeFunc(_) => "[Function]".to_string(),
@@ -359,6 +376,12 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     let mut task_obj = std::collections::HashMap::new();
     task_obj.insert("run".to_string(), Val::NativeFunc(StdlibFunc::TaskRun));
 
+    // Create Promise object with methods
+    let mut promise_obj = std::collections::HashMap::new();
+    promise_obj.insert("all".to_string(), Val::NativeFunc(StdlibFunc::PromiseAll));
+    promise_obj.insert("any".to_string(), Val::NativeFunc(StdlibFunc::PromiseAny));
+    promise_obj.insert("race".to_string(), Val::NativeFunc(StdlibFunc::PromiseRace));
+
     // Create Time object with methods
     let mut time_obj = std::collections::HashMap::new();
     time_obj.insert("delay".to_string(), Val::NativeFunc(StdlibFunc::TimeDelay));
@@ -366,6 +389,7 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     // Add stdlib objects to environment
     env.insert("Math".to_string(), Val::Obj(math_obj));
     env.insert("Task".to_string(), Val::Obj(task_obj));
+    env.insert("Promise".to_string(), Val::Obj(promise_obj));
     env.insert("Time".to_string(), Val::Obj(time_obj));
 
     // Add global operator functions

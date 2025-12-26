@@ -2,6 +2,7 @@
 //!
 //! This module provides the worker loop logic for claiming and executing work.
 
+pub mod awaitable;
 pub mod claim;
 pub mod complete;
 pub mod runner;
