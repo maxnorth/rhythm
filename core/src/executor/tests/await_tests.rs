@@ -22,7 +22,10 @@ fn test_await_suspend_basic() {
     run_until_done(&mut vm);
 
     // Should suspend on the task
-    assert_eq!(vm.control, Control::Suspend(Awaitable::Task("task-123".to_string())));
+    assert_eq!(
+        vm.control,
+        Control::Suspend(Awaitable::Task("task-123".to_string()))
+    );
 
     // Frame should still be on the stack (not popped)
     assert_eq!(vm.frames.len(), 2); // Block + Return frames
@@ -43,7 +46,10 @@ fn test_await_resume() {
     run_until_done(&mut vm);
 
     // Should suspend on the task
-    assert_eq!(vm.control, Control::Suspend(Awaitable::Task("task-123".to_string())));
+    assert_eq!(
+        vm.control,
+        Control::Suspend(Awaitable::Task("task-123".to_string()))
+    );
 
     // Serialize the suspended VM
     let serialized = serde_json::to_string(&vm).unwrap();
@@ -52,7 +58,10 @@ fn test_await_resume() {
     let mut vm2: VM = serde_json::from_str(&serialized).unwrap();
 
     // Should still be suspended
-    assert_eq!(vm2.control, Control::Suspend(Awaitable::Task("task-123".to_string())));
+    assert_eq!(
+        vm2.control,
+        Control::Suspend(Awaitable::Task("task-123".to_string()))
+    );
 
     // Resume with a result
     let result = Val::Str("task result".to_string());
@@ -82,7 +91,10 @@ fn test_await_resume_with_num() {
     let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
 
-    assert_eq!(vm.control, Control::Suspend(Awaitable::Task("task-456".to_string())));
+    assert_eq!(
+        vm.control,
+        Control::Suspend(Awaitable::Task("task-456".to_string()))
+    );
 
     // Serialize and deserialize
     let serialized = serde_json::to_string(&vm).unwrap();
@@ -160,7 +172,10 @@ fn test_await_preserves_frames() {
     run_until_done(&mut vm);
 
     // Should suspend
-    assert_eq!(vm.control, Control::Suspend(Awaitable::Task("task-789".to_string())));
+    assert_eq!(
+        vm.control,
+        Control::Suspend(Awaitable::Task("task-789".to_string()))
+    );
 
     // Should have 4 frames: workflow body Block, outer nested Block, inner nested Block, Return
     assert_eq!(vm.frames.len(), 4);
@@ -198,7 +213,10 @@ fn test_serialization_with_suspend() {
     run_until_done(&mut vm);
 
     // Should suspend
-    assert_eq!(vm.control, Control::Suspend(Awaitable::Task("task-serial".to_string())));
+    assert_eq!(
+        vm.control,
+        Control::Suspend(Awaitable::Task("task-serial".to_string()))
+    );
 
     // Serialize the VM
     let serialized = serde_json::to_string(&vm).unwrap();
@@ -207,7 +225,10 @@ fn test_serialization_with_suspend() {
     let mut vm2: VM = serde_json::from_str(&serialized).unwrap();
 
     // Should still be suspended
-    assert_eq!(vm2.control, Control::Suspend(Awaitable::Task("task-serial".to_string())));
+    assert_eq!(
+        vm2.control,
+        Control::Suspend(Awaitable::Task("task-serial".to_string()))
+    );
 
     // Resume and finish
     assert!(vm2.resume(Val::Num(99.0)));
@@ -232,17 +253,15 @@ fn test_step_by_step_suspension() {
 
     // Step through execution manually
     let mut step_count = 0;
-    loop {
-        match step(&mut vm) {
-            Step::Continue => {
-                step_count += 1;
-            }
-            Step::Done => break,
-        }
+    while let Step::Continue = step(&mut vm) {
+        step_count += 1;
     }
 
     // Should have suspended
-    assert_eq!(vm.control, Control::Suspend(Awaitable::Task("task-step".to_string())));
+    assert_eq!(
+        vm.control,
+        Control::Suspend(Awaitable::Task("task-step".to_string()))
+    );
     assert!(step_count > 0);
 
     // Serialize and deserialize
@@ -253,12 +272,7 @@ fn test_step_by_step_suspension() {
     assert!(vm2.resume(Val::Str("stepped".to_string())));
 
     // Step through completion
-    loop {
-        match step(&mut vm2) {
-            Step::Continue => {}
-            Step::Done => break,
-        }
-    }
+    while let Step::Continue = step(&mut vm2) {}
 
     assert_eq!(
         vm2.control,

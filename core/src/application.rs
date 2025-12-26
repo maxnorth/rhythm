@@ -72,10 +72,7 @@ impl Application {
     ///
     /// Returns an error if the internal worker has already been started.
     pub fn start_internal_worker(&self) -> Result<()> {
-        if self
-            .internal_worker_started
-            .swap(true, Ordering::SeqCst)
-        {
+        if self.internal_worker_started.swap(true, Ordering::SeqCst) {
             bail!("Internal worker has already been started");
         }
 

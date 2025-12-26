@@ -191,7 +191,10 @@ fn test_array_in_task_run() {
     run_until_done(&mut vm);
 
     // Should return a Promise(Task) value
-    assert!(matches!(vm.control, Control::Return(Val::Promise(crate::executor::Awaitable::Task(_)))));
+    assert!(matches!(
+        vm.control,
+        Control::Return(Val::Promise(crate::executor::Awaitable::Task(_)))
+    ));
 
     // Check outbox has the task with array in inputs
     assert_eq!(vm.outbox.tasks.len(), 1);
@@ -260,7 +263,10 @@ fn test_task_run_with_multiline_object() {
     run_until_done(&mut vm);
 
     // Should return a Promise(Task) value
-    assert!(matches!(vm.control, Control::Return(Val::Promise(crate::executor::Awaitable::Task(_)))));
+    assert!(matches!(
+        vm.control,
+        Control::Return(Val::Promise(crate::executor::Awaitable::Task(_)))
+    ));
 
     // Check outbox has the task with correct inputs
     assert_eq!(vm.outbox.tasks.len(), 1);

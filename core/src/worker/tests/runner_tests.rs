@@ -334,7 +334,7 @@ async fn test_workflow_resumes_with_failed_task() {
     // Fail the task with error output
     db::executions::fail_execution(
         pool.as_ref(),
-        &task_id,
+        task_id,
         json!({"error": "Task failed!", "code": "TASK_ERROR"}),
     )
     .await
@@ -689,8 +689,7 @@ async fn test_workflow_suspends_on_timer() {
         return "timer_done"
     "#;
 
-    let (pool, execution) =
-        setup_workflow_test("timer_workflow", workflow_source, json!({})).await;
+    let (pool, execution) = setup_workflow_test("timer_workflow", workflow_source, json!({})).await;
     let workflow_id = execution.id.clone();
 
     // Run workflow - should suspend on timer
@@ -946,18 +945,23 @@ async fn test_fire_and_forget_timer() {
         .unwrap()
         .unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
-    assert_eq!(workflow_execution.output, Some(json!("done_without_waiting")));
+    assert_eq!(
+        workflow_execution.output,
+        Some(json!("done_without_waiting"))
+    );
 
     // Timer should still be scheduled (fire-and-forget creates the schedule)
-    let scheduled_count: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM scheduled_queue WHERE params->>'execution_id' = $1",
-    )
-    .bind(&workflow_id)
-    .fetch_one(pool.as_ref())
-    .await
-    .unwrap();
+    let scheduled_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM scheduled_queue WHERE params->>'execution_id' = $1")
+            .bind(&workflow_id)
+            .fetch_one(pool.as_ref())
+            .await
+            .unwrap();
 
-    assert_eq!(scheduled_count.0, 1, "Fire-and-forget timer should be scheduled");
+    assert_eq!(
+        scheduled_count.0, 1,
+        "Fire-and-forget timer should be scheduled"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -988,14 +992,16 @@ async fn test_timer_captured_then_awaited_after_task() {
     assert_eq!(workflow_execution.status, ExecutionStatus::Suspended);
 
     // Timer should already be scheduled even though we haven't awaited it yet
-    let scheduled_count: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM scheduled_queue WHERE params->>'execution_id' = $1",
-    )
-    .bind(&workflow_id)
-    .fetch_one(pool.as_ref())
-    .await
-    .unwrap();
-    assert_eq!(scheduled_count.0, 1, "Timer should be scheduled before being awaited");
+    let scheduled_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM scheduled_queue WHERE params->>'execution_id' = $1")
+            .bind(&workflow_id)
+            .fetch_one(pool.as_ref())
+            .await
+            .unwrap();
+    assert_eq!(
+        scheduled_count.0, 1,
+        "Timer should be scheduled before being awaited"
+    );
 
     // Complete the task
     let tasks = get_child_tasks(&pool, &workflow_id).await.unwrap();
@@ -1046,13 +1052,12 @@ async fn test_parallel_timer_and_task() {
     run_workflow(&pool, execution).await.unwrap();
 
     // Both timer and task should be created
-    let scheduled_count: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM scheduled_queue WHERE params->>'execution_id' = $1",
-    )
-    .bind(&workflow_id)
-    .fetch_one(pool.as_ref())
-    .await
-    .unwrap();
+    let scheduled_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM scheduled_queue WHERE params->>'execution_id' = $1")
+            .bind(&workflow_id)
+            .fetch_one(pool.as_ref())
+            .await
+            .unwrap();
     assert_eq!(scheduled_count.0, 1, "Timer should be scheduled");
 
     let tasks = get_child_tasks(&pool, &workflow_id).await.unwrap();

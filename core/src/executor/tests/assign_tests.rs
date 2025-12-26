@@ -1,7 +1,7 @@
 //! Tests for assignment statements
 
 use super::helpers::parse_workflow_and_build_vm;
-use crate::executor::{run_until_done, Control, Stmt, Val, VM};
+use crate::executor::{run_until_done, Control, Val};
 use maplit::hashmap;
 use std::collections::HashMap;
 
@@ -187,7 +187,10 @@ fn test_assign_with_await() {
         Control::Suspend(crate::executor::Awaitable::Task(task_id)) => {
             assert_eq!(task_id.len(), 36); // UUID format
         }
-        _ => panic!("Expected Control::Suspend(Awaitable::Task(_)), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Suspend(Awaitable::Task(_)), got {:?}",
+            vm.control
+        ),
     }
 
     // The assignment should NOT have completed yet (variable not in env)

@@ -461,7 +461,10 @@ fn test_expression_without_await() {
         Control::Return(Val::Promise(crate::executor::Awaitable::Task(_task_id))) => {
             // Success - we got a Promise(Task) value
         }
-        _ => panic!("Expected Return with Promise(Task) value, got {:?}", vm.control),
+        _ => panic!(
+            "Expected Return with Promise(Task) value, got {:?}",
+            vm.control
+        ),
     }
 }
 

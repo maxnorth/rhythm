@@ -88,7 +88,11 @@ fn test_time_delay_large_value() {
             // fire_at should be approximately 1 hour in the future
             let expected = before + Duration::hours(1);
             let diff = (*fire_at - expected).num_seconds().abs();
-            assert!(diff < 2, "fire_at should be ~1 hour from now, diff was {} seconds", diff);
+            assert!(
+                diff < 2,
+                "fire_at should be ~1 hour from now, diff was {} seconds",
+                diff
+            );
         }
         _ => panic!("Expected Timer, got {:?}", vm.control),
     }
@@ -118,7 +122,11 @@ fn test_time_delay_records_timer_in_outbox() {
     // Timer should be ~5 seconds in the future
     let expected = before + Duration::milliseconds(5000);
     let diff = (timer.fire_at - expected).num_milliseconds().abs();
-    assert!(diff < 100, "Timer fire_at should be ~5s in future, diff was {}ms", diff);
+    assert!(
+        diff < 100,
+        "Timer fire_at should be ~5s in future, diff was {}ms",
+        diff
+    );
 }
 
 #[test]
@@ -159,9 +167,16 @@ fn test_await_time_delay_suspends() {
         Control::Suspend(Awaitable::Timer { fire_at }) => {
             let expected = before + Duration::milliseconds(1000);
             let diff = (*fire_at - expected).num_milliseconds().abs();
-            assert!(diff < 100, "fire_at should be ~1s in future, diff was {}ms", diff);
+            assert!(
+                diff < 100,
+                "fire_at should be ~1s in future, diff was {}ms",
+                diff
+            );
         }
-        _ => panic!("Expected Control::Suspend(Awaitable::Timer {{ .. }}), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Suspend(Awaitable::Timer {{ .. }}), got {:?}",
+            vm.control
+        ),
     }
 
     // Frames should be preserved (not popped due to suspension)
@@ -180,7 +195,10 @@ fn test_await_time_delay_resume() {
     run_until_done(&mut vm);
 
     // Should be suspended
-    assert!(matches!(vm.control, Control::Suspend(Awaitable::Timer { .. })));
+    assert!(matches!(
+        vm.control,
+        Control::Suspend(Awaitable::Timer { .. })
+    ));
 
     // Serialize and deserialize (like real workflow resumption)
     let serialized = serde_json::to_string(&vm).unwrap();
@@ -207,14 +225,20 @@ fn test_await_time_delay_in_sequence() {
     run_until_done(&mut vm);
 
     // Should suspend on first timer
-    assert!(matches!(vm.control, Control::Suspend(Awaitable::Timer { .. })));
+    assert!(matches!(
+        vm.control,
+        Control::Suspend(Awaitable::Timer { .. })
+    ));
 
     // Resume first timer
     vm.resume(Val::Null);
     run_until_done(&mut vm);
 
     // Should suspend on second timer
-    assert!(matches!(vm.control, Control::Suspend(Awaitable::Timer { .. })));
+    assert!(matches!(
+        vm.control,
+        Control::Suspend(Awaitable::Timer { .. })
+    ));
 
     // Resume second timer
     vm.resume(Val::Null);
@@ -387,12 +411,18 @@ fn test_await_task_then_timer() {
     run_until_done(&mut vm);
 
     // Should now suspend on timer
-    assert!(matches!(vm.control, Control::Suspend(Awaitable::Timer { .. })));
+    assert!(matches!(
+        vm.control,
+        Control::Suspend(Awaitable::Timer { .. })
+    ));
 
     // Resume timer
     vm.resume(Val::Null);
     run_until_done(&mut vm);
 
     // Should return task result
-    assert_eq!(vm.control, Control::Return(Val::Str("task_done".to_string())));
+    assert_eq!(
+        vm.control,
+        Control::Return(Val::Str("task_done".to_string()))
+    );
 }

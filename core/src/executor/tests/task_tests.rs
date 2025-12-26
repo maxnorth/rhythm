@@ -58,7 +58,10 @@ fn test_task_run_empty_inputs() {
     run_until_done(&mut vm);
 
     // Should return a Promise(Task) value
-    assert!(matches!(vm.control, Control::Return(Val::Promise(Awaitable::Task(_)))));
+    assert!(matches!(
+        vm.control,
+        Control::Return(Val::Promise(Awaitable::Task(_)))
+    ));
 
     // Check outbox
     assert_eq!(vm.outbox.tasks.len(), 1);
@@ -125,7 +128,10 @@ fn test_fire_and_forget_then_await() {
             // Should be suspended on the second task (the awaited one)
             assert_eq!(task_id.len(), 36);
         }
-        _ => panic!("Expected Control::Suspend(Awaitable::Task(_)), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Suspend(Awaitable::Task(_)), got {:?}",
+            vm.control
+        ),
     }
 
     // Outbox should contain BOTH tasks

@@ -61,9 +61,7 @@ async fn try_resume_suspended_state(
     if let Control::Suspend(awaitable) = &vm.control {
         match awaitable {
             Awaitable::Task(task_id) => {
-                if let Some(task_execution) =
-                    db::executions::get_execution(pool, task_id).await?
-                {
+                if let Some(task_execution) = db::executions::get_execution(pool, task_id).await? {
                     match task_execution.status {
                         crate::types::ExecutionStatus::Completed
                         | crate::types::ExecutionStatus::Failed => {

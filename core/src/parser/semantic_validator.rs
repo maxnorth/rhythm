@@ -78,7 +78,6 @@ pub fn validate_workflow(_workflow: &WorkflowDef) -> ValidationResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser;
 
     #[test]
     fn test_validate_workflow_simple() {
