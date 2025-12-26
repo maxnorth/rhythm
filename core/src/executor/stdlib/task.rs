@@ -139,7 +139,9 @@ pub fn all(args: &[Val]) -> EvalResult {
                         v: Val::Obj(HashMap::new()),
                     };
                 } else {
-                    return EvalResult::Value { v: Val::List(vec![]) };
+                    return EvalResult::Value {
+                        v: Val::List(vec![]),
+                    };
                 }
             }
             EvalResult::Value {

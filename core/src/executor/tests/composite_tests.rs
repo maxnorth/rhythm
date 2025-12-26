@@ -29,7 +29,10 @@ fn test_task_all_with_array() {
             assert!(matches!(items[0].1, Awaitable::Task(_)));
             assert!(matches!(items[1].1, Awaitable::Task(_)));
         }
-        _ => panic!("Expected Control::Return(Val::Promise(Awaitable::All)), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Return(Val::Promise(Awaitable::All)), got {:?}",
+            vm.control
+        ),
     }
 }
 
@@ -53,7 +56,10 @@ fn test_task_all_with_object() {
             assert_eq!(items[0].0, "first");
             assert_eq!(items[1].0, "second");
         }
-        _ => panic!("Expected Control::Return(Val::Promise(Awaitable::All)), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Return(Val::Promise(Awaitable::All)), got {:?}",
+            vm.control
+        ),
     }
 }
 
@@ -71,7 +77,10 @@ fn test_task_all_empty_array_returns_immediately() {
         Control::Return(Val::List(list)) => {
             assert!(list.is_empty());
         }
-        _ => panic!("Expected Control::Return(Val::List([])), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Return(Val::List([])), got {:?}",
+            vm.control
+        ),
     }
 }
 
@@ -89,7 +98,10 @@ fn test_task_all_empty_object_returns_immediately() {
         Control::Return(Val::Obj(obj)) => {
             assert!(obj.is_empty());
         }
-        _ => panic!("Expected Control::Return(Val::Obj({{}})), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Return(Val::Obj({{}})), got {:?}",
+            vm.control
+        ),
     }
 }
 
@@ -147,7 +159,10 @@ fn test_task_any_with_array() {
             assert_eq!(items[0].0, "0");
             assert_eq!(items[1].0, "1");
         }
-        _ => panic!("Expected Control::Return(Val::Promise(Awaitable::Any)), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Return(Val::Promise(Awaitable::Any)), got {:?}",
+            vm.control
+        ),
     }
 }
 
@@ -171,7 +186,10 @@ fn test_task_any_with_object() {
             assert_eq!(items[0].0, "alpha");
             assert_eq!(items[1].0, "beta");
         }
-        _ => panic!("Expected Control::Return(Val::Promise(Awaitable::Any)), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Return(Val::Promise(Awaitable::Any)), got {:?}",
+            vm.control
+        ),
     }
 }
 
@@ -212,7 +230,10 @@ fn test_task_race_with_array() {
             assert_eq!(items[0].0, "0");
             assert_eq!(items[1].0, "1");
         }
-        _ => panic!("Expected Control::Return(Val::Promise(Awaitable::Race)), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Return(Val::Promise(Awaitable::Race)), got {:?}",
+            vm.control
+        ),
     }
 }
 
@@ -236,7 +257,10 @@ fn test_task_race_with_object() {
             assert_eq!(items[0].0, "fast");
             assert_eq!(items[1].0, "slow");
         }
-        _ => panic!("Expected Control::Return(Val::Promise(Awaitable::Race)), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Return(Val::Promise(Awaitable::Race)), got {:?}",
+            vm.control
+        ),
     }
 }
 
@@ -276,7 +300,10 @@ fn test_await_task_all_suspends() {
             assert_eq!(items.len(), 2);
             assert!(!*is_object);
         }
-        _ => panic!("Expected Control::Suspend(Awaitable::All), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Suspend(Awaitable::All), got {:?}",
+            vm.control
+        ),
     }
 
     // Outbox should have 2 tasks
@@ -300,7 +327,10 @@ fn test_await_task_any_suspends() {
             assert_eq!(items.len(), 2);
             assert!(!*is_object);
         }
-        _ => panic!("Expected Control::Suspend(Awaitable::Any), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Suspend(Awaitable::Any), got {:?}",
+            vm.control
+        ),
     }
 }
 
@@ -321,7 +351,10 @@ fn test_await_task_race_suspends() {
             assert_eq!(items.len(), 2);
             assert!(!*is_object);
         }
-        _ => panic!("Expected Control::Suspend(Awaitable::Race), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Suspend(Awaitable::Race), got {:?}",
+            vm.control
+        ),
     }
 }
 
@@ -347,7 +380,10 @@ fn test_task_all_with_timers() {
             assert!(matches!(items[0].1, Awaitable::Timer { .. }));
             assert!(matches!(items[1].1, Awaitable::Timer { .. }));
         }
-        _ => panic!("Expected Control::Return(Val::Promise(Awaitable::All)), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Return(Val::Promise(Awaitable::All)), got {:?}",
+            vm.control
+        ),
     }
 }
 
@@ -371,6 +407,9 @@ fn test_task_race_mixed_task_and_timer() {
             assert!(matches!(items[0].1, Awaitable::Task(_)));
             assert!(matches!(items[1].1, Awaitable::Timer { .. }));
         }
-        _ => panic!("Expected Control::Return(Val::Promise(Awaitable::Race)), got {:?}", vm.control),
+        _ => panic!(
+            "Expected Control::Return(Val::Promise(Awaitable::Race)), got {:?}",
+            vm.control
+        ),
     }
 }

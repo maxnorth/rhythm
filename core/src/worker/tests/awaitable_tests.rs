@@ -11,9 +11,7 @@ use serde_json::json;
 
 use super::super::run_workflow;
 use crate::db;
-use crate::test_helpers::{
-    enqueue_and_claim_execution, get_child_tasks, setup_workflow_test,
-};
+use crate::test_helpers::{enqueue_and_claim_execution, get_child_tasks, setup_workflow_test};
 use crate::types::ExecutionStatus;
 
 /* ===================== Promise.all() Integration Tests ===================== */
@@ -478,8 +476,7 @@ async fn test_task_all_with_timer() {
         return results
     "#;
 
-    let (pool, execution) =
-        setup_workflow_test("all_with_timer", workflow_source, json!({})).await;
+    let (pool, execution) = setup_workflow_test("all_with_timer", workflow_source, json!({})).await;
     let workflow_id = execution.id.clone();
 
     // First run - timer fires but task pending, so still suspended
@@ -513,10 +510,7 @@ async fn test_task_all_with_timer() {
         .unwrap()
         .unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
-    assert_eq!(
-        workflow_execution.output,
-        Some(json!(["task_done", null]))
-    );
+    assert_eq!(workflow_execution.output, Some(json!(["task_done", null])));
 }
 
 /* ===================== Nested Composite Tests ===================== */
