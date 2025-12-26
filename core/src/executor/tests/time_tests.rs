@@ -1,17 +1,17 @@
-//! Tests for Time.sleep() and timer functionality
+//! Tests for Time.delay() and timer functionality
 
 use super::helpers::parse_workflow_and_build_vm;
 use crate::executor::{errors, run_until_done, Awaitable, Control, Val, VM};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 
-/* ===================== Time.sleep() Basic Tests ===================== */
+/* ===================== Time.delay() Basic Tests ===================== */
 
 #[test]
-fn test_time_sleep_basic() {
-    // Time.sleep(1000) returns a Promise(Timer) with fire_at ~1 second in the future
+fn test_time_delay_basic() {
+    // Time.delay(1000) returns a Promise(Timer) with fire_at ~1 second in the future
     let source = r#"
-        return Time.sleep(1000)
+        return Time.delay(1000)
     "#;
 
     let before = Utc::now();
@@ -44,10 +44,10 @@ fn test_time_sleep_basic() {
 }
 
 #[test]
-fn test_time_sleep_zero() {
-    // Time.sleep(0) should work and set fire_at to approximately now
+fn test_time_delay_zero() {
+    // Time.delay(0) should work and set fire_at to approximately now
     let source = r#"
-        return Time.sleep(0)
+        return Time.delay(0)
     "#;
 
     let before = Utc::now();
@@ -73,10 +73,10 @@ fn test_time_sleep_zero() {
 }
 
 #[test]
-fn test_time_sleep_large_value() {
-    // Time.sleep(3600000) - 1 hour
+fn test_time_delay_large_value() {
+    // Time.delay(3600000) - 1 hour
     let source = r#"
-        return Time.sleep(3600000)
+        return Time.delay(3600000)
     "#;
 
     let before = Utc::now();
@@ -97,9 +97,9 @@ fn test_time_sleep_large_value() {
 /* ===================== Outbox Side Effects Tests ===================== */
 
 #[test]
-fn test_time_sleep_records_timer_in_outbox() {
+fn test_time_delay_records_timer_in_outbox() {
     let source = r#"
-        return Time.sleep(5000)
+        return Time.delay(5000)
     "#;
 
     let before = Utc::now();
@@ -122,12 +122,12 @@ fn test_time_sleep_records_timer_in_outbox() {
 }
 
 #[test]
-fn test_time_sleep_multiple_timers() {
-    // Multiple Time.sleep() calls add multiple entries to outbox
+fn test_time_delay_multiple_timers() {
+    // Multiple Time.delay() calls add multiple entries to outbox
     let source = r#"
-        Time.sleep(1000)
-        Time.sleep(2000)
-        return Time.sleep(3000)
+        Time.delay(1000)
+        Time.delay(2000)
+        return Time.delay(3000)
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -144,10 +144,10 @@ fn test_time_sleep_multiple_timers() {
 /* ===================== Await/Suspend Tests ===================== */
 
 #[test]
-fn test_await_time_sleep_suspends() {
-    // await Time.sleep(1000) should suspend the VM
+fn test_await_time_delay_suspends() {
+    // await Time.delay(1000) should suspend the VM
     let source = r#"
-        return await Time.sleep(1000)
+        return await Time.delay(1000)
     "#;
 
     let before = Utc::now();
@@ -169,10 +169,10 @@ fn test_await_time_sleep_suspends() {
 }
 
 #[test]
-fn test_await_time_sleep_resume() {
+fn test_await_time_delay_resume() {
     // After resuming a suspended timer, execution continues
     let source = r#"
-        let result = await Time.sleep(1000)
+        let result = await Time.delay(1000)
         return result
     "#;
 
@@ -195,11 +195,11 @@ fn test_await_time_sleep_resume() {
 }
 
 #[test]
-fn test_await_time_sleep_in_sequence() {
+fn test_await_time_delay_in_sequence() {
     // Multiple awaited sleeps in sequence
     let source = r#"
-        await Time.sleep(100)
-        await Time.sleep(200)
+        await Time.delay(100)
+        await Time.delay(200)
         return "done"
     "#;
 
@@ -228,7 +228,7 @@ fn test_await_time_sleep_in_sequence() {
 fn test_timer_serialization() {
     // Test that suspended timer state can be serialized/deserialized
     let source = r#"
-        return await Time.sleep(60000)
+        return await Time.delay(60000)
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -258,10 +258,10 @@ fn test_timer_serialization() {
 /* ===================== Error Handling Tests ===================== */
 
 #[test]
-fn test_time_sleep_wrong_arg_count_zero() {
-    // Time.sleep() with no arguments
+fn test_time_delay_wrong_arg_count_zero() {
+    // Time.delay() with no arguments
     let source = r#"
-        return Time.sleep()
+        return Time.delay()
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -275,10 +275,10 @@ fn test_time_sleep_wrong_arg_count_zero() {
 }
 
 #[test]
-fn test_time_sleep_wrong_arg_count_two() {
-    // Time.sleep(1000, 2000) - too many arguments
+fn test_time_delay_wrong_arg_count_two() {
+    // Time.delay(1000, 2000) - too many arguments
     let source = r#"
-        return Time.sleep(1000, 2000)
+        return Time.delay(1000, 2000)
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -292,10 +292,10 @@ fn test_time_sleep_wrong_arg_count_two() {
 }
 
 #[test]
-fn test_time_sleep_wrong_arg_type_string() {
-    // Time.sleep("1000") - string instead of number
+fn test_time_delay_wrong_arg_type_string() {
+    // Time.delay("1000") - string instead of number
     let source = r#"
-        return Time.sleep("1000")
+        return Time.delay("1000")
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -309,10 +309,10 @@ fn test_time_sleep_wrong_arg_type_string() {
 }
 
 #[test]
-fn test_time_sleep_wrong_arg_type_null() {
-    // Time.sleep(null) - null instead of number
+fn test_time_delay_wrong_arg_type_null() {
+    // Time.delay(null) - null instead of number
     let source = r#"
-        return Time.sleep(null)
+        return Time.delay(null)
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -325,10 +325,10 @@ fn test_time_sleep_wrong_arg_type_null() {
 }
 
 #[test]
-fn test_time_sleep_negative_duration() {
-    // Time.sleep(-1000) - negative duration
+fn test_time_delay_negative_duration() {
+    // Time.delay(-1000) - negative duration
     let source = r#"
-        return Time.sleep(-1000)
+        return Time.delay(-1000)
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -348,7 +348,7 @@ fn test_task_and_timer_in_same_workflow() {
     // Test that tasks and timers can coexist in the same workflow
     let source = r#"
         Task.run("my_task", {})
-        Time.sleep(1000)
+        Time.delay(1000)
         return "done"
     "#;
 
@@ -367,7 +367,7 @@ fn test_await_task_then_timer() {
     // await task, then await timer
     let source = r#"
         let task_result = await Task.run("process", {})
-        await Time.sleep(1000)
+        await Time.delay(1000)
         return task_result
     "#;
 

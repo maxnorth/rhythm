@@ -86,7 +86,6 @@ def run():
                     continue
 
                 # Mark as completed
-                logger.info(f"Execution {action.execution_id} completed successfully")
                 RhythmCore.complete_execution(action.execution_id, result)
 
             elif action.type == "continue":

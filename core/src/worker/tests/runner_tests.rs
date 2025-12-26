@@ -685,7 +685,7 @@ async fn test_workflow_runtime_error_sets_failed_status() {
 async fn test_workflow_suspends_on_timer() {
     // Workflow that awaits a timer
     let workflow_source = r#"
-        await Time.sleep(60000)
+        await Time.delay(60000)
         return "timer_done"
     "#;
 
@@ -714,7 +714,7 @@ async fn test_workflow_suspends_on_timer() {
 async fn test_timer_schedules_to_scheduled_queue() {
     // Workflow that awaits a timer
     let workflow_source = r#"
-        await Time.sleep(5000)
+        await Time.delay(5000)
         return "done"
     "#;
 
@@ -761,8 +761,10 @@ async fn test_timer_schedules_to_scheduled_queue() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_timer_resumes_when_ready() {
     // Workflow that awaits a very short timer (0ms - fires immediately)
+    // Since the timer's fire_at is already <= db_now when checked in the runner loop,
+    // the timer fires in the same execution cycle without needing a separate run
     let workflow_source = r#"
-        await Time.sleep(0)
+        await Time.delay(0)
         return "timer_fired"
     "#;
 
@@ -770,28 +772,10 @@ async fn test_timer_resumes_when_ready() {
         setup_workflow_test("immediate_timer_workflow", workflow_source, json!({})).await;
     let workflow_id = execution.id.clone();
 
-    // First run - suspends on timer
+    // Run - 0ms timer fires immediately since fire_at <= db_now
     run_workflow(&pool, execution).await.unwrap();
 
-    // Verify suspended
-    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(workflow_execution.status, ExecutionStatus::Suspended);
-
-    // Re-enqueue and run again - timer should be ready (fire_at <= now)
-    enqueue_and_claim_execution(&pool, &workflow_id, "default")
-        .await
-        .unwrap();
-
-    let execution = db::executions::get_execution(&pool, &workflow_id)
-        .await
-        .unwrap()
-        .expect("Execution should exist");
-    run_workflow(&pool, execution).await.unwrap();
-
-    // Verify workflow completed
+    // Verify workflow completed in one run
     let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
         .await
         .unwrap()
@@ -804,7 +788,7 @@ async fn test_timer_resumes_when_ready() {
 async fn test_timer_stays_suspended_when_not_ready() {
     // Workflow that awaits a long timer (1 hour)
     let workflow_source = r#"
-        await Time.sleep(3600000)
+        await Time.delay(3600000)
         return "timer_fired"
     "#;
 
@@ -844,9 +828,10 @@ async fn test_timer_stays_suspended_when_not_ready() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_task_then_timer_workflow() {
     // Workflow that awaits a task, then a timer
+    // After task completes, the 0ms timer fires immediately in the same run
     let workflow_source = r#"
         task_result = await Task.run("process", {value: 42})
-        await Time.sleep(0)
+        await Time.delay(0)
         return task_result * 2
     "#;
 
@@ -871,7 +856,7 @@ async fn test_task_then_timer_workflow() {
         .await
         .unwrap();
 
-    // Second run - should suspend on timer
+    // Second run - resumes from task, 0ms timer fires immediately, workflow completes
     enqueue_and_claim_execution(&pool, &workflow_id, "default")
         .await
         .unwrap();
@@ -882,25 +867,7 @@ async fn test_task_then_timer_workflow() {
         .expect("Execution should exist");
     run_workflow(&pool, execution).await.unwrap();
 
-    // Still suspended (on timer now)
-    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(workflow_execution.status, ExecutionStatus::Suspended);
-
-    // Third run - timer should be ready (0ms timer)
-    enqueue_and_claim_execution(&pool, &workflow_id, "default")
-        .await
-        .unwrap();
-
-    let execution = db::executions::get_execution(&pool, &workflow_id)
-        .await
-        .unwrap()
-        .expect("Execution should exist");
-    run_workflow(&pool, execution).await.unwrap();
-
-    // Verify workflow completed
+    // Verify workflow completed (0ms timer fired immediately after task resumed)
     let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
         .await
         .unwrap()
@@ -913,9 +880,9 @@ async fn test_task_then_timer_workflow() {
 async fn test_multiple_sequential_timers() {
     // Workflow with multiple sequential timers (all 0ms for immediate firing)
     let workflow_source = r#"
-        await Time.sleep(0)
-        await Time.sleep(0)
-        await Time.sleep(0)
+        await Time.delay(0)
+        await Time.delay(0)
+        await Time.delay(0)
         return "all_timers_done"
     "#;
 
@@ -956,4 +923,162 @@ async fn test_multiple_sequential_timers() {
         .unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
     assert_eq!(workflow_execution.output, Some(json!("all_timers_done")));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fire_and_forget_timer() {
+    // Timer created but not awaited (fire-and-forget)
+    let workflow_source = r#"
+        Time.delay(1000)
+        return "done_without_waiting"
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("fire_forget_timer_workflow", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // Run workflow - should complete immediately (timer not awaited)
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify workflow completed
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
+    assert_eq!(workflow_execution.output, Some(json!("done_without_waiting")));
+
+    // Timer should still be scheduled (fire-and-forget creates the schedule)
+    let scheduled_count: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM scheduled_queue WHERE params->>'execution_id' = $1",
+    )
+    .bind(&workflow_id)
+    .fetch_one(pool.as_ref())
+    .await
+    .unwrap();
+
+    assert_eq!(scheduled_count.0, 1, "Fire-and-forget timer should be scheduled");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_timer_captured_then_awaited_after_task() {
+    // Timer created early, task awaited, then timer awaited
+    // This tests that timers "start" when created, not when awaited
+    // Since 0ms timer will already be ready by the time we await it,
+    // the workflow should complete in one run after task completion
+    let workflow_source = r#"
+        timer = Time.delay(0)
+        task_result = await Task.run("slow_task", {})
+        await timer
+        return task_result
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("timer_after_task_workflow", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // First run - suspends on task (timer already created and scheduled)
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify suspended on task
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Suspended);
+
+    // Timer should already be scheduled even though we haven't awaited it yet
+    let scheduled_count: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM scheduled_queue WHERE params->>'execution_id' = $1",
+    )
+    .bind(&workflow_id)
+    .fetch_one(pool.as_ref())
+    .await
+    .unwrap();
+    assert_eq!(scheduled_count.0, 1, "Timer should be scheduled before being awaited");
+
+    // Complete the task
+    let tasks = get_child_tasks(&pool, &workflow_id).await.unwrap();
+    assert_eq!(tasks.len(), 1);
+    db::executions::complete_execution(pool.as_ref(), &tasks[0].0, json!("task_done"))
+        .await
+        .unwrap();
+
+    // Second run - timer was created before task, so it's already ready (0ms elapsed)
+    // The runner loop will: resume task -> hit timer await -> check timer ready -> resume timer -> complete
+    enqueue_and_claim_execution(&pool, &workflow_id, "default")
+        .await
+        .unwrap();
+
+    let execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .expect("Execution should exist");
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify workflow completed with task result (timer fired immediately since it was already ready)
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
+    assert_eq!(workflow_execution.output, Some(json!("task_done")));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_parallel_timer_and_task() {
+    // Create both timer and task, await task first, then timer
+    // Simulates starting a timer while waiting for a task
+    // Since 0ms timer is already ready when awaited, it fires in same execution cycle
+    let workflow_source = r#"
+        timer = Time.delay(0)
+        task = Task.run("work", {})
+        task_result = await task
+        await timer
+        return task_result
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("parallel_timer_task_workflow", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // First run - suspends on task
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Both timer and task should be created
+    let scheduled_count: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM scheduled_queue WHERE params->>'execution_id' = $1",
+    )
+    .bind(&workflow_id)
+    .fetch_one(pool.as_ref())
+    .await
+    .unwrap();
+    assert_eq!(scheduled_count.0, 1, "Timer should be scheduled");
+
+    let tasks = get_child_tasks(&pool, &workflow_id).await.unwrap();
+    assert_eq!(tasks.len(), 1, "Task should be created");
+
+    // Complete the task
+    db::executions::complete_execution(pool.as_ref(), &tasks[0].0, json!("work_done"))
+        .await
+        .unwrap();
+
+    // Second run - resumes from task, timer already ready (0ms), completes
+    enqueue_and_claim_execution(&pool, &workflow_id, "default")
+        .await
+        .unwrap();
+
+    let execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .expect("Execution should exist");
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify workflow completed (timer fired immediately since it was already ready)
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
+    assert_eq!(workflow_execution.output, Some(json!("work_done")));
 }

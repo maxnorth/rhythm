@@ -17,9 +17,6 @@ use crate::types::{CreateExecutionParams, ExecutionOutcome, ExecutionType};
 pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> Result<()> {
     let maybe_context = db::workflow_execution_context::get_context(pool, &execution.id).await?;
 
-    // Fetch DB time eagerly for timer resolution checks
-    let db_now = db::get_db_time(pool).await?;
-
     let (mut vm, workflow_def_id) = if let Some(context) = maybe_context {
         (
             serde_json::from_value(context.vm_state).context("Failed to deserialize VM state")?,
@@ -30,7 +27,10 @@ pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> 
     };
 
     loop {
-        // if suspended and has result, or any other status
+        // Fetch current DB time for timer resolution checks
+        let db_now = db::get_db_time(pool).await?;
+
+        // If suspended on an awaitable, check if it's ready
         if !try_resume_suspended_state(pool, &mut vm, db_now).await? {
             break; // Awaitable not ready, suspend and save state
         }

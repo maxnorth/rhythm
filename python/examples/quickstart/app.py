@@ -58,7 +58,7 @@ def main():
     print(f"✓ Notification task queued: {notification_id}")
 
     # Schedule a task to run 15 seconds from now (using UTC)
-    run_at = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%S")
+    run_at = (datetime.now(timezone.utc) + timedelta(seconds=30)).strftime("%Y-%m-%dT%H:%M:%S")
     scheduled_id = rhythm.client.schedule_task(
         name="send_email",
         inputs={

@@ -6,12 +6,12 @@ use crate::executor::outbox::{Outbox, TimerSchedule};
 use crate::executor::types::{Awaitable, Val};
 use chrono::{Duration, Utc};
 
-/// Time.sleep(duration_ms) - Create a timer that fires after the specified duration
+/// Time.delay(duration_ms) - Create a timer that fires after the specified duration
 ///
 /// Takes a duration in milliseconds, computes the absolute fire_at time using
 /// the current worker time, records a TimerSchedule side effect in the outbox,
 /// and returns a Promise value wrapping the timer.
-pub fn sleep(args: &[Val], outbox: &mut Outbox) -> EvalResult {
+pub fn delay(args: &[Val], outbox: &mut Outbox) -> EvalResult {
     // Validate argument count
     if args.len() != 1 {
         return EvalResult::Throw {
