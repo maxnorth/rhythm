@@ -95,5 +95,5 @@ pub async fn run_cooperative_worker_loop(
     }
 
     // No work available, tell host to wait before retrying
-    Ok(DelegatedAction::Wait { duration_ms: 5000 })
+    Ok(DelegatedAction::Wait { duration_ms: 1000 })
 }
