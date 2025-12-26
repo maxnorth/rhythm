@@ -44,6 +44,9 @@ def run():
     except Exception as e:
         logger.warning(f"Failed to initialize Rust adapter: {e}")
 
+    # Start the internal worker (scheduler queue processor)
+    RhythmCore.start_internal_worker()
+
     # Simple infinite loop
     while True:
         try:
@@ -83,7 +86,6 @@ def run():
                     continue
 
                 # Mark as completed
-                logger.info(f"Execution {action.execution_id} completed successfully")
                 RhythmCore.complete_execution(action.execution_id, result)
 
             elif action.type == "continue":

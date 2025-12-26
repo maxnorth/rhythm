@@ -1,5 +1,7 @@
 let orderId = Inputs.orderId
 
+let sleepTask = Time.delay(10 * 1000)  // 2 minutes
+
 let result1 = await Task.run("process_payment", {
     order_id: "test1",
     amount: 1
@@ -16,6 +18,13 @@ let result3 = await Task.run("process_payment", {
 })
 
 let result2 = await task2
+await sleepTask
+
+
+let result4 = await Task.run("process_payment", {
+    order_id: "test4",
+    amount: 4
+})
 
 return {
     orderId: orderId,

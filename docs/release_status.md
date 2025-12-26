@@ -1,6 +1,7 @@
+## Recent Additions
+- `Time.delay(duration_ms)` - Timed delays in workflows
 
 ## Planned Features
-- Timed delays in workflows (minutes, hours, days, weeks, etc.)
 - Waiting on signals, for human-in-the-loop workflows
 - CRON scheduled workflows
 - `Task.any(...)`, `Task.all(...)`, and `Task.race(...)` composites

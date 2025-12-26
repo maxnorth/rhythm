@@ -8,7 +8,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::runner;
 use crate::db;
-use crate::types::ExecutionType;
+use crate::types::{ExecutionStatus, ExecutionType};
 
 /// Delegated action returned to the client for cooperative execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,12 +51,29 @@ pub async fn run_cooperative_worker_loop(
     // Try to claim work (one attempt)
     let claimed_ids = db::work_queue::claim_work(pool, queue, 1).await?;
     if let Some(claimed_execution_id) = claimed_ids.into_iter().next() {
-        // Fetch the execution and mark it as running
-        let execution = db::executions::start_execution(pool, &claimed_execution_id)
-            .await?
-            .ok_or_else(|| {
-                anyhow::anyhow!("Claimed execution not found: {}", claimed_execution_id)
-            })?;
+        let execution =
+            db::executions::start_execution_unless_finished(pool, &claimed_execution_id)
+                .await?
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Claimed execution not found: {}", claimed_execution_id)
+                })?;
+
+        let is_finished = matches!(
+            execution.status,
+            ExecutionStatus::Completed | ExecutionStatus::Failed
+        );
+
+        if is_finished {
+            if execution.exec_type == ExecutionType::Task {
+                tracing::error!(
+                    execution_id = %claimed_execution_id,
+                    status = ?execution.status,
+                    "Task claimed from work queue but already in terminal state - this indicates a bug"
+                );
+            }
+            db::work_queue::complete_work(pool, &claimed_execution_id).await?;
+            return Ok(DelegatedAction::Continue);
+        }
 
         match execution.exec_type {
             ExecutionType::Workflow => {

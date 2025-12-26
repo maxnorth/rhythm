@@ -66,21 +66,14 @@ pub fn val_to_json(val: &Val) -> Result<JsonValue> {
             }
             JsonValue::Object(map)
         }
-        Val::Task(task_id) => {
+        Val::Promise(awaitable) => {
             return Err(anyhow::anyhow!(
-                "Cannot convert Task value to JSON (task_id: {})",
-                task_id
+                "Cannot convert Promise value to JSON ({:?})",
+                awaitable
             ));
         }
-        Val::Error(error_info) => {
-            return Err(anyhow::anyhow!(
-                "Cannot convert Error value to JSON: {}",
-                error_info.message
-            ));
-        }
-        Val::NativeFunc(_) => {
-            return Err(anyhow::anyhow!("Cannot convert function to JSON"));
-        }
+        Val::Error(error_info) => serde_json::to_value(error_info)?,
+        Val::NativeFunc(_) => JsonValue::Null,
     };
     Ok(json)
 }

@@ -3,7 +3,6 @@
 use crate::executor::tests::helpers::parse_workflow_and_build_vm;
 use crate::executor::{run_until_done, Control, Val};
 use maplit::hashmap;
-use std::collections::HashMap;
 
 /* ===================== Basic Declaration Tests ===================== */
 

@@ -2,8 +2,23 @@
 
 use super::super::errors::ErrorInfo;
 use super::super::stdlib::StdlibFunc;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+/// Represents something that can be awaited
+///
+/// This is the identity of what a workflow is waiting on:
+/// - Task: waiting for a child task to complete (identified by task_id for DB lookup)
+/// - Timer: waiting for a specific time to pass (identified by fire_at timestamp)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "t", content = "v")]
+pub enum Awaitable {
+    /// A child task identified by its ID
+    Task(String),
+    /// A timer that fires at a specific time
+    Timer { fire_at: DateTime<Utc> },
+}
 
 /// Runtime value type
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -15,7 +30,8 @@ pub enum Val {
     Str(String),
     List(Vec<Val>),
     Obj(HashMap<String, Val>),
-    Task(String),
+    /// A promise representing an awaitable (task or timer)
+    Promise(Awaitable),
     /// Error value with code and message
     Error(ErrorInfo),
     /// Native function (standard library)

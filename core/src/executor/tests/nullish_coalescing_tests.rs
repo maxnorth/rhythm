@@ -344,7 +344,7 @@ fn test_default_config_value_with_optional() {
         Control::Throw(_) => {
             // Current behavior - throws on missing property even with ?.
         }
-        Control::Return(Val::Num(n)) if n == 5000.0 => {
+        Control::Return(Val::Num(5000.0)) => {
             // Ideal behavior if we handle missing properties with ?.
         }
         other => panic!("Unexpected result: {:?}", other),

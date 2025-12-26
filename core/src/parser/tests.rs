@@ -4,7 +4,7 @@
 //! They do NOT execute the code - that's tested in executor_v2 tests.
 
 use crate::executor::types::ast::{Expr, MemberAccess, Stmt};
-use crate::parser::{self, WorkflowDef};
+use crate::parser::WorkflowDef;
 
 /* ===================== Test Helpers ===================== */
 
@@ -39,14 +39,14 @@ fn test_parse_return_number() {
 
 #[test]
 fn test_parse_return_negative_number() {
-    let ast = crate::parser::parse("return -3.14").expect("Should parse");
+    let ast = crate::parser::parse("return -3.5").expect("Should parse");
     let stmt = unwrap_block(ast);
 
     match stmt {
         Stmt::Return {
             value: Some(Expr::LitNum { v }),
         } => {
-            assert_eq!(v, -3.14);
+            assert_eq!(v, -3.5);
         }
         _ => panic!("Expected Return with LitNum, got {:?}", stmt),
     }
@@ -349,7 +349,7 @@ fn test_parse_workflow_no_params() {
         return 42
     "#;
 
-    let workflow = crate::parser::parse_workflow(source).expect("Should parse");
+    let _workflow = crate::parser::parse_workflow(source).expect("Should parse");
 
     // Verify no params
 }
@@ -415,7 +415,7 @@ fn test_parse_workflow_custom_param_names() {
         return data.value
     "#;
 
-    let workflow = crate::parser::parse_workflow(source).expect("Should parse");
+    let _workflow = crate::parser::parse_workflow(source).expect("Should parse");
 
     // Verify custom param names
 }
@@ -533,7 +533,7 @@ fn test_parser_accepts_workflow_wrapper() {
         return 42
     "#;
 
-    let workflow = crate::parser::parse_workflow(source).expect("Should parse");
+    let _workflow = crate::parser::parse_workflow(source).expect("Should parse");
 }
 
 /* ===================== Optional Main Function Wrapper Tests ===================== */
@@ -709,7 +709,7 @@ fn test_parse_while_loop() {
                 } => {
                     // Test should be true
                     match test {
-                        Expr::LitBool { v } => assert_eq!(*v, true),
+                        Expr::LitBool { v } => assert!(*v),
                         _ => panic!("Expected LitBool for test"),
                     }
                     // Body should be a block with return statement
@@ -1481,7 +1481,7 @@ fn test_parse_array_literal_mixed_types() {
                         assert_eq!(elements.len(), 4);
                         assert!(matches!(&elements[0], Expr::LitNum { v } if *v == 1.0));
                         assert!(matches!(&elements[1], Expr::LitStr { v } if v == "hello"));
-                        assert!(matches!(&elements[2], Expr::LitBool { v } if *v == true));
+                        assert!(matches!(&elements[2], Expr::LitBool { v } if *v));
                         assert!(matches!(&elements[3], Expr::LitNull));
                     }
                     _ => panic!("Expected LitList expression"),

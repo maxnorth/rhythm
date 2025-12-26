@@ -15,5 +15,6 @@ mod operator_tests;
 mod optional_chaining_tests;
 mod stdlib_tests;
 mod task_tests;
+mod time_tests;
 mod truthy_tests;
 mod while_tests;

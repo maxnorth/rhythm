@@ -3,7 +3,7 @@
 //! Common utilities for parsing workflows and building VMs
 
 use crate::executor::{Val, VM};
-use crate::parser::{self, WorkflowDef};
+use crate::parser::WorkflowDef;
 use std::collections::HashMap;
 
 /// Parse workflow source, validate, serialize/deserialize, and create VM

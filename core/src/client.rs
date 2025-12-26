@@ -11,7 +11,7 @@ use std::sync::OnceLock;
 use tokio::sync::Mutex;
 
 use crate::application::{Application, WorkflowFile};
-use crate::types::CreateExecutionParams;
+use crate::types::{CreateExecutionParams, ScheduleExecutionParams};
 
 /// Global application instance (ONLY place with static state)
 static APP: OnceLock<Application> = OnceLock::new();
@@ -137,6 +137,15 @@ impl Client {
             .await
     }
 
+    /// Schedule an execution (workflow or task) to start at a future time
+    ///
+    /// Creates the execution immediately in Pending status, then schedules
+    /// it to be enqueued at the specified time.
+    pub async fn schedule_execution(params: ScheduleExecutionParams) -> Result<String> {
+        let app = Self::get_app()?;
+        app.scheduler_service.schedule_execution(params).await
+    }
+
     /// Register a workflow definition
     pub async fn register_workflow(name: String, source: String) -> Result<i32> {
         let app = Self::get_app()?;
@@ -154,6 +163,19 @@ impl Client {
             .into_iter()
             .map(|e| serde_json::to_value(e).unwrap())
             .collect())
+    }
+
+    /* ===================== Internal Operations ===================== */
+
+    /// Start the internal worker (scheduler queue processor)
+    ///
+    /// This should be called by the language adapter when starting a worker.
+    /// Not intended for public API use.
+    ///
+    /// Returns an error if the internal worker has already been started.
+    pub fn start_internal_worker() -> Result<()> {
+        let app = Self::get_app()?;
+        app.start_internal_worker()
     }
 
     /* ===================== Internal Helpers ===================== */

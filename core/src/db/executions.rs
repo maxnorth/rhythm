@@ -109,16 +109,25 @@ pub async fn create_execution(
     }
 }
 
-pub async fn start_execution<'e, E>(executor: E, execution_id: &str) -> Result<Option<Execution>>
+pub async fn start_execution_unless_finished<'e, E>(
+    executor: E,
+    execution_id: &str,
+) -> Result<Option<Execution>>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
     let result = sqlx::query(
         r#"
-        UPDATE executions
-        SET status = 'running'
-        WHERE id = $1
-        RETURNING *
+        WITH updated AS (
+            UPDATE executions
+            SET status = 'running'
+            WHERE id = $1
+              AND status NOT IN ('completed', 'failed')
+            RETURNING *
+        )
+        SELECT * FROM updated
+        UNION ALL
+        SELECT * FROM executions WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM updated)
         "#,
     )
     .bind(execution_id)

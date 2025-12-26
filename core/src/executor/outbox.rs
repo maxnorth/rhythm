@@ -1,11 +1,21 @@
-//! Task outbox for side effects
+//! Outbox for side effects
 //!
-//! The outbox pattern allows the executor to record side effects (like task creation)
-//! without actually performing them. The external orchestrator is responsible for
-//! processing the outbox after execution.
+//! The outbox pattern allows the executor to record side effects (like task creation
+//! or timer scheduling) without actually performing them. The external orchestrator
+//! is responsible for processing the outbox after execution.
 
 use super::types::Val;
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
+
+/// A side effect recorded during workflow execution
+#[derive(Debug, Clone, PartialEq)]
+pub enum SideEffect {
+    /// Create a new task
+    TaskCreation(TaskCreation),
+    /// Schedule a timer
+    TimerSchedule(TimerSchedule),
+}
 
 /// A task creation side effect
 ///
@@ -35,5 +45,54 @@ impl TaskCreation {
     }
 }
 
-/// Task outbox - collection of side effects
-pub type Outbox = Vec<TaskCreation>;
+/// A timer scheduling side effect
+///
+/// Represents a request to schedule a timer. This is added to the outbox
+/// when Time.delay() is called, and the external orchestrator will create
+/// a scheduled_queue entry.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TimerSchedule {
+    /// The absolute time when the timer should fire
+    pub fire_at: DateTime<Utc>,
+}
+
+impl TimerSchedule {
+    /// Create a new timer schedule side effect
+    pub fn new(fire_at: DateTime<Utc>) -> Self {
+        Self { fire_at }
+    }
+}
+
+/// Outbox - collection of side effects
+#[derive(Debug, Clone, Default)]
+pub struct Outbox {
+    /// Task creation side effects
+    pub tasks: Vec<TaskCreation>,
+    /// Timer scheduling side effects
+    pub timers: Vec<TimerSchedule>,
+}
+
+impl Outbox {
+    /// Create a new empty outbox
+    pub fn new() -> Self {
+        Self {
+            tasks: Vec::new(),
+            timers: Vec::new(),
+        }
+    }
+
+    /// Add a task creation side effect
+    pub fn push_task(&mut self, task: TaskCreation) {
+        self.tasks.push(task);
+    }
+
+    /// Add a timer schedule side effect
+    pub fn push_timer(&mut self, timer: TimerSchedule) {
+        self.timers.push(timer);
+    }
+
+    /// Check if a task with the given ID is in the outbox
+    pub fn has_task(&self, task_id: &str) -> bool {
+        self.tasks.iter().any(|t| t.task_id == task_id)
+    }
+}
