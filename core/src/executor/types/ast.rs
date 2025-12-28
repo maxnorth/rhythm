@@ -9,6 +9,14 @@ pub enum VarKind {
     Const,
 }
 
+/// Target for variable declaration (simple identifier or destructure pattern)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "t")]
+pub enum DeclareTarget {
+    Simple { name: String },
+    Destructure { names: Vec<String> },
+}
+
 /// Member access segment for assignment paths
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "t")]
@@ -26,7 +34,7 @@ pub enum Stmt {
     },
     Declare {
         var_kind: VarKind,
-        name: String,
+        target: DeclareTarget,
         init: Option<Expr>,
     },
     Assign {

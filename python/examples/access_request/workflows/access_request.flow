@@ -29,7 +29,7 @@ try {
     }
 
     // grant access if approved
-    await Task.run("grant-access", { user_email, request_id: request.id })
+    await Task.run("grant-access", { user_email, request_id })
 
     // wait for session end or timeout
     let cancelled = await Promise.race([

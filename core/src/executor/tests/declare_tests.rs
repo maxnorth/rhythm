@@ -462,3 +462,138 @@ return x
 
     assert_eq!(vm.control, Control::Return(Val::Num(100.0)));
 }
+
+/* ===================== Destructuring Tests ===================== */
+
+#[test]
+fn test_destructure_simple() {
+    let source = r#"
+        let obj = { a: 1, b: 2 }
+        let { a, b } = obj
+        return a + b
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(3.0)));
+}
+
+#[test]
+fn test_destructure_from_inputs() {
+    let source = r#"
+        let { name, age } = Inputs
+        return name
+    "#;
+
+    let inputs = hashmap! {
+        "name".to_string() => Val::Str("Alice".to_string()),
+        "age".to_string() => Val::Num(30.0),
+    };
+
+    let mut vm = parse_workflow_and_build_vm(source, inputs);
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Str("Alice".to_string())));
+}
+
+#[test]
+fn test_destructure_const() {
+    let source = r#"
+        const { x, y } = { x: 10, y: 20 }
+        return x + y
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(30.0)));
+}
+
+#[test]
+fn test_destructure_missing_property_throws() {
+    // Missing property should throw PROPERTY_NOT_FOUND
+    let source = r#"
+        let { a, missing } = { a: 42 }
+        return missing
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    match vm.control {
+        Control::Throw(Val::Error(ref err)) => {
+            assert_eq!(err.code, "PROPERTY_NOT_FOUND");
+            assert!(err.message.contains("missing"));
+        }
+        _ => panic!("Expected PROPERTY_NOT_FOUND error, got {:?}", vm.control),
+    }
+}
+
+#[test]
+fn test_destructure_single_property() {
+    let source = r#"
+        let { id } = { id: 123, extra: "ignored" }
+        return id
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(123.0)));
+}
+
+#[test]
+fn test_destructure_non_object_throws() {
+    let source = r#"
+        let { a } = 42
+        return a
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    match vm.control {
+        Control::Throw(Val::Error(ref err)) => {
+            assert!(err.message.contains("Cannot destructure non-object"));
+        }
+        _ => panic!("Expected TypeError, got {:?}", vm.control),
+    }
+}
+
+#[test]
+fn test_destructure_scope_cleanup() {
+    let source = r#"
+        {
+            let { a, b } = { a: 1, b: 2 }
+        }
+        return a
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    // 'a' should not be defined outside the block
+    match vm.control {
+        Control::Throw(Val::Error(ref err)) => {
+            assert!(err.message.contains("Undefined variable"));
+        }
+        _ => panic!(
+            "Expected error for undefined variable, got {:?}",
+            vm.control
+        ),
+    }
+}
+
+#[test]
+fn test_destructure_trailing_comma() {
+    let source = r#"
+        let { a, b, } = { a: 1, b: 2 }
+        return a + b
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+
+    assert_eq!(vm.control, Control::Return(Val::Num(3.0)));
+}

@@ -105,10 +105,10 @@ pub fn step(vm: &mut VM) -> Step {
             FrameKind::Declare { phase },
             Stmt::Declare {
                 var_kind,
-                name,
+                target,
                 init,
             },
-        ) => execute_declare(vm, phase, var_kind, name, init),
+        ) => execute_declare(vm, phase, var_kind, target, init),
 
         // Shouldn't happen - frame kind doesn't match node
         _ => panic!("Frame kind does not match statement node"),

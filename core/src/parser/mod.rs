@@ -6,7 +6,7 @@ use pest::Parser;
 use pest_derive::Parser;
 use serde::{Deserialize, Serialize};
 
-use super::executor::types::ast::{BinaryOp, Expr, MemberAccess, Stmt, VarKind};
+use super::executor::types::ast::{BinaryOp, DeclareTarget, Expr, MemberAccess, Stmt, VarKind};
 
 pub mod semantic_validator;
 
@@ -229,7 +229,7 @@ fn build_while_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
 }
 
 fn build_declare_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
-    // declare_stmt = { ("let" | "const") ~ identifier ~ ("=" ~ expression)? }
+    // declare_stmt = { var_kind ~ declare_target ~ ("=" ~ expression)? }
     let mut inner = pair.into_inner();
 
     // Get the kind (let or const)
@@ -245,8 +245,9 @@ fn build_declare_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
         }
     };
 
-    // Get the variable name
-    let name = inner.next().unwrap().as_str().to_string();
+    // Get the declare target (identifier or destructure pattern)
+    let target_pair = inner.next().unwrap();
+    let target = build_declare_target(target_pair)?;
 
     // Get the optional initialization expression
     let init = if let Some(expr_pair) = inner.next() {
@@ -255,11 +256,42 @@ fn build_declare_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
         None
     };
 
+    // Destructuring requires an initializer
+    if matches!(target, DeclareTarget::Destructure { .. }) && init.is_none() {
+        return Err(ParseError::BuildError(
+            "Destructuring declaration requires an initializer".to_string(),
+        ));
+    }
+
     Ok(Stmt::Declare {
         var_kind,
-        name,
+        target,
         init,
     })
+}
+
+fn build_declare_target(pair: pest::iterators::Pair<Rule>) -> ParseResult<DeclareTarget> {
+    // declare_target = { destructure_pattern | identifier }
+    let inner = pair.into_inner().next().unwrap();
+
+    match inner.as_rule() {
+        Rule::identifier => Ok(DeclareTarget::Simple {
+            name: inner.as_str().to_string(),
+        }),
+        Rule::destructure_pattern => {
+            // destructure_pattern = { "{" ~ destructure_props ~ "}" }
+            let props_pair = inner.into_inner().next().unwrap();
+            let names: Vec<String> = props_pair
+                .into_inner()
+                .map(|id| id.as_str().to_string())
+                .collect();
+            Ok(DeclareTarget::Destructure { names })
+        }
+        _ => Err(ParseError::BuildError(format!(
+            "Unexpected declare target rule: {:?}",
+            inner.as_rule()
+        ))),
+    }
 }
 
 fn build_try_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {

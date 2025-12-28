@@ -20,7 +20,10 @@ statement = { return_stmt | if_stmt | while_stmt | try_stmt | break_stmt | conti
 
 return_stmt = { "return" ~ expression }
 
-declare_stmt = { var_kind ~ identifier ~ ("=" ~ expression)? }
+declare_stmt = { var_kind ~ declare_target ~ ("=" ~ expression)? }
+declare_target = { destructure_pattern | identifier }
+destructure_pattern = { "{" ~ destructure_props ~ "}" }
+destructure_props = { identifier ~ ("," ~ identifier)* ~ ","? }
 var_kind = { "let" | "const" }
 
 assign_stmt = { identifier ~ assign_path_segment* ~ "=" ~ expression }

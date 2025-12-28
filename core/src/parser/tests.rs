@@ -1649,3 +1649,82 @@ fn test_parse_array_with_object_elements() {
         _ => panic!("Expected Block for workflow body"),
     }
 }
+
+/* ===================== Destructuring Tests ===================== */
+
+use crate::executor::types::ast::DeclareTarget;
+
+#[test]
+fn test_parse_destructure_simple() {
+    let source = r#"
+        let { a, b } = obj
+        return a
+    "#;
+
+    let workflow = crate::parser::parse_workflow(source).expect("Should parse");
+
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 2);
+            match &body[0] {
+                Stmt::Declare { target, .. } => match target {
+                    DeclareTarget::Destructure { names } => {
+                        assert_eq!(names, &vec!["a".to_string(), "b".to_string()]);
+                    }
+                    _ => panic!("Expected Destructure target"),
+                },
+                _ => panic!("Expected Declare statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_destructure_with_trailing_comma() {
+    let source = r#"
+        const { x, y, } = Inputs
+        return x
+    "#;
+
+    let workflow = crate::parser::parse_workflow(source).expect("Should parse");
+
+    match workflow.body {
+        Stmt::Block { body } => {
+            assert_eq!(body.len(), 2);
+            match &body[0] {
+                Stmt::Declare { target, .. } => match target {
+                    DeclareTarget::Destructure { names } => {
+                        assert_eq!(names, &vec!["x".to_string(), "y".to_string()]);
+                    }
+                    _ => panic!("Expected Destructure target"),
+                },
+                _ => panic!("Expected Declare statement"),
+            }
+        }
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_destructure_single() {
+    let source = r#"
+        let { id } = result
+        return id
+    "#;
+
+    let workflow = crate::parser::parse_workflow(source).expect("Should parse");
+
+    match workflow.body {
+        Stmt::Block { body } => match &body[0] {
+            Stmt::Declare { target, .. } => match target {
+                DeclareTarget::Destructure { names } => {
+                    assert_eq!(names, &vec!["id".to_string()]);
+                }
+                _ => panic!("Expected Destructure target"),
+            },
+            _ => panic!("Expected Declare statement"),
+        },
+        _ => panic!("Expected Block for workflow body"),
+    }
+}

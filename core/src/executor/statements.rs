@@ -3,12 +3,13 @@
 //! Each statement type has its own handler function that processes
 //! the statement based on its current execution phase.
 
-use super::errors::ErrorInfo;
+use super::errors::{self, ErrorInfo};
 use super::expressions::{eval_expr, EvalResult};
 use super::stdlib::to_string;
 use super::types::{
-    AssignPhase, BlockPhase, BreakPhase, ContinuePhase, Control, DeclarePhase, Expr, ExprPhase,
-    FrameKind, IfPhase, MemberAccess, ReturnPhase, Stmt, TryPhase, Val, VarKind, WhilePhase,
+    AssignPhase, BlockPhase, BreakPhase, ContinuePhase, Control, DeclarePhase, DeclareTarget, Expr,
+    ExprPhase, FrameKind, IfPhase, MemberAccess, ReturnPhase, Stmt, TryPhase, Val, VarKind,
+    WhilePhase,
 };
 use super::vm::{push_stmt, Step, VM};
 
@@ -39,9 +40,16 @@ pub fn execute_block(
             // Get the current statement to execute
             let child_stmt = &body[idx];
 
-            // If this is a declaration, track it for cleanup
-            if let Stmt::Declare { name, .. } = child_stmt {
-                declared_vars.push(name.clone());
+            // If this is a declaration, track declared names for cleanup
+            if let Stmt::Declare { target, .. } = child_stmt {
+                match target {
+                    DeclareTarget::Simple { name } => {
+                        declared_vars.push(name.clone());
+                    }
+                    DeclareTarget::Destructure { names } => {
+                        declared_vars.extend(names.clone());
+                    }
+                }
             }
 
             // Update our frame to point to the next statement
@@ -456,7 +464,7 @@ pub fn execute_declare(
     vm: &mut VM,
     phase: DeclarePhase,
     _var_kind: VarKind,
-    name: String,
+    target: DeclareTarget,
     init: Option<Expr>,
 ) -> Step {
     match phase {
@@ -484,10 +492,40 @@ pub fn execute_declare(
                 Val::Null
             };
 
-            // Insert the variable into the environment
-            // Note: Shadowing checks are handled by the semantic validator
-            // Note: The parent block frame has already added this variable to its declared_vars list
-            vm.env.insert(name, value);
+            // Insert variable(s) into the environment based on target type
+            match target {
+                DeclareTarget::Simple { name } => {
+                    vm.env.insert(name, value);
+                }
+                DeclareTarget::Destructure { names } => {
+                    // Value must be an object for destructuring
+                    let obj = match value {
+                        Val::Obj(map) => map,
+                        _ => {
+                            vm.control = Control::Throw(Val::Error(ErrorInfo::new(
+                                errors::TYPE_ERROR,
+                                "Cannot destructure non-object value",
+                            )));
+                            return Step::Continue;
+                        }
+                    };
+
+                    // Extract each named property
+                    for name in names {
+                        let prop_value = match obj.get(&name).cloned() {
+                            Some(v) => v,
+                            None => {
+                                vm.control = Control::Throw(Val::Error(ErrorInfo::new(
+                                    errors::PROPERTY_NOT_FOUND,
+                                    format!("Property '{}' not found on object", name),
+                                )));
+                                return Step::Continue;
+                            }
+                        };
+                        vm.env.insert(name, prop_value);
+                    }
+                }
+            }
 
             // Pop this frame and continue
             vm.frames.pop();
