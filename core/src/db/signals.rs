@@ -79,11 +79,7 @@ where
 /// Claim a specific signal by its ID
 ///
 /// Sets the claim_id on the signal, linking it to a request.
-pub async fn claim_signal<'e, E>(
-    executor: E,
-    signal_id: &str,
-    claim_id: &str,
-) -> Result<()>
+pub async fn claim_signal<'e, E>(executor: E, signal_id: &str, claim_id: &str) -> Result<()>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
@@ -175,68 +171,56 @@ where
     Ok(row.get("payload"))
 }
 
-/// Resolve all pending signal claims for a workflow
+/// A requested signal waiting for a match
+#[derive(Debug)]
+pub struct RequestedSignal {
+    pub id: String,
+    pub signal_name: String,
+    pub claim_id: String,
+}
+
+/// Get all 'requested' signals for a workflow, ordered by creation time
 ///
-/// Handles the race condition where both workflow and signal sender missed each other:
-/// - Workflow inserted 'requested' row
-/// - Signal sender inserted unclaimed 'sent' row
-///
-/// For each 'requested' signal, if a matching unclaimed 'sent' signal exists:
-/// 1. Claims the signal (sets claim_id on the 'sent' row)
-/// 2. Deletes the 'requested' row
-///
-/// This is idempotent and safe to run multiple times. Should be called at the
-/// start of workflow resumption, before the main execution loop.
-///
-/// Returns the number of signals that were resolved.
-pub async fn resolve_signal_claims<'e, E>(executor: E, workflow_id: &str) -> Result<i64>
+/// Returns signal requests in FIFO order (oldest first) for proper matching.
+pub async fn get_requested_signals<'e, E>(
+    executor: E,
+    workflow_id: &str,
+) -> Result<Vec<RequestedSignal>>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
-    // This query:
-    // 1. Finds all 'requested' signals for this workflow
-    // 2. For each, finds the oldest matching unclaimed 'sent' signal
-    // 3. Claims the 'sent' signal by setting its claim_id
-    // 4. Deletes the now-unnecessary 'requested' row
-    let result = sqlx::query(
+    let rows = sqlx::query(
         r#"
-        WITH requests AS (
-            SELECT id, signal_name, claim_id
-            FROM signals
-            WHERE workflow_id = $1 AND status = 'requested'
-        ),
-        matched AS (
-            SELECT DISTINCT ON (r.id)
-                r.id AS request_id,
-                r.claim_id,
-                s.id AS signal_id
-            FROM requests r
-            JOIN signals s ON s.workflow_id = $1
-                AND s.signal_name = r.signal_name
-                AND s.status = 'sent'
-                AND s.claim_id IS NULL
-            ORDER BY r.id, s.created_at ASC
-        ),
-        claimed AS (
-            UPDATE signals
-            SET claim_id = m.claim_id
-            FROM matched m
-            WHERE signals.id = m.signal_id
-            RETURNING signals.id
-        ),
-        deleted AS (
-            DELETE FROM signals
-            WHERE id IN (SELECT request_id FROM matched)
-            RETURNING id
-        )
-        SELECT COUNT(*) as resolved_count FROM claimed
+        SELECT id, signal_name, claim_id FROM signals
+        WHERE workflow_id = $1 AND status = 'requested'
+        ORDER BY created_at ASC
         "#,
     )
     .bind(workflow_id)
-    .fetch_one(executor)
+    .fetch_all(executor)
     .await
-    .context("Failed to resolve signal claims")?;
+    .context("Failed to fetch requested signals")?;
 
-    let resolved_count: i64 = result.get("resolved_count");
-    Ok(resolved_count)
+    Ok(rows
+        .into_iter()
+        .map(|row| RequestedSignal {
+            id: row.get::<sqlx::types::Uuid, _>("id").to_string(),
+            signal_name: row.get("signal_name"),
+            claim_id: row.get("claim_id"),
+        })
+        .collect())
+}
+
+/// Delete a signal by ID
+pub async fn delete_signal<'e, E>(executor: E, signal_id: &str) -> Result<()>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    sqlx::query("DELETE FROM signals WHERE id = $1::uuid")
+        .bind(signal_id)
+        .execute(executor)
+        .await
+        .context("Failed to delete signal")?;
+
+    Ok(())
 }

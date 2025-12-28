@@ -50,9 +50,7 @@ pub fn resolve_awaitable<'a>(
             Awaitable::Race { items, is_object } => {
                 resolve_race(pool, items, *is_object, db_now, outbox).await
             }
-            Awaitable::Signal { name: _, claim_id } => {
-                resolve_signal(pool, claim_id, outbox).await
-            }
+            Awaitable::Signal { name: _, claim_id } => resolve_signal(pool, claim_id, outbox).await,
         }
     })
 }
@@ -63,11 +61,7 @@ pub fn resolve_awaitable<'a>(
 /// 1. If claim_id is in signal outbox with signal_id → fetch payload, Ready
 /// 2. If claim_id is in signal outbox without signal_id → Pending
 /// 3. If claim_id not in outbox → check DB by claim_id
-async fn resolve_signal(
-    pool: &PgPool,
-    claim_id: &str,
-    outbox: &Outbox,
-) -> Result<AwaitableStatus> {
+async fn resolve_signal(pool: &PgPool, claim_id: &str, outbox: &Outbox) -> Result<AwaitableStatus> {
     // Check if this signal is in the outbox (created this run)
     if let Some(outbox_signal) = outbox.get_signal(claim_id) {
         if let Some(signal_id) = &outbox_signal.signal_id {

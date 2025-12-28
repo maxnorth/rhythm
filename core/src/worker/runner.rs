@@ -7,7 +7,9 @@ use sqlx::PgPool;
 
 use super::awaitable::{resolve_awaitable, AwaitableStatus};
 use super::complete::finish_work;
-use super::signals::{match_outbox_signals_to_unclaimed, process_signal_outbox};
+use super::signals::{
+    match_outbox_signals_to_unclaimed, process_signal_outbox, resolve_signal_claims,
+};
 use crate::db;
 use crate::executor::{json_to_val_map, run_until_done, val_map_to_json, val_to_json, Control, VM};
 use crate::parser::parse_workflow;
@@ -18,7 +20,7 @@ pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> 
 
     let (mut vm, workflow_def_id) = if let Some(context) = maybe_context {
         // Resuming a workflow - resolve any signal race conditions from previous runs
-        db::signals::resolve_signal_claims(pool, &execution.id).await?;
+        resolve_signal_claims(pool, &execution.id).await?;
 
         (
             serde_json::from_value(context.vm_state).context("Failed to deserialize VM state")?,
