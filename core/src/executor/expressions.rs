@@ -383,5 +383,53 @@ pub fn eval_expr(
                 }
             }
         }
+
+        Expr::Ternary {
+            condition,
+            consequent,
+            alternate,
+        } => {
+            // Evaluate the condition first
+            let cond_result = eval_expr(condition, env, resume_value, outbox);
+
+            match cond_result {
+                EvalResult::Suspend { .. } => {
+                    // This should never happen - validator ensures no await in ternary condition
+                    EvalResult::Throw {
+                        error: Val::Error(ErrorInfo::new(
+                            errors::INTERNAL_ERROR,
+                            "Suspension during ternary condition evaluation (should be prevented by semantic validator)",
+                        )),
+                    }
+                }
+                EvalResult::Throw { error } => {
+                    // Propagate error from condition
+                    EvalResult::Throw { error }
+                }
+                EvalResult::Value { v: cond_val } => {
+                    // Evaluate the appropriate branch based on truthiness
+                    let branch = if cond_val.to_bool() {
+                        consequent
+                    } else {
+                        alternate
+                    };
+
+                    let branch_result = eval_expr(branch, env, resume_value, outbox);
+                    match branch_result {
+                        EvalResult::Suspend { .. } => {
+                            // This should never happen - validator ensures no await in ternary branches
+                            EvalResult::Throw {
+                                error: Val::Error(ErrorInfo::new(
+                                    errors::INTERNAL_ERROR,
+                                    "Suspension during ternary branch evaluation (should be prevented by semantic validator)",
+                                )),
+                            }
+                        }
+                        EvalResult::Throw { error } => EvalResult::Throw { error },
+                        EvalResult::Value { v } => EvalResult::Value { v },
+                    }
+                }
+            }
+        }
     }
 }

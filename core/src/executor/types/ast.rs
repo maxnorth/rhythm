@@ -129,4 +129,9 @@ pub enum Expr {
         left: Box<Expr>,
         right: Box<Expr>,
     },
+    Ternary {
+        condition: Box<Expr>,
+        consequent: Box<Expr>,
+        alternate: Box<Expr>,
+    },
 }

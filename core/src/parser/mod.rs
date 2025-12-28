@@ -563,9 +563,30 @@ fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
 fn build_expression(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
     match pair.as_rule() {
         Rule::expression => {
-            // expression = { await_expr | nullish_expr }
+            // expression = { await_expr | ternary_expr }
             let inner = pair.into_inner().next().unwrap();
             build_expression(inner)
+        }
+        Rule::ternary_expr => {
+            // ternary_expr = { nullish_expr ~ ("?" ~ expression ~ ":" ~ expression)? }
+            let mut inner = pair.into_inner();
+            let condition_pair = inner.next().unwrap();
+            let condition = build_expression(condition_pair)?;
+
+            // Check if there's a ternary part (? then : else)
+            if let Some(consequent_pair) = inner.next() {
+                let consequent = build_expression(consequent_pair)?;
+                let alternate_pair = inner.next().unwrap();
+                let alternate = build_expression(alternate_pair)?;
+                Ok(Expr::Ternary {
+                    condition: Box::new(condition),
+                    consequent: Box::new(consequent),
+                    alternate: Box::new(alternate),
+                })
+            } else {
+                // No ternary part, just return the condition
+                Ok(condition)
+            }
         }
         Rule::nullish_expr => build_binary_expr(pair),
         Rule::logical_or_expr => build_binary_expr(pair),

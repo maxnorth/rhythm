@@ -18,6 +18,7 @@ mod optional_chaining_tests;
 mod signal_tests;
 mod stdlib_tests;
 mod task_tests;
+mod ternary_tests;
 mod timer_tests;
 mod truthy_tests;
 mod while_tests;

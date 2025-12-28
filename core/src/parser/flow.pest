@@ -48,7 +48,10 @@ expr_stmt = { expression }
 // Identifiers
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
-expression = { await_expr | nullish_expr }
+expression = { await_expr | ternary_expr }
+
+// Ternary: condition ? then : else
+ternary_expr = { nullish_expr ~ ("?" ~ expression ~ ":" ~ expression)? }
 
 // Await expression: await foo(), await task
 await_expr = { "await" ~ expression }
