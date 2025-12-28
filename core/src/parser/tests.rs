@@ -3,7 +3,7 @@
 //! These tests verify that the parser correctly converts source code into AST structures.
 //! They do NOT execute the code - that's tested in executor_v2 tests.
 
-use crate::executor::types::ast::{Expr, MemberAccess, Stmt};
+use crate::executor::types::ast::{Expr, ForLoopKind, MemberAccess, Stmt};
 use crate::parser::WorkflowDef;
 
 /* ===================== Test Helpers ===================== */
@@ -1727,4 +1727,96 @@ fn test_parse_destructure_single() {
         },
         _ => panic!("Expected Block for workflow body"),
     }
+}
+
+/* ===================== For Loop Tests ===================== */
+
+#[test]
+fn test_parse_for_of_simple() {
+    let source = r#"
+        for (let x of arr) {
+            return x
+        }
+    "#;
+
+    let workflow = crate::parser::parse_workflow(source).expect("Should parse");
+
+    match workflow.body {
+        Stmt::Block { body } => match &body[0] {
+            Stmt::ForLoop {
+                kind,
+                binding,
+                iterable,
+                ..
+            } => {
+                assert_eq!(*kind, ForLoopKind::Of);
+                assert_eq!(binding, "x");
+                assert!(matches!(iterable, Expr::Ident { name } if name == "arr"));
+            }
+            _ => panic!("Expected ForLoop statement, got {:?}", body[0]),
+        },
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_for_in_simple() {
+    let source = r#"
+        for (let k in obj) {
+            return k
+        }
+    "#;
+
+    let workflow = crate::parser::parse_workflow(source).expect("Should parse");
+
+    match workflow.body {
+        Stmt::Block { body } => match &body[0] {
+            Stmt::ForLoop {
+                kind,
+                binding,
+                iterable,
+                ..
+            } => {
+                assert_eq!(*kind, ForLoopKind::In);
+                assert_eq!(binding, "k");
+                assert!(matches!(iterable, Expr::Ident { name } if name == "obj"));
+            }
+            _ => panic!("Expected ForLoop statement, got {:?}", body[0]),
+        },
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_for_of_with_const() {
+    let source = r#"
+        for (const item of items) {
+            return item
+        }
+    "#;
+
+    let workflow = crate::parser::parse_workflow(source).expect("Should parse");
+
+    match workflow.body {
+        Stmt::Block { body } => match &body[0] {
+            Stmt::ForLoop { kind, binding, .. } => {
+                assert_eq!(*kind, ForLoopKind::Of);
+                assert_eq!(binding, "item");
+            }
+            _ => panic!("Expected ForLoop statement"),
+        },
+        _ => panic!("Expected Block for workflow body"),
+    }
+}
+
+#[test]
+fn test_parse_for_loop_requires_block() {
+    // For loops require a block body, not inline statements
+    let source = "for (let x of arr) return x";
+
+    let result = crate::parser::parse(source);
+    assert!(
+        result.is_err(),
+        "for loops should require a block body, not inline statements"
+    );
 }

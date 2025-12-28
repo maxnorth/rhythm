@@ -10,7 +10,7 @@
 
 use super::statements::{
     execute_assign, execute_block, execute_break, execute_continue, execute_declare, execute_expr,
-    execute_if, execute_return, execute_try, execute_while,
+    execute_for_loop, execute_if, execute_return, execute_try, execute_while,
 };
 use super::types::{Control, FrameKind, Stmt};
 use super::vm::{Step, VM};
@@ -96,6 +96,16 @@ pub fn step(vm: &mut VM) -> Step {
         (FrameKind::While { phase, label: _ }, Stmt::While { test, body }) => {
             execute_while(vm, phase, test, body)
         }
+
+        (
+            FrameKind::ForLoop { phase, items, idx },
+            Stmt::ForLoop {
+                kind,
+                binding,
+                iterable,
+                body,
+            },
+        ) => execute_for_loop(vm, phase, items, idx, kind, binding, iterable, body),
 
         (FrameKind::Break { phase }, Stmt::Break) => execute_break(vm, phase),
 
@@ -195,7 +205,7 @@ fn unwind(vm: &mut VM) -> Step {
         }
 
         Control::Break(label) => {
-            // Break: Pop frames until we find a matching loop (While/For)
+            // Break: Pop frames until we find a matching loop (While/ForLoop)
             while let Some(frame) = vm.frames.last() {
                 match &frame.kind {
                     super::types::FrameKind::While {
@@ -212,6 +222,26 @@ fn unwind(vm: &mut VM) -> Step {
                             // Not the target loop - pop and continue searching
                             let frame = vm.frames.pop().unwrap();
                             // Clean up any variables declared in this block
+                            if let FrameKind::Block { declared_vars, .. } = frame.kind {
+                                for var_name in declared_vars {
+                                    vm.env.remove(&var_name);
+                                }
+                            }
+                        }
+                    }
+                    super::types::FrameKind::ForLoop { .. } => {
+                        // ForLoop is also a loop - break out of it (no labels yet)
+                        if label.is_none() {
+                            // Clean up the loop binding variable
+                            if let Stmt::ForLoop { binding, .. } = &frame.node {
+                                vm.env.remove(binding);
+                            }
+                            vm.frames.pop();
+                            vm.control = Control::None;
+                            return Step::Continue;
+                        } else {
+                            // Labeled break - ForLoop doesn't support labels yet
+                            let frame = vm.frames.pop().unwrap();
                             if let FrameKind::Block { declared_vars, .. } = frame.kind {
                                 for var_name in declared_vars {
                                     vm.env.remove(&var_name);
@@ -239,10 +269,11 @@ fn unwind(vm: &mut VM) -> Step {
         }
 
         Control::Continue(label) => {
-            // Continue: Pop frames until we find a matching loop, then reset it to re-evaluate test
+            // Continue: Pop frames until we find a matching loop, then reset it to re-evaluate
             // First, collect frames to pop (everything above the target loop)
             let mut frames_to_pop = 0;
             let mut found_loop = false;
+            let mut is_for_loop = false;
 
             for i in (0..vm.frames.len()).rev() {
                 match &vm.frames[i].kind {
@@ -258,6 +289,16 @@ fn unwind(vm: &mut VM) -> Step {
                             break;
                         } else {
                             // Not the target loop - count it for popping
+                            frames_to_pop += 1;
+                        }
+                    }
+                    super::types::FrameKind::ForLoop { .. } => {
+                        // ForLoop is also a loop (no labels yet)
+                        if label.is_none() {
+                            found_loop = true;
+                            is_for_loop = true;
+                            break;
+                        } else {
                             frames_to_pop += 1;
                         }
                     }
@@ -281,8 +322,12 @@ fn unwind(vm: &mut VM) -> Step {
                 }
 
                 // The target loop is now at the top
-                // We don't need to reset its phase - it's already in Eval phase
-                // (WhilePhase only has one phase: Eval)
+                // For While, we keep it in Eval phase to re-test the condition
+                // For ForLoop, we keep it in Iterate phase to move to the next item
+                if is_for_loop {
+                    // For ForLoop, the Iterate phase will handle advancing to next item
+                    // Just clear control flow
+                }
 
                 // Clear control flow and continue
                 vm.control = Control::None;

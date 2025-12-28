@@ -2,8 +2,8 @@
 
 use super::ast::Stmt;
 use super::phase::{
-    AssignPhase, BlockPhase, BreakPhase, ContinuePhase, DeclarePhase, ExprPhase, IfPhase,
-    ReturnPhase, TryPhase, WhilePhase,
+    AssignPhase, BlockPhase, BreakPhase, ContinuePhase, DeclarePhase, ExprPhase, ForLoopPhase,
+    IfPhase, ReturnPhase, TryPhase, WhilePhase,
 };
 use super::values::{Awaitable, Val};
 use serde::{Deserialize, Serialize};
@@ -56,6 +56,13 @@ pub enum FrameKind {
     While {
         phase: WhilePhase,
         label: Option<String>,
+    },
+    ForLoop {
+        phase: ForLoopPhase,
+        /// Items to iterate over (None = iterable not yet evaluated)
+        items: Option<Vec<Val>>,
+        /// Current iteration index
+        idx: usize,
     },
     Break {
         phase: BreakPhase,

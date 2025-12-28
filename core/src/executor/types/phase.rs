@@ -84,3 +84,11 @@ pub enum DeclarePhase {
     /// Evaluate the initialization expression
     Eval = 0,
 }
+
+/// Execution phase for ForLoop statements (for...in / for...of)
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum ForLoopPhase {
+    /// Iterate through items (evaluates iterable on first call if items is None)
+    Iterate = 0,
+}

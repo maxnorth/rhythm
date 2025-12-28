@@ -9,6 +9,15 @@ pub enum VarKind {
     Const,
 }
 
+/// For loop kind (in vs of)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ForLoopKind {
+    /// for (let k in obj) - iterates over keys
+    In,
+    /// for (let v of arr) - iterates over values
+    Of,
+}
+
 /// Target for variable declaration (simple identifier or destructure pattern)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "t")]
@@ -49,6 +58,12 @@ pub enum Stmt {
     },
     While {
         test: Expr,
+        body: Box<Stmt>,
+    },
+    ForLoop {
+        kind: ForLoopKind,
+        binding: String,
+        iterable: Expr,
         body: Box<Stmt>,
     },
     Return {

@@ -16,7 +16,7 @@ front_matter_content = @{ (!("```") ~ ANY)* }
 block = { "{" ~ statement* ~ "}" }
 
 // Statements
-statement = { return_stmt | if_stmt | while_stmt | try_stmt | break_stmt | continue_stmt | block | declare_stmt | assign_stmt | expr_stmt }
+statement = { return_stmt | if_stmt | while_stmt | for_loop_stmt | try_stmt | break_stmt | continue_stmt | block | declare_stmt | assign_stmt | expr_stmt }
 
 return_stmt = { "return" ~ expression }
 
@@ -33,6 +33,10 @@ if_stmt = { "if" ~ "(" ~ expression ~ ")" ~ block ~ else_clause? }
 else_clause = { "else" ~ (if_stmt | block) }
 
 while_stmt = { "while" ~ "(" ~ expression ~ ")" ~ block }
+
+// For loop: for (let x of arr) or for (let k in obj)
+for_loop_stmt = { "for" ~ "(" ~ var_kind ~ identifier ~ for_loop_kind ~ expression ~ ")" ~ block }
+for_loop_kind = { "of" | "in" }
 
 try_stmt = { "try" ~ block ~ "catch" ~ "(" ~ identifier ~ ")" ~ block }
 

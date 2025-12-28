@@ -6,7 +6,9 @@ use pest::Parser;
 use pest_derive::Parser;
 use serde::{Deserialize, Serialize};
 
-use super::executor::types::ast::{BinaryOp, DeclareTarget, Expr, MemberAccess, Stmt, VarKind};
+use super::executor::types::ast::{
+    BinaryOp, DeclareTarget, Expr, ForLoopKind, MemberAccess, Stmt, VarKind,
+};
 
 pub mod semantic_validator;
 
@@ -224,6 +226,55 @@ fn build_while_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
 
     Ok(Stmt::While {
         test,
+        body: Box::new(body),
+    })
+}
+
+fn build_for_loop_stmt(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
+    // for_loop_stmt = { "for" ~ "(" ~ var_kind ~ identifier ~ for_loop_kind ~ expression ~ ")" ~ block }
+    let mut inner = pair.into_inner();
+
+    // Get the var_kind (let or const)
+    let kind_pair = inner.next().unwrap();
+    let _var_kind = match kind_pair.as_str() {
+        "let" => VarKind::Let,
+        "const" => VarKind::Const,
+        _ => {
+            return Err(ParseError::BuildError(format!(
+                "Expected 'let' or 'const', got: {}",
+                kind_pair.as_str()
+            )))
+        }
+    };
+
+    // Get the binding identifier
+    let binding = inner.next().unwrap().as_str().to_string();
+
+    // Get the loop kind (in or of)
+    let kind_pair = inner.next().unwrap();
+    let kind = match kind_pair.as_str() {
+        "of" => ForLoopKind::Of,
+        "in" => ForLoopKind::In,
+        _ => {
+            return Err(ParseError::BuildError(format!(
+                "Expected 'of' or 'in', got: {}",
+                kind_pair.as_str()
+            )))
+        }
+    };
+
+    // Get the iterable expression
+    let iterable_pair = inner.next().unwrap();
+    let iterable = build_expression(iterable_pair)?;
+
+    // Get the body block
+    let body_pair = inner.next().unwrap();
+    let body = build_statement(body_pair)?;
+
+    Ok(Stmt::ForLoop {
+        kind,
+        binding,
+        iterable,
         body: Box::new(body),
     })
 }
@@ -467,6 +518,10 @@ fn build_statement(pair: pest::iterators::Pair<Rule>) -> ParseResult<Stmt> {
         Rule::while_stmt => {
             // while_stmt = { "while" ~ "(" ~ expression ~ ")" ~ block }
             build_while_stmt(pair)
+        }
+        Rule::for_loop_stmt => {
+            // for_loop_stmt = { "for" ~ "(" ~ var_kind ~ identifier ~ for_loop_kind ~ expression ~ ")" ~ block }
+            build_for_loop_stmt(pair)
         }
         Rule::try_stmt => {
             // try_stmt = { "try" ~ block ~ "catch" ~ "(" ~ identifier ~ ")" ~ block }

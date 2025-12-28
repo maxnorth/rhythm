@@ -14,7 +14,7 @@ pub mod values;
 // Re-export all types for convenient access
 pub use super::errors::ErrorInfo;
 pub use super::stdlib::StdlibFunc;
-pub use ast::{DeclareTarget, Expr, MemberAccess, Stmt, VarKind};
+pub use ast::{DeclareTarget, Expr, ForLoopKind, MemberAccess, Stmt, VarKind};
 pub use control::{Control, Frame, FrameKind};
 pub use phase::*;
 pub use values::{Awaitable, Val};

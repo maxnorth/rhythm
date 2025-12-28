@@ -8,8 +8,8 @@ use super::expressions::{eval_expr, EvalResult};
 use super::stdlib::to_string;
 use super::types::{
     AssignPhase, BlockPhase, BreakPhase, ContinuePhase, Control, DeclarePhase, DeclareTarget, Expr,
-    ExprPhase, FrameKind, IfPhase, MemberAccess, ReturnPhase, Stmt, TryPhase, Val, VarKind,
-    WhilePhase,
+    ExprPhase, ForLoopKind, ForLoopPhase, FrameKind, IfPhase, MemberAccess, ReturnPhase, Stmt,
+    TryPhase, Val, VarKind, WhilePhase,
 };
 use super::vm::{push_stmt, Step, VM};
 
@@ -439,6 +439,95 @@ pub fn execute_while(vm: &mut VM, phase: WhilePhase, test: Expr, body: Box<Stmt>
             }
         }
     }
+}
+
+/// Execute ForLoop statement (for...in / for...of)
+#[allow(clippy::too_many_arguments)]
+pub fn execute_for_loop(
+    vm: &mut VM,
+    _phase: ForLoopPhase,
+    items: Option<Vec<Val>>,
+    idx: usize,
+    kind: ForLoopKind,
+    binding: String,
+    iterable: Expr,
+    body: Box<Stmt>,
+) -> Step {
+    // If items is None, we need to evaluate the iterable first
+    let items = match items {
+        Some(items) => items,
+        None => {
+            // Evaluate the iterable expression
+            let iterable_val =
+                match eval_expr(&iterable, &vm.env, &mut vm.resume_value, &mut vm.outbox) {
+                    EvalResult::Value { v } => v,
+                    EvalResult::Suspend { .. } => {
+                        // Should never happen - semantic validator ensures no await in iterable
+                        panic!("Internal error: await in for loop iterable expression");
+                    }
+                    EvalResult::Throw { error } => {
+                        vm.control = Control::Throw(error);
+                        return Step::Continue;
+                    }
+                };
+
+            // Extract items based on loop kind
+            match kind {
+                ForLoopKind::Of => {
+                    // for...of iterates over values
+                    match iterable_val {
+                        Val::List(arr) => arr,
+                        _ => {
+                            vm.control = Control::Throw(Val::Error(ErrorInfo::new(
+                                errors::TYPE_ERROR,
+                                "for...of requires an array",
+                            )));
+                            return Step::Continue;
+                        }
+                    }
+                }
+                ForLoopKind::In => {
+                    // for...in iterates over keys
+                    match iterable_val {
+                        Val::Obj(map) => map.keys().cloned().map(Val::Str).collect(),
+                        Val::List(arr) => (0..arr.len()).map(|i| Val::Num(i as f64)).collect(),
+                        _ => {
+                            vm.control = Control::Throw(Val::Error(ErrorInfo::new(
+                                errors::TYPE_ERROR,
+                                "for...in requires an object or array",
+                            )));
+                            return Step::Continue;
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    // Check if we've exhausted all items
+    if idx >= items.len() {
+        // Loop complete - clean up binding and pop frame
+        vm.env.remove(&binding);
+        vm.frames.pop();
+        return Step::Continue;
+    }
+
+    // Set the binding variable to the current item
+    let current_item = items[idx].clone();
+    vm.env.insert(binding.clone(), current_item);
+
+    // Advance the index for next iteration
+    let frame_idx = vm.frames.len() - 1;
+    vm.frames[frame_idx].kind = FrameKind::ForLoop {
+        phase: ForLoopPhase::Iterate,
+        items: Some(items),
+        idx: idx + 1,
+    };
+
+    // Push the body onto the stack
+    push_stmt(vm, &body);
+
+    Step::Continue
 }
 
 /// Execute Break statement

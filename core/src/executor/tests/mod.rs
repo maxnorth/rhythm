@@ -8,6 +8,7 @@ mod basic_tests;
 mod composite_tests;
 mod declare_tests;
 mod error_tests;
+mod for_loop_tests;
 pub mod helpers; // Public helper utilities for tests
 mod if_tests;
 mod literal_tests;
