@@ -1,4 +1,4 @@
-//! Time stdlib functions
+//! Timer stdlib functions
 
 use crate::executor::errors::{self, ErrorInfo};
 use crate::executor::expressions::EvalResult;
@@ -6,9 +6,9 @@ use crate::executor::outbox::{Outbox, TimerSchedule};
 use crate::executor::types::{Awaitable, Val};
 use chrono::{Duration, Utc};
 
-/// Time.delay(duration_ms) - Create a timer that fires after the specified duration
+/// Timer.delay(duration_seconds) - Create a timer that fires after the specified duration
 ///
-/// Takes a duration in milliseconds, computes the absolute fire_at time using
+/// Takes a duration in seconds, computes the absolute fire_at time using
 /// the current worker time, records a TimerSchedule side effect in the outbox,
 /// and returns a Promise value wrapping the timer.
 pub fn delay(args: &[Val], outbox: &mut Outbox) -> EvalResult {
@@ -22,8 +22,8 @@ pub fn delay(args: &[Val], outbox: &mut Outbox) -> EvalResult {
         };
     }
 
-    // Extract duration_ms (first argument, must be number)
-    let duration_ms = match &args[0] {
+    // Extract duration_seconds (first argument, must be number)
+    let duration_seconds = match &args[0] {
         Val::Num(n) => {
             if *n < 0.0 {
                 return EvalResult::Throw {
@@ -33,19 +33,21 @@ pub fn delay(args: &[Val], outbox: &mut Outbox) -> EvalResult {
                     )),
                 };
             }
-            *n as i64
+            *n
         }
         _ => {
             return EvalResult::Throw {
                 error: Val::Error(ErrorInfo::new(
                     errors::WRONG_ARG_TYPE,
-                    "Argument (duration_ms) must be a number",
+                    "Argument (duration_seconds) must be a number",
                 )),
             };
         }
     };
 
     // Compute fire_at using worker-local time (clock skew is acceptable)
+    // Convert seconds to milliseconds for Duration
+    let duration_ms = (duration_seconds * 1000.0) as i64;
     let fire_at = Utc::now() + Duration::milliseconds(duration_ms);
 
     // Record side effect in outbox

@@ -1,5 +1,5 @@
 ## Recent Additions
-- `Time.delay(duration_ms)` - Timed delays in workflows
+- `Timer.delay(duration_seconds)` - Timed delays in workflows
 - `Task.any(...)`, `Task.all(...)`, and `Task.race(...)` composites
 
 ## Planned Features

@@ -5,7 +5,7 @@
 pub mod math;
 pub mod signal;
 pub mod task;
-pub mod time;
+pub mod timer;
 
 use super::expressions::EvalResult;
 use super::outbox::Outbox;
@@ -73,7 +73,7 @@ pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val], outbox: &mut Outbox) ->
         StdlibFunc::PromiseAny => task::any(args),
         StdlibFunc::PromiseRace => task::race(args),
         // Time functions have side effects - outbox required
-        StdlibFunc::TimeDelay => time::delay(args, outbox),
+        StdlibFunc::TimeDelay => timer::delay(args, outbox),
         // Signal functions have side effects - outbox required
         StdlibFunc::SignalNext => signal::next(args, outbox),
         // Arithmetic operators
@@ -390,9 +390,9 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     promise_obj.insert("any".to_string(), Val::NativeFunc(StdlibFunc::PromiseAny));
     promise_obj.insert("race".to_string(), Val::NativeFunc(StdlibFunc::PromiseRace));
 
-    // Create Time object with methods
-    let mut time_obj = std::collections::HashMap::new();
-    time_obj.insert("delay".to_string(), Val::NativeFunc(StdlibFunc::TimeDelay));
+    // Create Timer object with methods
+    let mut timer_obj = std::collections::HashMap::new();
+    timer_obj.insert("delay".to_string(), Val::NativeFunc(StdlibFunc::TimeDelay));
 
     // Create Signal object with methods
     let mut signal_obj = std::collections::HashMap::new();
@@ -402,7 +402,7 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     env.insert("Math".to_string(), Val::Obj(math_obj));
     env.insert("Task".to_string(), Val::Obj(task_obj));
     env.insert("Promise".to_string(), Val::Obj(promise_obj));
-    env.insert("Time".to_string(), Val::Obj(time_obj));
+    env.insert("Timer".to_string(), Val::Obj(timer_obj));
     env.insert("Signal".to_string(), Val::Obj(signal_obj));
 
     // Add global operator functions

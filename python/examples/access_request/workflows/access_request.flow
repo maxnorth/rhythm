@@ -16,7 +16,7 @@ try {
     // wait for approval or timeout
     let approval = await Promise.race([
         Signal.next("access-request-approval"),
-        Time.delay(2 * 60 * 60) // 2 hours timeout
+        Timer.delay(2 * 60 * 60) // 2 hours timeout
     ])
 
     // reject if not approved
@@ -34,7 +34,7 @@ try {
     // wait for session end or timeout
     let cancelled = await Promise.race([
         Signal.next("access-session-canceled"),
-        Time.delay(Inputs.duration_minutes * 60) // duration in seconds
+        Timer.delay(Inputs.duration_minutes * 60) // duration in seconds
     ])
 
     // revoke access

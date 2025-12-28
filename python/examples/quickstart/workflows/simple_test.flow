@@ -1,6 +1,6 @@
 let orderId = Inputs.orderId
 
-let sleepTask = Time.delay(10 * 1000)  // 10 seconds
+let sleepTask = Timer.delay(10)  // 10 seconds
 
 let result1 = await Task.run("process_payment", {
     order_id: "test1",

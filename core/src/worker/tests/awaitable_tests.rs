@@ -443,7 +443,7 @@ async fn test_task_race_with_timer_timeout_pattern() {
     // Race between a task and a 0ms timer (immediate timeout)
     let workflow_source = r#"
         let task = Task.run("slow_task", {})
-        let timeout = Time.delay(0)
+        let timeout = Timer.delay(0)
         let result = await Promise.race([task, timeout])
         return result
     "#;
@@ -471,7 +471,7 @@ async fn test_task_all_with_timer() {
     // Wait for both a task and a timer
     let workflow_source = r#"
         let task = Task.run("some_task", {})
-        let timer = Time.delay(0)
+        let timer = Timer.delay(0)
         let results = await Promise.all([task, timer])
         return results
     "#;
@@ -522,7 +522,7 @@ async fn test_nested_all_in_race() {
         let t1 = Task.run("task1", {})
         let t2 = Task.run("task2", {})
         let all_tasks = Promise.all([t1, t2])
-        let timeout = Time.delay(0)
+        let timeout = Timer.delay(0)
         let result = await Promise.race([all_tasks, timeout])
         return result
     "#;
@@ -550,7 +550,7 @@ async fn test_nested_race_in_all() {
     let workflow_source = r#"
         let t1 = Task.run("task1", {})
         let t2 = Task.run("task2", {})
-        let timer = Time.delay(0)
+        let timer = Timer.delay(0)
         let race_result = Promise.race([t1, timer])
         let results = await Promise.all([race_result, t2])
         return results

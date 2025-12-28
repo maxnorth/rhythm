@@ -39,7 +39,7 @@ impl TaskCreation {
 /// A timer scheduling side effect
 ///
 /// Represents a request to schedule a timer. This is added to the outbox
-/// when Time.delay() is called, and the external orchestrator will create
+/// when Timer.delay() is called, and the external orchestrator will create
 /// a scheduled_queue entry.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TimerSchedule {

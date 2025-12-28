@@ -363,8 +363,8 @@ fn test_await_task_race_suspends() {
 #[test]
 fn test_task_all_with_timers() {
     let source = r#"
-        let timer1 = Time.delay(1000)
-        let timer2 = Time.delay(2000)
+        let timer1 = Timer.delay(1)
+        let timer2 = Timer.delay(2)
         return Promise.all([timer1, timer2])
     "#;
 
@@ -391,7 +391,7 @@ fn test_task_all_with_timers() {
 fn test_task_race_mixed_task_and_timer() {
     let source = r#"
         let task = Task.run("slow_task", {})
-        let timer = Time.delay(5000)
+        let timer = Timer.delay(5)
         return Promise.race([task, timer])
     "#;
 

@@ -1,17 +1,17 @@
-//! Tests for Time.delay() and timer functionality
+//! Tests for Timer.delay() and timer functionality
 
 use super::helpers::parse_workflow_and_build_vm;
 use crate::executor::{errors, run_until_done, Awaitable, Control, Val, VM};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 
-/* ===================== Time.delay() Basic Tests ===================== */
+/* ===================== Timer.delay() Basic Tests ===================== */
 
 #[test]
-fn test_time_delay_basic() {
-    // Time.delay(1000) returns a Promise(Timer) with fire_at ~1 second in the future
+fn test_timer_delay_basic() {
+    // Timer.delay(1) returns a Promise(Timer) with fire_at ~1 second in the future
     let source = r#"
-        return Time.delay(1000)
+        return Timer.delay(1)
     "#;
 
     let before = Utc::now();
@@ -23,8 +23,8 @@ fn test_time_delay_basic() {
     match &vm.control {
         Control::Return(Val::Promise(Awaitable::Timer { fire_at })) => {
             // fire_at should be approximately 1 second after now
-            let expected_min = before + Duration::milliseconds(1000);
-            let expected_max = after + Duration::milliseconds(1000);
+            let expected_min = before + Duration::seconds(1);
+            let expected_max = after + Duration::seconds(1);
             assert!(
                 *fire_at >= expected_min && *fire_at <= expected_max,
                 "fire_at {:?} should be between {:?} and {:?}",
@@ -44,10 +44,10 @@ fn test_time_delay_basic() {
 }
 
 #[test]
-fn test_time_delay_zero() {
-    // Time.delay(0) should work and set fire_at to approximately now
+fn test_timer_delay_zero() {
+    // Timer.delay(0) should work and set fire_at to approximately now
     let source = r#"
-        return Time.delay(0)
+        return Timer.delay(0)
     "#;
 
     let before = Utc::now();
@@ -73,10 +73,10 @@ fn test_time_delay_zero() {
 }
 
 #[test]
-fn test_time_delay_large_value() {
-    // Time.delay(3600000) - 1 hour
+fn test_timer_delay_large_value() {
+    // Timer.delay(3600) - 1 hour
     let source = r#"
-        return Time.delay(3600000)
+        return Timer.delay(3600)
     "#;
 
     let before = Utc::now();
@@ -98,12 +98,38 @@ fn test_time_delay_large_value() {
     }
 }
 
+#[test]
+fn test_timer_delay_fractional_seconds() {
+    // Timer.delay(0.5) - half a second
+    let source = r#"
+        return Timer.delay(0.5)
+    "#;
+
+    let before = Utc::now();
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    match &vm.control {
+        Control::Return(Val::Promise(Awaitable::Timer { fire_at })) => {
+            // fire_at should be approximately 500ms in the future
+            let expected = before + Duration::milliseconds(500);
+            let diff = (*fire_at - expected).num_milliseconds().abs();
+            assert!(
+                diff < 100,
+                "fire_at should be ~500ms from now, diff was {}ms",
+                diff
+            );
+        }
+        _ => panic!("Expected Timer, got {:?}", vm.control),
+    }
+}
+
 /* ===================== Outbox Side Effects Tests ===================== */
 
 #[test]
-fn test_time_delay_records_timer_in_outbox() {
+fn test_timer_delay_records_timer_in_outbox() {
     let source = r#"
-        return Time.delay(5000)
+        return Timer.delay(5)
     "#;
 
     let before = Utc::now();
@@ -120,7 +146,7 @@ fn test_time_delay_records_timer_in_outbox() {
     }
 
     // Timer should be ~5 seconds in the future
-    let expected = before + Duration::milliseconds(5000);
+    let expected = before + Duration::seconds(5);
     let diff = (timer.fire_at - expected).num_milliseconds().abs();
     assert!(
         diff < 100,
@@ -130,12 +156,12 @@ fn test_time_delay_records_timer_in_outbox() {
 }
 
 #[test]
-fn test_time_delay_multiple_timers() {
-    // Multiple Time.delay() calls add multiple entries to outbox
+fn test_timer_delay_multiple_timers() {
+    // Multiple Timer.delay() calls add multiple entries to outbox
     let source = r#"
-        Time.delay(1000)
-        Time.delay(2000)
-        return Time.delay(3000)
+        Timer.delay(1)
+        Timer.delay(2)
+        return Timer.delay(3)
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -152,10 +178,10 @@ fn test_time_delay_multiple_timers() {
 /* ===================== Await/Suspend Tests ===================== */
 
 #[test]
-fn test_await_time_delay_suspends() {
-    // await Time.delay(1000) should suspend the VM
+fn test_await_timer_delay_suspends() {
+    // await Timer.delay(1) should suspend the VM
     let source = r#"
-        return await Time.delay(1000)
+        return await Timer.delay(1)
     "#;
 
     let before = Utc::now();
@@ -165,7 +191,7 @@ fn test_await_time_delay_suspends() {
     // Should be suspended on a timer
     match &vm.control {
         Control::Suspend(Awaitable::Timer { fire_at }) => {
-            let expected = before + Duration::milliseconds(1000);
+            let expected = before + Duration::seconds(1);
             let diff = (*fire_at - expected).num_milliseconds().abs();
             assert!(
                 diff < 100,
@@ -184,10 +210,10 @@ fn test_await_time_delay_suspends() {
 }
 
 #[test]
-fn test_await_time_delay_resume() {
+fn test_await_timer_delay_resume() {
     // After resuming a suspended timer, execution continues
     let source = r#"
-        let result = await Time.delay(1000)
+        let result = await Timer.delay(1)
         return result
     "#;
 
@@ -213,11 +239,11 @@ fn test_await_time_delay_resume() {
 }
 
 #[test]
-fn test_await_time_delay_in_sequence() {
+fn test_await_timer_delay_in_sequence() {
     // Multiple awaited sleeps in sequence
     let source = r#"
-        await Time.delay(100)
-        await Time.delay(200)
+        await Timer.delay(0.1)
+        await Timer.delay(0.2)
         return "done"
     "#;
 
@@ -252,7 +278,7 @@ fn test_await_time_delay_in_sequence() {
 fn test_timer_serialization() {
     // Test that suspended timer state can be serialized/deserialized
     let source = r#"
-        return await Time.delay(60000)
+        return await Timer.delay(60)
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -282,10 +308,10 @@ fn test_timer_serialization() {
 /* ===================== Error Handling Tests ===================== */
 
 #[test]
-fn test_time_delay_wrong_arg_count_zero() {
-    // Time.delay() with no arguments
+fn test_timer_delay_wrong_arg_count_zero() {
+    // Timer.delay() with no arguments
     let source = r#"
-        return Time.delay()
+        return Timer.delay()
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -299,10 +325,10 @@ fn test_time_delay_wrong_arg_count_zero() {
 }
 
 #[test]
-fn test_time_delay_wrong_arg_count_two() {
-    // Time.delay(1000, 2000) - too many arguments
+fn test_timer_delay_wrong_arg_count_two() {
+    // Timer.delay(1, 2) - too many arguments
     let source = r#"
-        return Time.delay(1000, 2000)
+        return Timer.delay(1, 2)
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -316,10 +342,10 @@ fn test_time_delay_wrong_arg_count_two() {
 }
 
 #[test]
-fn test_time_delay_wrong_arg_type_string() {
-    // Time.delay("1000") - string instead of number
+fn test_timer_delay_wrong_arg_type_string() {
+    // Timer.delay("1") - string instead of number
     let source = r#"
-        return Time.delay("1000")
+        return Timer.delay("1")
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -333,10 +359,10 @@ fn test_time_delay_wrong_arg_type_string() {
 }
 
 #[test]
-fn test_time_delay_wrong_arg_type_null() {
-    // Time.delay(null) - null instead of number
+fn test_timer_delay_wrong_arg_type_null() {
+    // Timer.delay(null) - null instead of number
     let source = r#"
-        return Time.delay(null)
+        return Timer.delay(null)
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -349,10 +375,10 @@ fn test_time_delay_wrong_arg_type_null() {
 }
 
 #[test]
-fn test_time_delay_negative_duration() {
-    // Time.delay(-1000) - negative duration
+fn test_timer_delay_negative_duration() {
+    // Timer.delay(-1) - negative duration
     let source = r#"
-        return Time.delay(-1000)
+        return Timer.delay(-1)
     "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
@@ -372,7 +398,7 @@ fn test_task_and_timer_in_same_workflow() {
     // Test that tasks and timers can coexist in the same workflow
     let source = r#"
         Task.run("my_task", {})
-        Time.delay(1000)
+        Timer.delay(1)
         return "done"
     "#;
 
@@ -391,7 +417,7 @@ fn test_await_task_then_timer() {
     // await task, then await timer
     let source = r#"
         let task_result = await Task.run("process", {})
-        await Time.delay(1000)
+        await Timer.delay(1)
         return task_result
     "#;
 

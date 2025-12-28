@@ -685,7 +685,7 @@ async fn test_workflow_runtime_error_sets_failed_status() {
 async fn test_workflow_suspends_on_timer() {
     // Workflow that awaits a timer
     let workflow_source = r#"
-        await Time.delay(60000)
+        await Timer.delay(60)
         return "timer_done"
     "#;
 
@@ -713,7 +713,7 @@ async fn test_workflow_suspends_on_timer() {
 async fn test_timer_schedules_to_scheduled_queue() {
     // Workflow that awaits a timer
     let workflow_source = r#"
-        await Time.delay(5000)
+        await Timer.delay(5)
         return "done"
     "#;
 
@@ -763,7 +763,7 @@ async fn test_timer_resumes_when_ready() {
     // Since the timer's fire_at is already <= db_now when checked in the runner loop,
     // the timer fires in the same execution cycle without needing a separate run
     let workflow_source = r#"
-        await Time.delay(0)
+        await Timer.delay(0)
         return "timer_fired"
     "#;
 
@@ -787,7 +787,7 @@ async fn test_timer_resumes_when_ready() {
 async fn test_timer_stays_suspended_when_not_ready() {
     // Workflow that awaits a long timer (1 hour)
     let workflow_source = r#"
-        await Time.delay(3600000)
+        await Timer.delay(3600)
         return "timer_fired"
     "#;
 
@@ -830,7 +830,7 @@ async fn test_task_then_timer_workflow() {
     // After task completes, the 0ms timer fires immediately in the same run
     let workflow_source = r#"
         task_result = await Task.run("process", {value: 42})
-        await Time.delay(0)
+        await Timer.delay(0)
         return task_result * 2
     "#;
 
@@ -879,9 +879,9 @@ async fn test_task_then_timer_workflow() {
 async fn test_multiple_sequential_timers() {
     // Workflow with multiple sequential timers (all 0ms for immediate firing)
     let workflow_source = r#"
-        await Time.delay(0)
-        await Time.delay(0)
-        await Time.delay(0)
+        await Timer.delay(0)
+        await Timer.delay(0)
+        await Timer.delay(0)
         return "all_timers_done"
     "#;
 
@@ -928,7 +928,7 @@ async fn test_multiple_sequential_timers() {
 async fn test_fire_and_forget_timer() {
     // Timer created but not awaited (fire-and-forget)
     let workflow_source = r#"
-        Time.delay(1000)
+        Timer.delay(1)
         return "done_without_waiting"
     "#;
 
@@ -971,7 +971,7 @@ async fn test_timer_captured_then_awaited_after_task() {
     // Since 0ms timer will already be ready by the time we await it,
     // the workflow should complete in one run after task completion
     let workflow_source = r#"
-        timer = Time.delay(0)
+        timer = Timer.delay(0)
         task_result = await Task.run("slow_task", {})
         await timer
         return task_result
@@ -1037,7 +1037,7 @@ async fn test_parallel_timer_and_task() {
     // Simulates starting a timer while waiting for a task
     // Since 0ms timer is already ready when awaited, it fires in same execution cycle
     let workflow_source = r#"
-        timer = Time.delay(0)
+        timer = Timer.delay(0)
         task = Task.run("work", {})
         task_result = await task
         await timer

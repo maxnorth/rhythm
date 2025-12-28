@@ -429,7 +429,7 @@ async fn test_signal_in_race_with_timer() {
     // Race between signal and timer - timer wins if signal not sent
     let workflow_source = r#"
         let signal = Signal.next("maybe")
-        let timeout = Time.delay(0)
+        let timeout = Timer.delay(0)
         let result = await Promise.race([signal, timeout])
         return result
     "#;
@@ -458,7 +458,7 @@ async fn test_signal_in_race_signal_wins() {
     // Race between signal and timer - signal wins if sent before workflow runs
     let workflow_source = r#"
         let signal = Signal.next("fast")
-        let timeout = Time.delay(60000)
+        let timeout = Timer.delay(60000)
         let result = await Promise.race([signal, timeout])
         return result
     "#;

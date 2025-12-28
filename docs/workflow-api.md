@@ -12,8 +12,8 @@ using async/await, loops, conditionals, and error handling.
   - [Inputs](#inputs.inputs)
 - [Task](#task)
   - [run](#task.run)
-- [Time](#time)
-  - [delay](#time.delay)
+- [Timer](#timer)
+  - [delay](#timer.delay)
 - [Math](#math)
   - [floor](#math.floor)
   - [ceil](#math.ceil)
@@ -145,14 +145,14 @@ return { payment, inventory, email }
 
 ```
 
-## Time
+## Timer
 
-The Time object provides timer functionality for workflow delays.
+The Timer object provides timer functionality for workflow delays.
 
-### <a id="time.delay"></a>delay `method`
+### <a id="timer.delay"></a>delay `method`
 
 ```
-Time.delay(duration_ms: number): Timer
+Timer.delay(duration_seconds: number): Timer
 ```
 
 Create a timer that fires after the specified duration.
@@ -161,7 +161,7 @@ Use `await` to pause workflow execution until the timer fires.
 
 **Parameters:**
 
-- **`duration_ms`**: Duration in milliseconds
+- **`duration_seconds`**: Duration in seconds (supports fractional values like `0.5` for 500ms)
 
 **Returns:** Timer handle that can be awaited
 
@@ -169,20 +169,20 @@ Use `await` to pause workflow execution until the timer fires.
 
 **Simple delay**
 ```javascript
-await Time.delay(5000)  // Wait 5 seconds
+await Timer.delay(5)  // Wait 5 seconds
 return "done"
 ```
 
 **Delay between tasks**
 ```javascript
 let result = await Task.run("process", {})
-await Time.delay(10000)  // Wait 10 seconds
+await Timer.delay(10)  // Wait 10 seconds
 await Task.run("followup", { result })
 ```
 
 **Capture timer for later**
 ```javascript
-let timer = Time.delay(30000)  // Create 30s timer
+let timer = Timer.delay(30)  // Create 30s timer
 let result = await Task.run("work", {})
 await timer  // Wait for remaining time
 return result
