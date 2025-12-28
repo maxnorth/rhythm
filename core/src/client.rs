@@ -165,6 +165,25 @@ impl Client {
             .collect())
     }
 
+    /* ===================== Signal Operations ===================== */
+
+    /// Send a signal to a workflow
+    ///
+    /// The workflow will be enqueued for processing and will pick up the
+    /// signal on its next resumption.
+    pub async fn send_signal(
+        workflow_id: String,
+        signal_name: String,
+        payload: JsonValue,
+        queue: Option<String>,
+    ) -> Result<()> {
+        let app = Self::get_app()?;
+        let queue = queue.as_deref().unwrap_or("default");
+        app.signal_service
+            .send_signal(&workflow_id, &signal_name, payload, queue)
+            .await
+    }
+
     /* ===================== Internal Operations ===================== */
 
     /// Start the internal worker (scheduler queue processor)

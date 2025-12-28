@@ -266,6 +266,42 @@ def schedule_workflow(
     return execution_id
 
 
+def send_signal(
+    workflow_id: str,
+    signal_name: str,
+    payload: Any,
+    queue: str = "default",
+) -> None:
+    """Send a signal to a workflow.
+
+    The workflow will be enqueued for processing and will pick up the
+    signal on its next resumption.
+
+    Args:
+        workflow_id: ID of the workflow to send the signal to
+        signal_name: Name of the signal channel
+        payload: Signal payload (any JSON-serializable value)
+        queue: Queue name (default: "default")
+
+    Example:
+        rhythm.send_signal(
+            workflow_id="abc-123",
+            signal_name="approval",
+            payload={"approved": True, "reviewer": "alice"}
+        )
+
+    Meta:
+        section: Client
+    """
+    RhythmCore.send_signal(
+        workflow_id=workflow_id,
+        signal_name=signal_name,
+        payload=payload,
+        queue=queue,
+    )
+    logger.info(f"Sent signal '{signal_name}' to workflow {workflow_id}")
+
+
 def wait_for_execution(
     execution_id: str,
     timeout: float = 60.0,

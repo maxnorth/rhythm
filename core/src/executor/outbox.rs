@@ -8,15 +8,6 @@ use super::types::Val;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 
-/// A side effect recorded during workflow execution
-#[derive(Debug, Clone, PartialEq)]
-pub enum SideEffect {
-    /// Create a new task
-    TaskCreation(TaskCreation),
-    /// Schedule a timer
-    TimerSchedule(TimerSchedule),
-}
-
 /// A task creation side effect
 ///
 /// Represents a request to create a new task. This is added to the outbox
@@ -63,6 +54,31 @@ impl TimerSchedule {
     }
 }
 
+/// A signal request recorded during workflow execution
+///
+/// Represents a request to wait for a signal. The claim_id uniquely identifies
+/// this request for idempotent matching with incoming signals.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SignalRequest {
+    /// Unique identifier linking request to signal
+    pub claim_id: String,
+    /// The signal channel name
+    pub signal_name: String,
+    /// Set when matched to an unclaimed signal (during pre-loop or commit)
+    pub signal_id: Option<String>,
+}
+
+impl SignalRequest {
+    /// Create a new signal request
+    pub fn new(claim_id: String, signal_name: String) -> Self {
+        Self {
+            claim_id,
+            signal_name,
+            signal_id: None,
+        }
+    }
+}
+
 /// Outbox - collection of side effects
 #[derive(Debug, Clone, Default)]
 pub struct Outbox {
@@ -70,6 +86,8 @@ pub struct Outbox {
     pub tasks: Vec<TaskCreation>,
     /// Timer scheduling side effects
     pub timers: Vec<TimerSchedule>,
+    /// Signal request side effects
+    pub signals: Vec<SignalRequest>,
 }
 
 impl Outbox {
@@ -78,6 +96,7 @@ impl Outbox {
         Self {
             tasks: Vec::new(),
             timers: Vec::new(),
+            signals: Vec::new(),
         }
     }
 
@@ -94,5 +113,15 @@ impl Outbox {
     /// Check if a task with the given ID is in the outbox
     pub fn has_task(&self, task_id: &str) -> bool {
         self.tasks.iter().any(|t| t.task_id == task_id)
+    }
+
+    /// Add a signal request side effect
+    pub fn push_signal(&mut self, signal: SignalRequest) {
+        self.signals.push(signal);
+    }
+
+    /// Find a signal request by claim_id
+    pub fn get_signal(&self, claim_id: &str) -> Option<&SignalRequest> {
+        self.signals.iter().find(|s| s.claim_id == claim_id)
     }
 }

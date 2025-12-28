@@ -6,6 +6,7 @@ pub mod awaitable;
 pub mod claim;
 pub mod complete;
 pub mod runner;
+pub mod signals;
 
 #[cfg(test)]
 mod tests;

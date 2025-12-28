@@ -199,3 +199,29 @@ class RhythmCore:
             run_at_iso=run_at,
             queue=queue,
         )
+
+    @staticmethod
+    def send_signal(
+        workflow_id: str,
+        signal_name: str,
+        payload: Any,
+        queue: str = "default",
+    ) -> None:
+        """
+        Send a signal to a workflow.
+
+        The workflow will be enqueued for processing and will pick up the
+        signal on its next resumption.
+
+        Args:
+            workflow_id: ID of the workflow to send the signal to
+            signal_name: Name of the signal channel
+            payload: Signal payload (will be JSON serialized)
+            queue: Queue name (defaults to "default")
+        """
+        rust.send_signal_sync(
+            workflow_id=workflow_id,
+            signal_name=signal_name,
+            payload_json=json.dumps(payload),
+            queue=queue,
+        )

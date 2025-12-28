@@ -37,6 +37,9 @@ pub enum Awaitable {
         items: Vec<(String, Awaitable)>,
         is_object: bool,
     },
+    /// Wait for a signal on a named channel.
+    /// claim_id uniquely identifies this request for idempotent resolution.
+    Signal { name: String, claim_id: String },
 }
 
 /// Runtime value type

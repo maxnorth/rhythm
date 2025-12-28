@@ -3,6 +3,7 @@
 //! This module contains all stdlib function implementations organized by category.
 
 pub mod math;
+pub mod signal;
 pub mod task;
 pub mod time;
 
@@ -32,6 +33,8 @@ pub enum StdlibFunc {
     PromiseRace,
     // Time functions
     TimeDelay,
+    // Signal functions
+    SignalNext,
     // Arithmetic operators
     Add,
     Sub,
@@ -71,6 +74,8 @@ pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val], outbox: &mut Outbox) ->
         StdlibFunc::PromiseRace => task::race(args),
         // Time functions have side effects - outbox required
         StdlibFunc::TimeDelay => time::delay(args, outbox),
+        // Signal functions have side effects - outbox required
+        StdlibFunc::SignalNext => signal::next(args, outbox),
         // Arithmetic operators
         StdlibFunc::Add => add(args),
         StdlibFunc::Sub => sub(args),
@@ -352,6 +357,9 @@ pub fn to_string(val: &Val) -> String {
             super::types::Awaitable::Race { items, .. } => {
                 format!("[Promise Race({})]", items.len())
             }
+            super::types::Awaitable::Signal { name, .. } => {
+                format!("[Promise Signal({})]", name)
+            }
         },
         Val::Error(err) => format!("[Error: {}]", err.message),
         Val::NativeFunc(_) => "[Function]".to_string(),
@@ -386,11 +394,16 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     let mut time_obj = std::collections::HashMap::new();
     time_obj.insert("delay".to_string(), Val::NativeFunc(StdlibFunc::TimeDelay));
 
+    // Create Signal object with methods
+    let mut signal_obj = std::collections::HashMap::new();
+    signal_obj.insert("next".to_string(), Val::NativeFunc(StdlibFunc::SignalNext));
+
     // Add stdlib objects to environment
     env.insert("Math".to_string(), Val::Obj(math_obj));
     env.insert("Task".to_string(), Val::Obj(task_obj));
     env.insert("Promise".to_string(), Val::Obj(promise_obj));
     env.insert("Time".to_string(), Val::Obj(time_obj));
+    env.insert("Signal".to_string(), Val::Obj(signal_obj));
 
     // Add global operator functions
     env.insert("add".to_string(), Val::NativeFunc(StdlibFunc::Add));

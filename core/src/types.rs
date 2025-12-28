@@ -90,3 +90,13 @@ pub enum ExecutionOutcome {
     Failure(JsonValue),
     Suspended,
 }
+
+/// A signal sent to a workflow
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Signal {
+    pub id: String,
+    pub workflow_id: String,
+    pub signal_name: String,
+    pub payload: JsonValue,
+    pub created_at: DateTime<Utc>,
+}
