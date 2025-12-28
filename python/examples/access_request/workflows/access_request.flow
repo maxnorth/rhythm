@@ -1,0 +1,45 @@
+try {
+    const { user_email, request_details } = Inputs
+
+    // init request
+    let { request_id } = await Task.run("init-access-request", { user_email, request_details })
+
+    // notify approvers
+    let approvers = await Task.run("get-access-request-approvers", { request_id })
+    for (let approver of approvers) {
+        await Task.run("send-access-request-approval", { 
+            approver: approver,
+            request_id,
+        })
+    }
+
+    // wait for approval or timeout
+    let approval = await Promise.race([
+        Signal.next("access-request-approval"),
+        Time.delay(2 * 60 * 60) // 2 hours timeout
+    ])
+
+    // reject if not approved
+    if (approval?.response != "approved") {
+        await Task.run("reject-access-request", { 
+            request_id,
+            reason: approval?.response || "timeout" 
+        })
+        return
+    }
+
+    // grant access if approved
+    await Task.run("grant-access", { user_email, request_id: request.id })
+
+    // wait for session end or timeout
+    let cancelled = await Promise.race([
+        Signal.next("access-session-canceled"),
+        Time.delay(Inputs.duration_minutes * 60) // duration in seconds
+    ])
+
+    // revoke access
+    await Task.run("revoke-access", { request_id, reason: cancelled ? "canceled" : "expired" })
+
+} catch (error) {
+    await Task.run("notify-error", { user_email, message: error.message })
+}
