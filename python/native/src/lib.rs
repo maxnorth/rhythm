@@ -256,6 +256,31 @@ fn get_workflow_tasks_sync(py: Python, workflow_id: String) -> PyResult<String> 
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
+/* ===================== Signal Operations ===================== */
+
+/// Send a signal to a workflow
+#[pyfunction]
+#[pyo3(signature = (workflow_id, signal_name, payload_json, queue=None))]
+fn send_signal_sync(
+    py: Python,
+    workflow_id: String,
+    signal_name: String,
+    payload_json: String,
+    queue: Option<String>,
+) -> PyResult<()> {
+    let runtime = get_runtime();
+
+    let payload: serde_json::Value = serde_json::from_str(&payload_json).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid payload JSON: {}", e))
+    })?;
+
+    // Release GIL while doing DB write
+    py.allow_threads(|| {
+        runtime.block_on(Client::send_signal(workflow_id, signal_name, payload, queue))
+    })
+    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+}
+
 /* ===================== Scheduling Operations ===================== */
 
 /// Schedule an execution (workflow or task) to start at a future time
@@ -328,6 +353,9 @@ fn rhythm_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Workflow operations
     m.add_function(wrap_pyfunction!(start_workflow_sync, m)?)?;
     m.add_function(wrap_pyfunction!(get_workflow_tasks_sync, m)?)?;
+
+    // Signal operations
+    m.add_function(wrap_pyfunction!(send_signal_sync, m)?)?;
 
     // Scheduling operations
     m.add_function(wrap_pyfunction!(schedule_execution_sync, m)?)?;

@@ -14,6 +14,7 @@ mod literal_tests;
 mod nullish_coalescing_tests;
 mod operator_tests;
 mod optional_chaining_tests;
+mod signal_tests;
 mod stdlib_tests;
 mod task_tests;
 mod time_tests;

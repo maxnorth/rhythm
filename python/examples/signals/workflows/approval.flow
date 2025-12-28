@@ -1,0 +1,61 @@
+// Human-in-the-loop approval workflow
+//
+// This workflow demonstrates waiting for external signals.
+// It processes an order request and waits for human approval
+// before proceeding with fulfillment.
+
+let orderId = Inputs.orderId
+let amount = Inputs.amount
+let customerId = Inputs.customerId
+
+// Step 1: Validate the order
+let validation = await Task.run("validate_order", {
+    order_id: orderId,
+    amount: amount
+})
+
+if (!validation.valid) {
+    return {
+        status: "rejected",
+        reason: validation.reason
+    }
+}
+
+// Step 2: Wait for human approval (signal from external system)
+// The workflow suspends here until Signal.next() receives a signal
+let approval = await Signal.next("approval")
+
+// Step 3: Check approval decision
+if (!approval.approved) {
+    // Notify customer of rejection
+    await Task.run("send_notification", {
+        user_id: customerId,
+        message: "Your order " + orderId + " was not approved: " + approval.reason
+    })
+
+    return {
+        status: "rejected",
+        reason: approval.reason,
+        reviewer: approval.reviewer
+    }
+}
+
+// Step 4: Process the approved order
+let payment = await Task.run("process_payment", {
+    order_id: orderId,
+    amount: amount
+})
+
+// Step 5: Notify customer of success
+await Task.run("send_notification", {
+    user_id: customerId,
+    message: "Your order " + orderId + " has been approved and processed!"
+})
+
+return {
+    status: "completed",
+    orderId: orderId,
+    amount: amount,
+    reviewer: approval.reviewer,
+    paymentStatus: payment.status
+}

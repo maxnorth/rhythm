@@ -1,6 +1,6 @@
 //! Awaitable resolution logic
 //!
-//! Recursively resolves awaitables (Task, Timer, All, Any, Race) to determine
+//! Recursively resolves awaitables (Task, Timer, All, Any, Race, Signal) to determine
 //! if they're ready and what value to resume with.
 
 use anyhow::Result;
@@ -9,7 +9,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 
 use crate::db;
-use crate::executor::{errors::ErrorInfo, json_to_val, Awaitable, Val};
+use crate::executor::{errors::ErrorInfo, json_to_val, Awaitable, Outbox, Val};
 use crate::types::ExecutionStatus;
 
 /// Result of checking an awaitable's status
@@ -27,30 +27,75 @@ pub enum AwaitableStatus {
 /// Returns the status: Pending if not ready, Success/Error if ready with a value.
 /// Handles nested composites by recursively resolving inner awaitables.
 ///
+/// `signal_outbox` contains signals created in the current execution run.
+/// Signals not in the outbox are from previous runs and checked via DB.
+///
 /// Uses `Box::pin` for async recursion.
 pub fn resolve_awaitable<'a>(
     pool: &'a PgPool,
     awaitable: &'a Awaitable,
     db_now: DateTime<Utc>,
+    outbox: &'a Outbox,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<AwaitableStatus>> + Send + 'a>> {
     Box::pin(async move {
         match awaitable {
-            Awaitable::Task(task_id) => resolve_task(pool, task_id).await,
+            Awaitable::Task(task_id) => resolve_task(pool, task_id, outbox).await,
             Awaitable::Timer { fire_at } => Ok(resolve_timer(*fire_at, db_now)),
             Awaitable::All { items, is_object } => {
-                resolve_all(pool, items, *is_object, db_now).await
+                resolve_all(pool, items, *is_object, db_now, outbox).await
             }
             Awaitable::Any { items, is_object } => {
-                resolve_any(pool, items, *is_object, db_now).await
+                resolve_any(pool, items, *is_object, db_now, outbox).await
             }
             Awaitable::Race { items, is_object } => {
-                resolve_race(pool, items, *is_object, db_now).await
+                resolve_race(pool, items, *is_object, db_now, outbox).await
+            }
+            Awaitable::Signal { name: _, claim_id } => {
+                resolve_signal(pool, claim_id, outbox).await
             }
         }
     })
 }
 
-async fn resolve_task(pool: &PgPool, task_id: &str) -> Result<AwaitableStatus> {
+/// Resolve a signal awaitable
+///
+/// Resolution logic:
+/// 1. If claim_id is in signal outbox with signal_id → fetch payload, Ready
+/// 2. If claim_id is in signal outbox without signal_id → Pending
+/// 3. If claim_id not in outbox → check DB by claim_id
+async fn resolve_signal(
+    pool: &PgPool,
+    claim_id: &str,
+    outbox: &Outbox,
+) -> Result<AwaitableStatus> {
+    // Check if this signal is in the outbox (created this run)
+    if let Some(outbox_signal) = outbox.get_signal(claim_id) {
+        if let Some(signal_id) = &outbox_signal.signal_id {
+            // Matched to an unclaimed signal - fetch payload
+            let payload = db::signals::get_signal_payload(pool, signal_id).await?;
+            let val = json_to_val(&payload)?;
+            return Ok(AwaitableStatus::Success(val));
+        } else {
+            // In outbox but not matched yet - pending
+            return Ok(AwaitableStatus::Pending);
+        }
+    }
+
+    // Not in outbox - check DB (signal from previous run)
+    if let Some(payload) = db::signals::check_signal_claimed(pool, claim_id).await? {
+        let val = json_to_val(&payload)?;
+        Ok(AwaitableStatus::Success(val))
+    } else {
+        Ok(AwaitableStatus::Pending)
+    }
+}
+
+async fn resolve_task(pool: &PgPool, task_id: &str, outbox: &Outbox) -> Result<AwaitableStatus> {
+    // If task is in outbox, it was just created this run - skip DB query
+    if outbox.has_task(task_id) {
+        return Ok(AwaitableStatus::Pending);
+    }
+
     if let Some(task_execution) = db::executions::get_execution(pool, task_id).await? {
         match task_execution.status {
             ExecutionStatus::Completed => {
@@ -72,7 +117,7 @@ async fn resolve_task(pool: &PgPool, task_id: &str) -> Result<AwaitableStatus> {
             _ => Ok(AwaitableStatus::Pending),
         }
     } else {
-        // Task not in DB yet (probably in outbox, will be saved soon)
+        // Task not in DB yet
         Ok(AwaitableStatus::Pending)
     }
 }
@@ -91,11 +136,12 @@ async fn resolve_all(
     items: &[(String, Awaitable)],
     is_object: bool,
     db_now: DateTime<Utc>,
+    outbox: &Outbox,
 ) -> Result<AwaitableStatus> {
     let mut results: Vec<(String, Val)> = Vec::new();
 
     for (key, awaitable) in items {
-        match resolve_awaitable(pool, awaitable, db_now).await? {
+        match resolve_awaitable(pool, awaitable, db_now, outbox).await? {
             AwaitableStatus::Success(val) => {
                 results.push((key.clone(), val));
             }
@@ -128,11 +174,12 @@ async fn resolve_any(
     items: &[(String, Awaitable)],
     is_object: bool,
     db_now: DateTime<Utc>,
+    outbox: &Outbox,
 ) -> Result<AwaitableStatus> {
     let mut has_pending = false;
 
     for (key, awaitable) in items {
-        match resolve_awaitable(pool, awaitable, db_now).await? {
+        match resolve_awaitable(pool, awaitable, db_now, outbox).await? {
             AwaitableStatus::Success(val) => {
                 // First success - return { key, value }
                 let result = build_winner_result(key, val, is_object);
@@ -163,9 +210,10 @@ async fn resolve_race(
     items: &[(String, Awaitable)],
     is_object: bool,
     db_now: DateTime<Utc>,
+    outbox: &Outbox,
 ) -> Result<AwaitableStatus> {
     for (key, awaitable) in items {
-        match resolve_awaitable(pool, awaitable, db_now).await? {
+        match resolve_awaitable(pool, awaitable, db_now, outbox).await? {
             AwaitableStatus::Success(val) => {
                 // First settled (success)
                 let result = build_winner_result(key, val, is_object);

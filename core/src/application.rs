@@ -11,7 +11,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config::Config;
 use crate::services::{
-    ExecutionService, InitializationService, SchedulerService, WorkerService, WorkflowService,
+    ExecutionService, InitializationService, SchedulerService, SignalService, WorkerService,
+    WorkflowService,
 };
 
 /// The Rhythm application instance with all services
@@ -23,6 +24,7 @@ pub struct Application {
     pub workflow_service: WorkflowService,
     pub worker_service: WorkerService,
     pub scheduler_service: SchedulerService,
+    pub signal_service: SignalService,
     pub initialization_service: InitializationService,
     internal_worker_started: AtomicBool,
 }
@@ -45,6 +47,7 @@ impl Application {
             workflow_service: WorkflowService::new(pool.clone()),
             worker_service: WorkerService::new(pool.clone(), shutdown_token),
             scheduler_service,
+            signal_service: SignalService::new(pool.clone()),
             initialization_service: InitializationService::new(pool),
             internal_worker_started: AtomicBool::new(false),
         })
