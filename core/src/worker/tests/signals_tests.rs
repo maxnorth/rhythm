@@ -447,10 +447,8 @@ async fn test_signal_in_race_with_timer() {
         .unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
 
-    // Timer won (index 1), value is null
-    let output = workflow_execution.output.unwrap();
-    assert_eq!(output["key"], json!(1.0));
-    assert_eq!(output["value"], json!(null));
+    // Timer won, Promise.race returns just the value (null for timers)
+    assert_eq!(workflow_execution.output, Some(json!(null)));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -503,10 +501,8 @@ async fn test_signal_in_race_signal_wins() {
         .unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
 
-    // Signal won (index 0)
-    let output = workflow_execution.output.unwrap();
-    assert_eq!(output["key"], json!(0.0));
-    assert_eq!(output["value"]["winner"], "signal");
+    // Signal won, Promise.race returns just the value
+    assert_eq!(workflow_execution.output, Some(json!({"winner": "signal"})));
 }
 
 /* ===================== Signal Payload Types Tests ===================== */
