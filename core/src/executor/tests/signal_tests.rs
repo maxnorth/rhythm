@@ -184,7 +184,10 @@ fn test_signal_resume_try_catch_variable_outside() {
     run_until_done(&mut vm);
 
     // Should suspend waiting for signal
-    assert!(matches!(&vm.control, Control::Suspend(Awaitable::Signal { .. })));
+    assert!(matches!(
+        &vm.control,
+        Control::Suspend(Awaitable::Signal { .. })
+    ));
 
     // Resume with signal data
     vm.resume(Val::Obj(HashMap::new()));

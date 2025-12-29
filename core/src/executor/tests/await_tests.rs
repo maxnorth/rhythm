@@ -3,7 +3,7 @@
 //! Tests for await expressions, suspension, and resumption
 
 use super::helpers::parse_workflow_and_build_vm;
-use crate::executor::{run_until_done, step, Awaitable, Control, Step, Val, VM};
+use crate::executor::{run_until_done, Awaitable, Control, Val, VM};
 use maplit::hashmap;
 use std::collections::HashMap;
 
@@ -240,7 +240,7 @@ fn test_serialization_with_suspend() {
 
 #[test]
 fn test_step_by_step_suspension() {
-    // Test stepping through suspension manually
+    // Test suspension, serialization, and resumption
     let source = r#"
             return await Inputs.task
         "#;
@@ -250,29 +250,21 @@ fn test_step_by_step_suspension() {
     };
 
     let mut vm = parse_workflow_and_build_vm(source, inputs);
-
-    // Step through execution manually
-    let mut step_count = 0;
-    while let Step::Continue = step(&mut vm) {
-        step_count += 1;
-    }
+    run_until_done(&mut vm);
 
     // Should have suspended
     assert_eq!(
         vm.control,
         Control::Suspend(Awaitable::Task("task-step".to_string()))
     );
-    assert!(step_count > 0);
 
     // Serialize and deserialize
     let serialized = serde_json::to_string(&vm).unwrap();
     let mut vm2: VM = serde_json::from_str(&serialized).unwrap();
 
-    // Resume
+    // Resume and complete
     assert!(vm2.resume(Val::Str("stepped".to_string())));
-
-    // Step through completion
-    while let Step::Continue = step(&mut vm2) {}
+    run_until_done(&mut vm2);
 
     assert_eq!(
         vm2.control,

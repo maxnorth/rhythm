@@ -436,24 +436,7 @@ fn test_try_block_completes_without_infinite_loop() {
         "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
-
-    // Run for a limited number of steps to detect infinite loop
-    let mut steps = 0;
-    let max_steps = 100;
-    while steps < max_steps {
-        let step = crate::executor::step(&mut vm);
-        steps += 1;
-        if step == crate::executor::Step::Done {
-            break;
-        }
-    }
-
-    // Should complete well before max_steps
-    assert!(
-        steps < max_steps,
-        "Workflow took {} steps - possible infinite loop",
-        steps
-    );
+    run_until_done(&mut vm);
 
     // Should return 1, not 999 (no error occurred)
     assert_eq!(vm.control, Control::Return(Val::Num(1.0)));

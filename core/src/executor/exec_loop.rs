@@ -13,7 +13,7 @@ use super::statements::{
     execute_for_loop, execute_if, execute_return, execute_try, execute_while,
 };
 use super::types::{Control, FrameKind, Stmt};
-use super::vm::{Step, VM};
+use super::vm::VM;
 
 /* ===================== Public API ===================== */
 
@@ -22,27 +22,22 @@ use super::vm::{Step, VM};
 /// This is the top-level driver that repeatedly calls step() until execution finishes.
 /// After completion, inspect `vm.control` for the final state and `vm.outbox` for side effects.
 pub fn run_until_done(vm: &mut VM) {
-    while let Step::Continue = step(vm) {}
+    while !vm.frames.is_empty() && !matches!(vm.control, Control::Suspend(_)) {
+        step(vm);
+    }
 }
 
 /// Execute one step of the VM
 ///
 /// This is the core interpreter loop. It:
-/// 1. Handles Suspend centrally (stops execution)
-/// 2. Gets the top frame
-/// 3. Dispatches to the appropriate statement handler
-/// 4. Each handler manages its own control flow propagation
-pub fn step(vm: &mut VM) -> Step {
-    // Handle Suspend centrally - stop execution, preserve state
-    if matches!(vm.control, Control::Suspend(_)) {
-        return Step::Done;
-    }
-
-
+/// 1. Gets the top frame
+/// 2. Dispatches to the appropriate statement handler
+/// 3. Each handler manages its own control flow propagation
+pub fn step(vm: &mut VM) {
     // Get top frame (if any)
     let Some(frame_idx) = vm.frames.len().checked_sub(1) else {
-        // No frames left - execution complete
-        return Step::Done;
+        // No frames left - nothing to do
+        return;
     };
 
     // Clone frame data we need (to avoid borrow checker issues)

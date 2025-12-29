@@ -11,7 +11,7 @@ use super::types::{
     ExprPhase, ForLoopKind, ForLoopPhase, FrameKind, IfPhase, MemberAccess, ReturnPhase, Stmt,
     TryPhase, Val, VarKind, WhilePhase,
 };
-use super::vm::{push_stmt, Step, VM};
+use super::vm::{push_stmt, VM};
 
 /* ===================== Statement Handlers ===================== */
 
@@ -22,14 +22,14 @@ pub fn execute_block(
     idx: usize,
     declared_vars: Vec<String>,
     body: &[Stmt],
-) -> Step {
+) {
     // If control flow is active, clean up and pop
     if vm.control != Control::None {
         for var_name in &declared_vars {
             vm.env.remove(var_name);
         }
         vm.frames.pop();
-        return Step::Continue;
+        return;
     }
 
     let mut declared_vars = declared_vars;
@@ -45,7 +45,7 @@ pub fn execute_block(
 
                 // Pop frame
                 vm.frames.pop();
-                return Step::Continue;
+                return;
             }
 
             // Get the current statement to execute
@@ -73,14 +73,12 @@ pub fn execute_block(
 
             // Push a frame for the child statement
             push_stmt(vm, child_stmt);
-
-            Step::Continue
         }
     }
 }
 
 /// Execute Return statement
-pub fn execute_return(vm: &mut VM, phase: ReturnPhase, value: Option<Expr>) -> Step {
+pub fn execute_return(vm: &mut VM, phase: ReturnPhase, value: Option<Expr>) {
     match phase {
         ReturnPhase::Eval => {
             // Evaluate the return value (if any)
@@ -92,12 +90,12 @@ pub fn execute_return(vm: &mut VM, phase: ReturnPhase, value: Option<Expr>) -> S
                         // Set control to Suspend and stop execution
                         // DO NOT pop the frame - we need to preserve state for resumption
                         vm.control = Control::Suspend(awaitable);
-                        return Step::Done;
+                        return;
                     }
                     EvalResult::Throw { error } => {
                         vm.control = Control::Throw(error);
                         vm.frames.pop();
-                        return Step::Continue;
+                        return;
                     }
                 }
             } else {
@@ -109,8 +107,6 @@ pub fn execute_return(vm: &mut VM, phase: ReturnPhase, value: Option<Expr>) -> S
 
             // Pop this frame
             vm.frames.pop();
-
-            Step::Continue
         }
     }
 }
@@ -122,7 +118,7 @@ pub fn execute_try(
     catch_var: String,
     body: Box<Stmt>,
     catch_body: Box<Stmt>,
-) -> Step {
+) {
     // Handle Throw in TryStarted - catch the error
     if let Control::Throw(error) = &vm.control {
         if phase == TryPhase::TryStarted {
@@ -136,7 +132,7 @@ pub fn execute_try(
                 catch_var,
             };
             push_stmt(vm, &catch_body);
-            return Step::Continue;
+            return;
         }
     }
 
@@ -146,7 +142,7 @@ pub fn execute_try(
             vm.env.remove(&catch_var);
         }
         vm.frames.pop();
-        return Step::Continue;
+        return;
     }
 
     match phase {
@@ -158,24 +154,21 @@ pub fn execute_try(
                 catch_var,
             };
             push_stmt(vm, &body);
-            Step::Continue
         }
         TryPhase::TryStarted => {
             // Try body completed successfully - pop frame, we're done
             vm.frames.pop();
-            Step::Continue
         }
         TryPhase::CatchStarted => {
             // Catch body completed - clean up catch_var and pop frame
             vm.env.remove(&catch_var);
             vm.frames.pop();
-            Step::Continue
         }
     }
 }
 
 /// Execute Expr statement
-pub fn execute_expr(vm: &mut VM, phase: ExprPhase, expr: Expr) -> Step {
+pub fn execute_expr(vm: &mut VM, phase: ExprPhase, expr: Expr) {
     match phase {
         ExprPhase::Eval => {
             // Evaluate the expression
@@ -185,19 +178,16 @@ pub fn execute_expr(vm: &mut VM, phase: ExprPhase, expr: Expr) -> Step {
                     // Discard the result (expression statements don't produce values)
                     // Pop this frame and continue
                     vm.frames.pop();
-                    Step::Continue
                 }
                 EvalResult::Suspend { awaitable } => {
                     // Expression suspended (await encountered)
                     // Set control to Suspend and stop execution
                     // DO NOT pop the frame - we need to preserve state for resumption
                     vm.control = Control::Suspend(awaitable);
-                    Step::Done
                 }
                 EvalResult::Throw { error } => {
                     vm.control = Control::Throw(error);
                     vm.frames.pop();
-                    Step::Continue
                 }
             }
         }
@@ -211,7 +201,7 @@ pub fn execute_assign(
     var: String,
     path: Vec<MemberAccess>,
     value: Expr,
-) -> Step {
+) {
     match phase {
         AssignPhase::Eval => {
             // Step 1: Evaluate all path segment expressions and build the access path
@@ -236,7 +226,7 @@ pub fn execute_assign(
                             EvalResult::Throw { error } => {
                                 vm.control = Control::Throw(error);
                                 vm.frames.pop();
-                                return Step::Continue;
+                                return;
                             }
                         }
                     }
@@ -255,12 +245,12 @@ pub fn execute_assign(
                             panic!("Internal error: await in attribute assignment value");
                         }
                         vm.control = Control::Suspend(awaitable);
-                        return Step::Done;
+                        return;
                     }
                     EvalResult::Throw { error } => {
                         vm.control = Control::Throw(error);
                         vm.frames.pop();
-                        return Step::Continue;
+                        return;
                     }
                 };
 
@@ -279,7 +269,7 @@ pub fn execute_assign(
                             message: format!("Variable '{}' is not defined", var),
                         }));
                         vm.frames.pop();
-                        return Step::Continue;
+                        return;
                     }
                 };
 
@@ -298,7 +288,7 @@ pub fn execute_assign(
                                 ),
                             }));
                             vm.frames.pop();
-                            return Step::Continue;
+                            return;
                         }
                     } else {
                         // Index access - valid on objects and arrays
@@ -309,7 +299,7 @@ pub fn execute_assign(
                                     .to_string(),
                             }));
                             vm.frames.pop();
-                            return Step::Continue;
+                            return;
                         }
                     }
 
@@ -322,7 +312,7 @@ pub fn execute_assign(
                                     message: format!("Cannot read property '{}' of undefined", key),
                                 }));
                                 vm.frames.pop();
-                                return Step::Continue;
+                                return;
                             }
                         },
                         Val::List(arr) => {
@@ -335,7 +325,7 @@ pub fn execute_assign(
                                         message: format!("Invalid array index: {}", key),
                                     }));
                                     vm.frames.pop();
-                                    return Step::Continue;
+                                    return;
                                 }
                             }
                         }
@@ -361,7 +351,7 @@ pub fn execute_assign(
                             ),
                         }));
                         vm.frames.pop();
-                        return Step::Continue;
+                        return;
                     }
                 } else {
                     // Index access - valid on objects and arrays
@@ -372,7 +362,7 @@ pub fn execute_assign(
                                 .to_string(),
                         }));
                         vm.frames.pop();
-                        return Step::Continue;
+                        return;
                     }
                 }
 
@@ -392,7 +382,7 @@ pub fn execute_assign(
                                     message: format!("Invalid array index: {}", final_key),
                                 }));
                                 vm.frames.pop();
-                                return Step::Continue;
+                                return;
                             }
                         }
                     }
@@ -405,7 +395,6 @@ pub fn execute_assign(
 
             // Pop this frame and continue
             vm.frames.pop();
-            Step::Continue
         }
     }
 }
@@ -417,7 +406,7 @@ pub fn execute_if(
     test: Expr,
     then_s: Box<Stmt>,
     else_s: Option<Box<Stmt>>,
-) -> Step {
+) {
     match phase {
         IfPhase::Eval => {
             // Evaluate the test expression
@@ -430,7 +419,7 @@ pub fn execute_if(
                 EvalResult::Throw { error } => {
                     vm.control = Control::Throw(error);
                     vm.frames.pop();
-                    return Step::Continue;
+                    return;
                 }
             };
 
@@ -449,8 +438,6 @@ pub fn execute_if(
                 push_stmt(vm, else_stmt);
             }
             // If not truthy and no else branch, we just continue (nothing to execute)
-
-            Step::Continue
         }
     }
 }
@@ -462,7 +449,7 @@ pub fn execute_while(
     label: Option<String>,
     test: Expr,
     body: Box<Stmt>,
-) -> Step {
+) {
     // Handle Continue - if label matches (or is None), re-evaluate test
     if let Control::Continue(continue_label) = &vm.control {
         if continue_label.is_none() || continue_label == &label {
@@ -476,7 +463,7 @@ pub fn execute_while(
             }
         }
         vm.frames.pop();
-        return Step::Continue;
+        return;
     }
 
     match phase {
@@ -491,7 +478,7 @@ pub fn execute_while(
                 EvalResult::Throw { error } => {
                     // Test expression threw an error
                     vm.control = Control::Throw(error);
-                    return Step::Continue;
+                    return;
                 }
             };
 
@@ -501,11 +488,9 @@ pub fn execute_while(
             if is_truthy {
                 // Continue looping - keep the While frame on the stack and push the body
                 push_stmt(vm, &body);
-                Step::Continue
             } else {
                 // Loop finished - pop this While frame
                 vm.frames.pop();
-                Step::Continue
             }
         }
     }
@@ -522,7 +507,7 @@ pub fn execute_for_loop(
     binding: String,
     iterable: Expr,
     body: Box<Stmt>,
-) -> Step {
+) {
     // Handle Continue - no labels yet, so any Continue goes to next iteration
     if let Control::Continue(continue_label) = &vm.control {
         if continue_label.is_none() {
@@ -537,7 +522,7 @@ pub fn execute_for_loop(
         }
         vm.env.remove(&binding);
         vm.frames.pop();
-        return Step::Continue;
+        return;
     }
 
     // If items is None, we need to evaluate the iterable first
@@ -554,7 +539,7 @@ pub fn execute_for_loop(
                     }
                     EvalResult::Throw { error } => {
                         vm.control = Control::Throw(error);
-                        return Step::Continue;
+                        return;
                     }
                 };
 
@@ -569,7 +554,7 @@ pub fn execute_for_loop(
                                 errors::TYPE_ERROR,
                                 "for...of requires an array",
                             )));
-                            return Step::Continue;
+                            return;
                         }
                     }
                 }
@@ -583,7 +568,7 @@ pub fn execute_for_loop(
                                 errors::TYPE_ERROR,
                                 "for...in requires an object or array",
                             )));
-                            return Step::Continue;
+                            return;
                         }
                     }
                 }
@@ -596,7 +581,7 @@ pub fn execute_for_loop(
         // Loop complete - clean up binding and pop frame
         vm.env.remove(&binding);
         vm.frames.pop();
-        return Step::Continue;
+        return;
     }
 
     // Set the binding variable to the current item
@@ -613,26 +598,22 @@ pub fn execute_for_loop(
 
     // Push the body onto the stack
     push_stmt(vm, &body);
-
-    Step::Continue
 }
 
 /// Execute Break statement
-pub fn execute_break(vm: &mut VM, _phase: BreakPhase) -> Step {
+pub fn execute_break(vm: &mut VM, _phase: BreakPhase) {
     // Set control flow to Break (no label support yet)
     vm.control = Control::Break(None);
     // Pop this Break frame
     vm.frames.pop();
-    Step::Continue
 }
 
 /// Execute Continue statement
-pub fn execute_continue(vm: &mut VM, _phase: ContinuePhase) -> Step {
+pub fn execute_continue(vm: &mut VM, _phase: ContinuePhase) {
     // Set control flow to Continue (no label support yet)
     vm.control = Control::Continue(None);
     // Pop this Continue frame
     vm.frames.pop();
-    Step::Continue
 }
 
 /// Execute Declare statement (let/const)
@@ -642,7 +623,7 @@ pub fn execute_declare(
     _var_kind: VarKind,
     target: DeclareTarget,
     init: Option<Expr>,
-) -> Step {
+) {
     match phase {
         DeclarePhase::Eval => {
             // Evaluate the initialization expression (if present) or use null
@@ -654,12 +635,12 @@ pub fn execute_declare(
                         // Set control to Suspend and stop execution
                         // DO NOT pop the frame - we need to preserve state for resumption
                         vm.control = Control::Suspend(awaitable);
-                        return Step::Done;
+                        return;
                     }
                     EvalResult::Throw { error } => {
                         vm.control = Control::Throw(error);
                         vm.frames.pop();
-                        return Step::Continue;
+                        return;
                     }
                 }
             } else {
@@ -682,7 +663,7 @@ pub fn execute_declare(
                                 "Cannot destructure non-object value",
                             )));
                             vm.frames.pop();
-                            return Step::Continue;
+                            return;
                         }
                     };
 
@@ -696,7 +677,7 @@ pub fn execute_declare(
                                     format!("Property '{}' not found on object", name),
                                 )));
                                 vm.frames.pop();
-                                return Step::Continue;
+                                return;
                             }
                         };
                         vm.env.insert(name, prop_value);
@@ -706,7 +687,6 @@ pub fn execute_declare(
 
             // Pop this frame and continue
             vm.frames.pop();
-            Step::Continue
         }
     }
 }

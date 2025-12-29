@@ -51,4 +51,4 @@ pub use expressions::EvalResult;
 pub use json::{json_to_val, json_to_val_map, val_map_to_json, val_to_json};
 pub use outbox::{Outbox, TaskCreation, TimerSchedule};
 pub use types::{Awaitable, Control, ErrorInfo, Expr, Stmt, Val};
-pub use vm::{Step, VM};
+pub use vm::VM;

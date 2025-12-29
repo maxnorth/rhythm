@@ -163,14 +163,3 @@ pub fn push_stmt(vm: &mut VM, stmt: &Stmt) {
         node: stmt.clone(),
     });
 }
-
-/* ===================== Step Result ===================== */
-
-/// Result of executing one step
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Step {
-    /// Continue to next step
-    Continue,
-    /// Execution complete
-    Done,
-}
