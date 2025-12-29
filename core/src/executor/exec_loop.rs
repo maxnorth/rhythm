@@ -28,17 +28,16 @@ pub fn run_until_done(vm: &mut VM) {
 /// Execute one step of the VM
 ///
 /// This is the core interpreter loop. It:
-/// 1. Checks for active control flow and unwinds if needed
+/// 1. Handles Suspend centrally (stops execution)
 /// 2. Gets the top frame
-/// 3. Matches on frame kind and execution phase
-/// 4. Executes the appropriate logic
-/// 5. Either continues or signals done
+/// 3. Dispatches to the appropriate statement handler
+/// 4. Each handler manages its own control flow propagation
 pub fn step(vm: &mut VM) -> Step {
-    // Check if we have active control flow (return/break/continue/throw)
-    if vm.control != Control::None {
-        // Unwind: pop frames until we find a handler or run out of frames
-        return unwind(vm);
+    // Handle Suspend centrally - stop execution, preserve state
+    if matches!(vm.control, Control::Suspend(_)) {
+        return Step::Done;
     }
+
 
     // Get top frame (if any)
     let Some(frame_idx) = vm.frames.len().checked_sub(1) else {
@@ -93,8 +92,8 @@ pub fn step(vm: &mut VM) -> Step {
             },
         ) => execute_if(vm, phase, test, then_s, else_s),
 
-        (FrameKind::While { phase, label: _ }, Stmt::While { test, body }) => {
-            execute_while(vm, phase, test, body)
+        (FrameKind::While { phase, label }, Stmt::While { test, body }) => {
+            execute_while(vm, phase, label, test, body)
         }
 
         (
@@ -122,221 +121,5 @@ pub fn step(vm: &mut VM) -> Step {
 
         // Shouldn't happen - frame kind doesn't match node
         _ => panic!("Frame kind does not match statement node"),
-    }
-}
-
-/* ===================== Control Flow ===================== */
-
-/// Unwind the stack when control flow is active
-///
-/// Pops frames until we find an appropriate handler or run out of frames.
-/// For Suspend, we DO NOT unwind - we preserve the stack for resumption.
-fn unwind(vm: &mut VM) -> Step {
-    match &vm.control {
-        Control::Return(_) => {
-            // Pop all frames, cleaning up block scopes as we go
-            while let Some(frame) = vm.frames.pop() {
-                // Clean up any variables declared in this block
-                if let FrameKind::Block { declared_vars, .. } = frame.kind {
-                    for var_name in declared_vars {
-                        vm.env.remove(&var_name);
-                    }
-                }
-            }
-            // No frames left means execution is complete
-            Step::Done
-        }
-
-        Control::Suspend(_) => {
-            // Suspend: DO NOT unwind the stack
-            // The VM is now in a suspended state with all frames preserved
-            // Execution stops here and can be resumed later
-            Step::Done
-        }
-
-        Control::None => {
-            // Should never happen - unwind is only called when control != None
-            panic!("Internal error: unwind() called with Control::None");
-        }
-
-        Control::Throw(error) => {
-            // Throw: Pop frames until we find a try/catch handler
-            // Walk the frame stack from top to bottom looking for Try frames
-            while let Some(frame) = vm.frames.last() {
-                match &frame.kind {
-                    super::types::FrameKind::Try {
-                        phase: _,
-                        catch_var,
-                    } => {
-                        // Found a try/catch handler!
-                        // Bind the error to the catch variable
-                        vm.env.insert(catch_var.clone(), error.clone());
-
-                        // Transition this frame to ExecuteCatch phase
-                        let frame_idx = vm.frames.len() - 1;
-                        vm.frames[frame_idx].kind = super::types::FrameKind::Try {
-                            phase: super::types::TryPhase::ExecuteCatch,
-                            catch_var: catch_var.clone(),
-                        };
-
-                        // Clear the error control flow
-                        vm.control = super::types::Control::None;
-
-                        // Continue execution (will run the catch block)
-                        return Step::Continue;
-                    }
-                    _ => {
-                        // Not a try/catch handler, pop this frame and clean up if needed
-                        let frame = vm.frames.pop().unwrap();
-                        // Clean up any variables declared in this block
-                        if let FrameKind::Block { declared_vars, .. } = frame.kind {
-                            for var_name in declared_vars {
-                                vm.env.remove(&var_name);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // No try/catch handler found - error propagates to top level
-            // Restore the error control (we cleared it in the loop check)
-            vm.control = super::types::Control::Throw(error.clone());
-            Step::Done
-        }
-
-        Control::Break(label) => {
-            // Break: Pop frames until we find a matching loop (While/ForLoop)
-            while let Some(frame) = vm.frames.last() {
-                match &frame.kind {
-                    super::types::FrameKind::While {
-                        phase: _,
-                        label: loop_label,
-                    } => {
-                        // Check if this is the target loop
-                        if label.is_none() || label == loop_label {
-                            // Found the target loop - pop it and clear control flow
-                            vm.frames.pop();
-                            vm.control = Control::None;
-                            return Step::Continue;
-                        } else {
-                            // Not the target loop - pop and continue searching
-                            let frame = vm.frames.pop().unwrap();
-                            // Clean up any variables declared in this block
-                            if let FrameKind::Block { declared_vars, .. } = frame.kind {
-                                for var_name in declared_vars {
-                                    vm.env.remove(&var_name);
-                                }
-                            }
-                        }
-                    }
-                    super::types::FrameKind::ForLoop { .. } => {
-                        // ForLoop is also a loop - break out of it (no labels yet)
-                        if label.is_none() {
-                            // Clean up the loop binding variable
-                            if let Stmt::ForLoop { binding, .. } = &frame.node {
-                                vm.env.remove(binding);
-                            }
-                            vm.frames.pop();
-                            vm.control = Control::None;
-                            return Step::Continue;
-                        } else {
-                            // Labeled break - ForLoop doesn't support labels yet
-                            let frame = vm.frames.pop().unwrap();
-                            if let FrameKind::Block { declared_vars, .. } = frame.kind {
-                                for var_name in declared_vars {
-                                    vm.env.remove(&var_name);
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        // Not a loop frame - pop it and clean up if needed
-                        let frame = vm.frames.pop().unwrap();
-                        // Clean up any variables declared in this block
-                        if let FrameKind::Block { declared_vars, .. } = frame.kind {
-                            for var_name in declared_vars {
-                                vm.env.remove(&var_name);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // No matching loop found - this is an error
-            // Restore the break control and signal done (error at top level)
-            vm.control = Control::Break(label.clone());
-            Step::Done
-        }
-
-        Control::Continue(label) => {
-            // Continue: Pop frames until we find a matching loop, then reset it to re-evaluate
-            // First, collect frames to pop (everything above the target loop)
-            let mut frames_to_pop = 0;
-            let mut found_loop = false;
-            let mut is_for_loop = false;
-
-            for i in (0..vm.frames.len()).rev() {
-                match &vm.frames[i].kind {
-                    super::types::FrameKind::While {
-                        phase: _,
-                        label: loop_label,
-                    } => {
-                        // Check if this is the target loop
-                        if label.is_none() || label == loop_label {
-                            // Found target loop!
-                            found_loop = true;
-                            // Don't include this frame in frames_to_pop
-                            break;
-                        } else {
-                            // Not the target loop - count it for popping
-                            frames_to_pop += 1;
-                        }
-                    }
-                    super::types::FrameKind::ForLoop { .. } => {
-                        // ForLoop is also a loop (no labels yet)
-                        if label.is_none() {
-                            found_loop = true;
-                            is_for_loop = true;
-                            break;
-                        } else {
-                            frames_to_pop += 1;
-                        }
-                    }
-                    _ => {
-                        // Not a loop frame - count it for popping
-                        frames_to_pop += 1;
-                    }
-                }
-            }
-
-            if found_loop {
-                // Pop all frames above the target loop, cleaning up blocks as we go
-                for _ in 0..frames_to_pop {
-                    let frame = vm.frames.pop().unwrap();
-                    // Clean up any variables declared in this block
-                    if let FrameKind::Block { declared_vars, .. } = frame.kind {
-                        for var_name in declared_vars {
-                            vm.env.remove(&var_name);
-                        }
-                    }
-                }
-
-                // The target loop is now at the top
-                // For While, we keep it in Eval phase to re-test the condition
-                // For ForLoop, we keep it in Iterate phase to move to the next item
-                if is_for_loop {
-                    // For ForLoop, the Iterate phase will handle advancing to next item
-                    // Just clear control flow
-                }
-
-                // Clear control flow and continue
-                vm.control = Control::None;
-                Step::Continue
-            } else {
-                // No matching loop found - this is an error
-                vm.control = Control::Continue(label.clone());
-                Step::Done
-            }
-        }
     }
 }

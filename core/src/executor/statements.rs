@@ -20,9 +20,20 @@ pub fn execute_block(
     vm: &mut VM,
     phase: BlockPhase,
     idx: usize,
-    mut declared_vars: Vec<String>,
+    declared_vars: Vec<String>,
     body: &[Stmt],
 ) -> Step {
+    // If control flow is active, clean up and pop
+    if vm.control != Control::None {
+        for var_name in &declared_vars {
+            vm.env.remove(var_name);
+        }
+        vm.frames.pop();
+        return Step::Continue;
+    }
+
+    let mut declared_vars = declared_vars;
+
     match phase {
         BlockPhase::Execute => {
             // Check if we've finished all statements in the block
@@ -84,9 +95,8 @@ pub fn execute_return(vm: &mut VM, phase: ReturnPhase, value: Option<Expr>) -> S
                         return Step::Done;
                     }
                     EvalResult::Throw { error } => {
-                        // Expression threw an error
-                        // Set control to Throw and DO NOT pop frame (unwinding will handle it)
                         vm.control = Control::Throw(error);
+                        vm.frames.pop();
                         return Step::Continue;
                     }
                 }
@@ -109,24 +119,56 @@ pub fn execute_return(vm: &mut VM, phase: ReturnPhase, value: Option<Expr>) -> S
 pub fn execute_try(
     vm: &mut VM,
     phase: TryPhase,
-    _catch_var: String,
+    catch_var: String,
     body: Box<Stmt>,
     catch_body: Box<Stmt>,
 ) -> Step {
+    // Handle Throw in TryStarted - catch the error
+    if let Control::Throw(error) = &vm.control {
+        if phase == TryPhase::TryStarted {
+            let error = error.clone();
+            vm.env.insert(catch_var.clone(), error);
+            vm.control = Control::None;
+
+            let frame_idx = vm.frames.len() - 1;
+            vm.frames[frame_idx].kind = FrameKind::Try {
+                phase: TryPhase::CatchStarted,
+                catch_var,
+            };
+            push_stmt(vm, &catch_body);
+            return Step::Continue;
+        }
+    }
+
+    // Any control flow - clean up catch_var if in CatchStarted, then pop and propagate
+    if vm.control != Control::None {
+        if phase == TryPhase::CatchStarted {
+            vm.env.remove(&catch_var);
+        }
+        vm.frames.pop();
+        return Step::Continue;
+    }
+
     match phase {
-        TryPhase::ExecuteTry => {
-            // Push the try body onto the stack
+        TryPhase::NotStarted => {
+            // Transition to TryStarted and push the try body
+            let frame_idx = vm.frames.len() - 1;
+            vm.frames[frame_idx].kind = FrameKind::Try {
+                phase: TryPhase::TryStarted,
+                catch_var,
+            };
             push_stmt(vm, &body);
             Step::Continue
         }
-        TryPhase::ExecuteCatch => {
-            // We're now executing the catch block
-            // Pop this Try frame BEFORE pushing the catch body
+        TryPhase::TryStarted => {
+            // Try body completed successfully - pop frame, we're done
             vm.frames.pop();
-
-            // Push the catch body onto the stack
-            push_stmt(vm, &catch_body);
-
+            Step::Continue
+        }
+        TryPhase::CatchStarted => {
+            // Catch body completed - clean up catch_var and pop frame
+            vm.env.remove(&catch_var);
+            vm.frames.pop();
             Step::Continue
         }
     }
@@ -153,9 +195,8 @@ pub fn execute_expr(vm: &mut VM, phase: ExprPhase, expr: Expr) -> Step {
                     Step::Done
                 }
                 EvalResult::Throw { error } => {
-                    // Expression threw an error
-                    // Set control to Throw and DO NOT pop frame (unwinding will handle it)
                     vm.control = Control::Throw(error);
+                    vm.frames.pop();
                     Step::Continue
                 }
             }
@@ -193,8 +234,8 @@ pub fn execute_assign(
                                 panic!("Internal error: await in assignment path");
                             }
                             EvalResult::Throw { error } => {
-                                // Index expression threw an error
                                 vm.control = Control::Throw(error);
+                                vm.frames.pop();
                                 return Step::Continue;
                             }
                         }
@@ -217,8 +258,8 @@ pub fn execute_assign(
                         return Step::Done;
                     }
                     EvalResult::Throw { error } => {
-                        // Value expression threw an error
                         vm.control = Control::Throw(error);
+                        vm.frames.pop();
                         return Step::Continue;
                     }
                 };
@@ -233,11 +274,11 @@ pub fn execute_assign(
                 let base = match vm.env.get_mut(&var) {
                     Some(v) => v,
                     None => {
-                        // Variable doesn't exist
                         vm.control = Control::Throw(Val::Error(ErrorInfo {
                             code: "ReferenceError".to_string(),
                             message: format!("Variable '{}' is not defined", var),
                         }));
+                        vm.frames.pop();
                         return Step::Continue;
                     }
                 };
@@ -256,6 +297,7 @@ pub fn execute_assign(
                                     key
                                 ),
                             }));
+                            vm.frames.pop();
                             return Step::Continue;
                         }
                     } else {
@@ -266,6 +308,7 @@ pub fn execute_assign(
                                 message: "Cannot use index access on non-object/non-array value"
                                     .to_string(),
                             }));
+                            vm.frames.pop();
                             return Step::Continue;
                         }
                     }
@@ -278,6 +321,7 @@ pub fn execute_assign(
                                     code: "TypeError".to_string(),
                                     message: format!("Cannot read property '{}' of undefined", key),
                                 }));
+                                vm.frames.pop();
                                 return Step::Continue;
                             }
                         },
@@ -290,6 +334,7 @@ pub fn execute_assign(
                                         code: "TypeError".to_string(),
                                         message: format!("Invalid array index: {}", key),
                                     }));
+                                    vm.frames.pop();
                                     return Step::Continue;
                                 }
                             }
@@ -315,6 +360,7 @@ pub fn execute_assign(
                                 final_key
                             ),
                         }));
+                        vm.frames.pop();
                         return Step::Continue;
                     }
                 } else {
@@ -325,6 +371,7 @@ pub fn execute_assign(
                             message: "Cannot use index access on non-object/non-array value"
                                 .to_string(),
                         }));
+                        vm.frames.pop();
                         return Step::Continue;
                     }
                 }
@@ -344,6 +391,7 @@ pub fn execute_assign(
                                     code: "TypeError".to_string(),
                                     message: format!("Invalid array index: {}", final_key),
                                 }));
+                                vm.frames.pop();
                                 return Step::Continue;
                             }
                         }
@@ -380,8 +428,8 @@ pub fn execute_if(
                     panic!("Internal error: await in if test expression");
                 }
                 EvalResult::Throw { error } => {
-                    // Test expression threw an error
                     vm.control = Control::Throw(error);
+                    vm.frames.pop();
                     return Step::Continue;
                 }
             };
@@ -408,7 +456,29 @@ pub fn execute_if(
 }
 
 /// Execute While statement
-pub fn execute_while(vm: &mut VM, phase: WhilePhase, test: Expr, body: Box<Stmt>) -> Step {
+pub fn execute_while(
+    vm: &mut VM,
+    phase: WhilePhase,
+    label: Option<String>,
+    test: Expr,
+    body: Box<Stmt>,
+) -> Step {
+    // Handle Continue - if label matches (or is None), re-evaluate test
+    if let Control::Continue(continue_label) = &vm.control {
+        if continue_label.is_none() || continue_label == &label {
+            vm.control = Control::None;
+        }
+    } else if vm.control != Control::None {
+        // Handle Break - if label matches (or is None), exit the loop
+        if let Control::Break(break_label) = &vm.control {
+            if break_label.is_none() || break_label == &label {
+                vm.control = Control::None;
+            }
+        }
+        vm.frames.pop();
+        return Step::Continue;
+    }
+
     match phase {
         WhilePhase::Eval => {
             // Evaluate the test expression
@@ -453,6 +523,23 @@ pub fn execute_for_loop(
     iterable: Expr,
     body: Box<Stmt>,
 ) -> Step {
+    // Handle Continue - no labels yet, so any Continue goes to next iteration
+    if let Control::Continue(continue_label) = &vm.control {
+        if continue_label.is_none() {
+            vm.control = Control::None;
+        }
+    } else if vm.control != Control::None {
+        // Handle Break - no labels yet, so any Break exits the loop
+        if let Control::Break(break_label) = &vm.control {
+            if break_label.is_none() {
+                vm.control = Control::None;
+            }
+        }
+        vm.env.remove(&binding);
+        vm.frames.pop();
+        return Step::Continue;
+    }
+
     // If items is None, we need to evaluate the iterable first
     let items = match items {
         Some(items) => items,
@@ -570,9 +657,8 @@ pub fn execute_declare(
                         return Step::Done;
                     }
                     EvalResult::Throw { error } => {
-                        // Expression threw an error
-                        // Set control to Throw and DO NOT pop frame (unwinding will handle it)
                         vm.control = Control::Throw(error);
+                        vm.frames.pop();
                         return Step::Continue;
                     }
                 }
@@ -595,6 +681,7 @@ pub fn execute_declare(
                                 errors::TYPE_ERROR,
                                 "Cannot destructure non-object value",
                             )));
+                            vm.frames.pop();
                             return Step::Continue;
                         }
                     };
@@ -608,6 +695,7 @@ pub fn execute_declare(
                                     errors::PROPERTY_NOT_FOUND,
                                     format!("Property '{}' not found on object", name),
                                 )));
+                                vm.frames.pop();
                                 return Step::Continue;
                             }
                         };

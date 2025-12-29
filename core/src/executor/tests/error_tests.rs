@@ -365,3 +365,118 @@ fn test_error_in_catch_handler() {
     assert_eq!(err.code, errors::PROPERTY_NOT_FOUND);
     assert!(err.message.contains("Property 'another_missing' not found"));
 }
+
+#[test]
+fn test_try_block_variables_not_accessible_in_catch() {
+    // Variables declared in try block are NOT accessible in catch block
+    // This is standard JavaScript scoping - try and catch are separate block scopes
+    let source = r#"
+            let obj = {}
+            try {
+                let email = "test@example.com"
+                return obj.missing
+            } catch (e) {
+                return email
+            }
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    // Should fail with undefined variable error - email is out of scope in catch
+    let Control::Throw(Val::Error(err)) = vm.control else {
+        unreachable!(
+            "Expected Control::Throw with undefined variable error, got {:?}",
+            vm.control
+        );
+    };
+    assert!(
+        err.message.contains("Undefined variable"),
+        "Expected undefined variable error, got: {}",
+        err.message
+    );
+}
+
+#[test]
+fn test_try_catch_variable_declared_outside() {
+    // Variables declared OUTSIDE try block ARE accessible in catch block
+    let source = r#"
+            let obj = {}
+            let email = "test@example.com"
+            try {
+                return obj.missing
+            } catch (e) {
+                return email
+            }
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    // Should return the email since it's in scope
+    assert_eq!(
+        vm.control,
+        Control::Return(Val::Str("test@example.com".to_string()))
+    );
+}
+
+#[test]
+fn test_try_block_completes_without_infinite_loop() {
+    // Regression test: try block should complete normally without restarting
+    // Previously, the try frame stayed in ExecuteTry phase after body completed,
+    // causing the body to be pushed again in an infinite loop
+    let source = r#"
+            let count = 0
+            try {
+                count = count + 1
+            } catch (e) {
+                count = 999
+            }
+            return count
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+
+    // Run for a limited number of steps to detect infinite loop
+    let mut steps = 0;
+    let max_steps = 100;
+    while steps < max_steps {
+        let step = crate::executor::step(&mut vm);
+        steps += 1;
+        if step == crate::executor::Step::Done {
+            break;
+        }
+    }
+
+    // Should complete well before max_steps
+    assert!(
+        steps < max_steps,
+        "Workflow took {} steps - possible infinite loop",
+        steps
+    );
+
+    // Should return 1, not 999 (no error occurred)
+    assert_eq!(vm.control, Control::Return(Val::Num(1.0)));
+}
+
+#[test]
+fn test_try_with_multiple_statements_completes() {
+    // Verify try block with multiple statements completes normally
+    let source = r#"
+            let a = 0
+            let b = 0
+            try {
+                a = 1
+                b = 2
+            } catch (e) {
+                a = 999
+            }
+            return a + b
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    // Should return 3 (1 + 2)
+    assert_eq!(vm.control, Control::Return(Val::Num(3.0)));
+}

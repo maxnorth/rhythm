@@ -118,7 +118,7 @@ pub fn push_stmt(vm: &mut VM, stmt: &Stmt) {
         },
 
         Stmt::Try { catch_var, .. } => FrameKind::Try {
-            phase: TryPhase::ExecuteTry,
+            phase: TryPhase::NotStarted,
             catch_var: catch_var.clone(),
         },
 
