@@ -170,7 +170,7 @@ pub fn any_kv(args: &[Val]) -> EvalResult {
     any_impl(args, true)
 }
 
-fn any_impl(args: &[Val], keyed: bool) -> EvalResult {
+fn any_impl(args: &[Val], with_kv: bool) -> EvalResult {
     if args.len() != 1 {
         return EvalResult::Throw {
             error: Val::Error(ErrorInfo::new(
@@ -195,7 +195,7 @@ fn any_impl(args: &[Val], keyed: bool) -> EvalResult {
                 v: Val::Promise(Awaitable::Any {
                     items,
                     is_object,
-                    keyed,
+                    with_kv,
                 }),
             }
         }
@@ -221,7 +221,7 @@ pub fn race_kv(args: &[Val]) -> EvalResult {
     race_impl(args, true)
 }
 
-fn race_impl(args: &[Val], keyed: bool) -> EvalResult {
+fn race_impl(args: &[Val], with_kv: bool) -> EvalResult {
     if args.len() != 1 {
         return EvalResult::Throw {
             error: Val::Error(ErrorInfo::new(
@@ -247,7 +247,7 @@ fn race_impl(args: &[Val], keyed: bool) -> EvalResult {
                 v: Val::Promise(Awaitable::Race {
                     items,
                     is_object,
-                    keyed,
+                    with_kv,
                 }),
             }
         }
