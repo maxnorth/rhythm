@@ -85,8 +85,9 @@ async fn try_resume_suspended_state(
 /// Checks the VM control state and returns whether to continue the loop.
 fn should_continue_execution(control: &Control) -> Result<bool> {
     match control {
-        Control::None | Control::Suspend(_) => Ok(true), // Still running, continue
-        Control::Return(_) | Control::Throw(_) => Ok(false), // Suspend/complete, break
+        Control::None => Ok(false), // Workflow completed (implicit return null)
+        Control::Suspend(_) => Ok(true), // Still running, awaiting something
+        Control::Return(_) | Control::Throw(_) => Ok(false), // Explicit return/throw
         Control::Break(_) | Control::Continue(_) => {
             Err(anyhow::anyhow!("Unexpected control flow at top level"))
         }
@@ -197,6 +198,19 @@ async fn handle_workflow_result(
                 &mut *tx,
                 execution_id,
                 ExecutionOutcome::Success(result_json),
+            )
+            .await?;
+        }
+        Control::None => {
+            // Implicit return null - workflow completed without explicit return statement
+            db::workflow_execution_context::delete_context(&mut **tx, execution_id)
+                .await
+                .context("Failed to delete workflow execution context")?;
+
+            finish_work(
+                &mut *tx,
+                execution_id,
+                ExecutionOutcome::Success(serde_json::json!(null)),
             )
             .await?;
         }

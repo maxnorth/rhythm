@@ -21,7 +21,7 @@ migrate:
 	cd core && RHYTHM_DATABASE_URL=postgresql://rhythm@localhost/rhythm cargo run --release --bin rhythm -- migrate
 
 core-test:
-	cd core && cargo test -- --test-threads=1
+	cd core && cargo test
 
 core-fmt:
 	cd core && cargo fmt
@@ -31,6 +31,11 @@ core-fmt-check:
 
 core-lint:
 	cd core && cargo clippy --all-targets --all-features -- -D warnings
+
+core-ci:
+	$(MAKE) core-fmt
+	$(MAKE) core-lint
+	$(MAKE) core-test
 
 python-docs:
 	python/.venv/bin/python python/scripts/generate_api_ref.py

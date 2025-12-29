@@ -7,7 +7,7 @@ try {
     // notify approvers
     let approvers = await Task.run("get-access-request-approvers", { request_id })
     for (let approver of approvers) {
-        await Task.run("send-access-request-approval", { 
+        await Task.run("send-access-request-approval", {
             approver: approver,
             request_id,
         })
@@ -21,9 +21,9 @@ try {
 
     // reject if not approved
     if (approval?.response != "approved") {
-        await Task.run("reject-access-request", { 
+        await Task.run("reject-access-request", {
             request_id,
-            reason: approval?.response || "timeout" 
+            reason: approval?.response || "timeout"
         })
         return
     }

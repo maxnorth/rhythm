@@ -19,6 +19,41 @@ use crate::test_helpers::{
 use crate::types::ExecutionStatus;
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_workflow_completes_without_return_statement() {
+    // Workflow that executes statements but has no explicit return
+    // Should complete with null output (implicit return)
+    let workflow_source = r#"
+        x = 42
+        y = x + 1
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("no_return_workflow", workflow_source, json!({})).await;
+    let execution_id = execution.id.clone();
+
+    // Run workflow - should complete immediately with null output
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify execution completed successfully with null output
+    let execution = db::executions::get_execution(&pool, &execution_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(execution.status, ExecutionStatus::Completed);
+    assert_eq!(execution.output, Some(json!(null)));
+
+    // Verify work queue entry was deleted
+    let work_count = get_work_queue_count(&pool, &execution_id).await.unwrap();
+    assert_eq!(work_count, 0, "Work queue should be empty after completion");
+
+    // Verify no workflow execution context exists
+    let context = db::workflow_execution_context::get_context(&pool, &execution_id)
+        .await
+        .unwrap();
+    assert!(context.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_simple_workflow_completes_immediately() {
     // Create a simple workflow that just returns a value
     let workflow_source = r#"
@@ -47,6 +82,68 @@ async fn test_simple_workflow_completes_immediately() {
 
     // Verify no workflow execution context exists
     let context = db::workflow_execution_context::get_context(&pool, &execution_id)
+        .await
+        .unwrap();
+    assert!(context.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_workflow_with_task_but_no_return_statement() {
+    // Workflow that awaits a task but has no explicit return
+    // Should complete with null output after task completes
+    let workflow_source = r#"
+        result = await Task.run("process_data", {value: 10})
+        log = result + 1
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("task_no_return_workflow", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // First run: workflow should suspend on task
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify workflow suspended
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Suspended);
+
+    // Get the child task
+    let child_tasks = get_child_tasks(&pool, &workflow_id).await.unwrap();
+    assert_eq!(child_tasks.len(), 1);
+    let (task_id, _) = &child_tasks[0];
+
+    // Complete the task out-of-band
+    db::executions::complete_execution(pool.as_ref(), task_id, json!(100))
+        .await
+        .unwrap();
+
+    // Enqueue work again for the workflow to resume
+    enqueue_and_claim_execution(&pool, &workflow_id, "default")
+        .await
+        .unwrap();
+
+    // Second run: workflow should resume and complete with null (no explicit return)
+    let execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify workflow completed with null output
+    let final_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(final_execution.status, ExecutionStatus::Completed);
+    assert_eq!(final_execution.output, Some(json!(null)));
+
+    // Verify work queue is empty and no workflow context exists
+    let work_count = get_work_queue_count(&pool, &workflow_id).await.unwrap();
+    assert_eq!(work_count, 0);
+    let context = db::workflow_execution_context::get_context(&pool, &workflow_id)
         .await
         .unwrap();
     assert!(context.is_none());
