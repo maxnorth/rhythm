@@ -118,7 +118,7 @@ pub fn push_stmt(vm: &mut VM, stmt: &Stmt) {
         },
 
         Stmt::Try { catch_var, .. } => FrameKind::Try {
-            phase: TryPhase::ExecuteTry,
+            phase: TryPhase::NotStarted,
             catch_var: catch_var.clone(),
         },
 
@@ -162,15 +162,4 @@ pub fn push_stmt(vm: &mut VM, stmt: &Stmt) {
         kind,
         node: stmt.clone(),
     });
-}
-
-/* ===================== Step Result ===================== */
-
-/// Result of executing one step
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Step {
-    /// Continue to next step
-    Continue,
-    /// Execution complete
-    Done,
 }

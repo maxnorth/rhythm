@@ -23,10 +23,13 @@ pub enum BlockPhase {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum TryPhase {
-    /// Executing the try block
-    ExecuteTry = 0,
-    /// Executing the catch block (error was caught)
-    ExecuteCatch = 1,
+    /// Initial state - push try body, transition to TryStarted
+    NotStarted = 0,
+    /// Try body is executing - when we return here, try completed
+    TryStarted = 1,
+    /// Catch body is executing - when we return here, catch completed
+    CatchStarted = 2,
+    // FinallyStarted = 3,  // for future use
 }
 
 /// Execution phase for Expr statements
