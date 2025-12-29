@@ -1,4 +1,4 @@
-# Rhythm - Intuitive Durable Execution
+# Rhythm - Durable Scripting for Workflows
 
 Rhythm is an experimental Durable Execution framework that can resume without replaying event history. It aims to make writing durable workflows intuitive and effortless. It has minimal hosting requirements and only needs Postgres. It will support multiple programming languages, each sharing Rhythm's embedded core engine written in rust.
 

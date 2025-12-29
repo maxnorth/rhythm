@@ -1,9 +1,9 @@
 ## Recent Additions
 - `Timer.delay(duration_seconds)` - Timed delays in workflows
 - `Task.any(...)`, `Task.all(...)`, and `Task.race(...)` composites
+- Waiting on signals, for human-in-the-loop workflows
 
 ## Planned Features
-- Waiting on signals, for human-in-the-loop workflows
 - CRON scheduled workflows
 - Observability, including OTEL tracing, metrics, and logs
 - IDE language server and breakpoint debugger for `.flow` files
