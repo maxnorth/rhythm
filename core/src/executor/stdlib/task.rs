@@ -155,9 +155,22 @@ pub fn all(args: &[Val]) -> EvalResult {
 /// Promise.any(promises) - Wait for first promise to succeed
 ///
 /// Accepts an array or object of promises.
-/// Returns { key, value } where key identifies which promise won.
+/// Returns just the winning value.
 /// Only fails if all promises fail.
 pub fn any(args: &[Val]) -> EvalResult {
+    any_impl(args, false)
+}
+
+/// Promise.any_kv(promises) - Wait for first promise to succeed (kv variant)
+///
+/// Accepts an array or object of promises.
+/// Returns { key, value } where key identifies which promise won.
+/// Only fails if all promises fail.
+pub fn any_kv(args: &[Val]) -> EvalResult {
+    any_impl(args, true)
+}
+
+fn any_impl(args: &[Val], keyed: bool) -> EvalResult {
     if args.len() != 1 {
         return EvalResult::Throw {
             error: Val::Error(ErrorInfo::new(
@@ -179,7 +192,11 @@ pub fn any(args: &[Val]) -> EvalResult {
                 };
             }
             EvalResult::Value {
-                v: Val::Promise(Awaitable::Any { items, is_object }),
+                v: Val::Promise(Awaitable::Any {
+                    items,
+                    is_object,
+                    keyed,
+                }),
             }
         }
         Err(e) => e,
@@ -189,9 +206,22 @@ pub fn any(args: &[Val]) -> EvalResult {
 /// Promise.race(promises) - Wait for first promise to settle
 ///
 /// Accepts an array or object of promises.
-/// Returns { key, value } where key identifies which promise won.
+/// Returns just the winning value.
 /// Returns as soon as any promise settles (success or error).
 pub fn race(args: &[Val]) -> EvalResult {
+    race_impl(args, false)
+}
+
+/// Promise.race_kv(promises) - Wait for first promise to settle (kv variant)
+///
+/// Accepts an array or object of promises.
+/// Returns { key, value } where key identifies which promise won.
+/// Returns as soon as any promise settles (success or error).
+pub fn race_kv(args: &[Val]) -> EvalResult {
+    race_impl(args, true)
+}
+
+fn race_impl(args: &[Val], keyed: bool) -> EvalResult {
     if args.len() != 1 {
         return EvalResult::Throw {
             error: Val::Error(ErrorInfo::new(
@@ -214,7 +244,11 @@ pub fn race(args: &[Val]) -> EvalResult {
                 };
             }
             EvalResult::Value {
-                v: Val::Promise(Awaitable::Race { items, is_object }),
+                v: Val::Promise(Awaitable::Race {
+                    items,
+                    is_object,
+                    keyed,
+                }),
             }
         }
         Err(e) => e,

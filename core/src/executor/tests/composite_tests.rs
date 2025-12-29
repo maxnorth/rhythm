@@ -153,9 +153,14 @@ fn test_task_any_with_array() {
 
     // Should return a Promise(Any) with two items
     match &vm.control {
-        Control::Return(Val::Promise(Awaitable::Any { items, is_object })) => {
+        Control::Return(Val::Promise(Awaitable::Any {
+            items,
+            is_object,
+            keyed,
+        })) => {
             assert_eq!(items.len(), 2);
             assert!(!*is_object);
+            assert!(!*keyed); // Promise.any returns just the value
             assert_eq!(items[0].0, "0");
             assert_eq!(items[1].0, "1");
         }
@@ -179,9 +184,14 @@ fn test_task_any_with_object() {
 
     // Should return a Promise(Any) with is_object=true
     match &vm.control {
-        Control::Return(Val::Promise(Awaitable::Any { items, is_object })) => {
+        Control::Return(Val::Promise(Awaitable::Any {
+            items,
+            is_object,
+            keyed,
+        })) => {
             assert_eq!(items.len(), 2);
             assert!(*is_object);
+            assert!(!*keyed); // Promise.any returns just the value
             // Keys sorted alphabetically
             assert_eq!(items[0].0, "alpha");
             assert_eq!(items[1].0, "beta");
@@ -224,9 +234,14 @@ fn test_task_race_with_array() {
 
     // Should return a Promise(Race) with two items
     match &vm.control {
-        Control::Return(Val::Promise(Awaitable::Race { items, is_object })) => {
+        Control::Return(Val::Promise(Awaitable::Race {
+            items,
+            is_object,
+            keyed,
+        })) => {
             assert_eq!(items.len(), 2);
             assert!(!*is_object);
+            assert!(!*keyed); // Promise.race returns just the value
             assert_eq!(items[0].0, "0");
             assert_eq!(items[1].0, "1");
         }
@@ -250,9 +265,14 @@ fn test_task_race_with_object() {
 
     // Should return a Promise(Race) with is_object=true
     match &vm.control {
-        Control::Return(Val::Promise(Awaitable::Race { items, is_object })) => {
+        Control::Return(Val::Promise(Awaitable::Race {
+            items,
+            is_object,
+            keyed,
+        })) => {
             assert_eq!(items.len(), 2);
             assert!(*is_object);
+            assert!(!*keyed); // Promise.race returns just the value
             // Keys sorted alphabetically
             assert_eq!(items[0].0, "fast");
             assert_eq!(items[1].0, "slow");
@@ -323,7 +343,9 @@ fn test_await_task_any_suspends() {
 
     // Should suspend on the Any awaitable
     match &vm.control {
-        Control::Suspend(Awaitable::Any { items, is_object }) => {
+        Control::Suspend(Awaitable::Any {
+            items, is_object, ..
+        }) => {
             assert_eq!(items.len(), 2);
             assert!(!*is_object);
         }
@@ -347,7 +369,9 @@ fn test_await_task_race_suspends() {
 
     // Should suspend on the Race awaitable
     match &vm.control {
-        Control::Suspend(Awaitable::Race { items, is_object }) => {
+        Control::Suspend(Awaitable::Race {
+            items, is_object, ..
+        }) => {
             assert_eq!(items.len(), 2);
             assert!(!*is_object);
         }
@@ -400,12 +424,134 @@ fn test_task_race_mixed_task_and_timer() {
 
     // Should return a Promise(Race) with mixed awaitables
     match &vm.control {
-        Control::Return(Val::Promise(Awaitable::Race { items, is_object })) => {
+        Control::Return(Val::Promise(Awaitable::Race {
+            items, is_object, ..
+        })) => {
             assert_eq!(items.len(), 2);
             assert!(!*is_object);
             // First should be Task, second should be Timer
             assert!(matches!(items[0].1, Awaitable::Task(_)));
             assert!(matches!(items[1].1, Awaitable::Timer { .. }));
+        }
+        _ => panic!(
+            "Expected Control::Return(Val::Promise(Awaitable::Race)), got {:?}",
+            vm.control
+        ),
+    }
+}
+
+/* ===================== Promise.any_kv() Tests ===================== */
+
+#[test]
+fn test_task_any_kv_with_array() {
+    let source = r#"
+        let t1 = Task.run("task1", {})
+        let t2 = Task.run("task2", {})
+        return Promise.any_kv([t1, t2])
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    // Should return a Promise(Any) with keyed=true
+    match &vm.control {
+        Control::Return(Val::Promise(Awaitable::Any {
+            items,
+            is_object,
+            keyed,
+        })) => {
+            assert_eq!(items.len(), 2);
+            assert!(!*is_object);
+            assert!(*keyed); // any_kv returns { key, value }
+        }
+        _ => panic!(
+            "Expected Control::Return(Val::Promise(Awaitable::Any)), got {:?}",
+            vm.control
+        ),
+    }
+}
+
+#[test]
+fn test_task_any_kv_with_object() {
+    let source = r#"
+        let t1 = Task.run("task1", {})
+        let t2 = Task.run("task2", {})
+        return Promise.any_kv({ alpha: t1, beta: t2 })
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    // Should return a Promise(Any) with keyed=true
+    match &vm.control {
+        Control::Return(Val::Promise(Awaitable::Any {
+            items,
+            is_object,
+            keyed,
+        })) => {
+            assert_eq!(items.len(), 2);
+            assert!(*is_object);
+            assert!(*keyed); // any_kv returns { key, value }
+        }
+        _ => panic!(
+            "Expected Control::Return(Val::Promise(Awaitable::Any)), got {:?}",
+            vm.control
+        ),
+    }
+}
+
+/* ===================== Promise.race_kv() Tests ===================== */
+
+#[test]
+fn test_task_race_kv_with_array() {
+    let source = r#"
+        let t1 = Task.run("task1", {})
+        let t2 = Task.run("task2", {})
+        return Promise.race_kv([t1, t2])
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    // Should return a Promise(Race) with keyed=true
+    match &vm.control {
+        Control::Return(Val::Promise(Awaitable::Race {
+            items,
+            is_object,
+            keyed,
+        })) => {
+            assert_eq!(items.len(), 2);
+            assert!(!*is_object);
+            assert!(*keyed); // race_kv returns { key, value }
+        }
+        _ => panic!(
+            "Expected Control::Return(Val::Promise(Awaitable::Race)), got {:?}",
+            vm.control
+        ),
+    }
+}
+
+#[test]
+fn test_task_race_kv_with_object() {
+    let source = r#"
+        let t1 = Task.run("task1", {})
+        let t2 = Task.run("task2", {})
+        return Promise.race_kv({ fast: t1, slow: t2 })
+    "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    run_until_done(&mut vm);
+
+    // Should return a Promise(Race) with keyed=true
+    match &vm.control {
+        Control::Return(Val::Promise(Awaitable::Race {
+            items,
+            is_object,
+            keyed,
+        })) => {
+            assert_eq!(items.len(), 2);
+            assert!(*is_object);
+            assert!(*keyed); // race_kv returns { key, value }
         }
         _ => panic!(
             "Expected Control::Return(Val::Promise(Awaitable::Race)), got {:?}",
