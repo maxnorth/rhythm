@@ -226,10 +226,8 @@ async fn test_task_any_returns_first_success() {
         .unwrap()
         .unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
-    let output = workflow_execution.output.unwrap();
-    // Result should be { key: 1, value: "winner" }
-    assert_eq!(output.get("key").unwrap(), &json!(1.0));
-    assert_eq!(output.get("value").unwrap(), "winner");
+    // Promise.any returns just the value (not { key, value })
+    assert_eq!(workflow_execution.output, Some(json!("winner")));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -296,9 +294,8 @@ async fn test_task_any_skips_failures() {
         .unwrap()
         .unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
-    let output = workflow_execution.output.unwrap();
-    assert_eq!(output.get("key").unwrap(), &json!(1.0));
-    assert_eq!(output.get("value").unwrap(), "success");
+    // Promise.any returns just the value (not { key, value })
+    assert_eq!(workflow_execution.output, Some(json!("success")));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -384,9 +381,8 @@ async fn test_task_race_returns_first_success() {
         .unwrap()
         .unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
-    let output = workflow_execution.output.unwrap();
-    assert_eq!(output.get("key").unwrap(), &json!(0.0));
-    assert_eq!(output.get("value").unwrap(), "first");
+    // Promise.race returns just the value (not { key, value })
+    assert_eq!(workflow_execution.output, Some(json!("first")));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -460,10 +456,8 @@ async fn test_task_race_with_timer_timeout_pattern() {
         .unwrap()
         .unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
-    let output = workflow_execution.output.unwrap();
-    // Timer won (index 1), value is null
-    assert_eq!(output.get("key").unwrap(), &json!(1.0));
-    assert_eq!(output.get("value").unwrap(), &json!(null));
+    // Timer won, Promise.race returns just the value (null for timers)
+    assert_eq!(workflow_execution.output, Some(json!(null)));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -539,9 +533,8 @@ async fn test_nested_all_in_race() {
         .unwrap()
         .unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
-    let output = workflow_execution.output.unwrap();
-    // Timer won (index 1)
-    assert_eq!(output.get("key").unwrap(), &json!(1.0));
+    // Timer won, Promise.race returns just the value (null)
+    assert_eq!(workflow_execution.output, Some(json!(null)));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -592,9 +585,170 @@ async fn test_nested_race_in_all() {
         .unwrap()
         .unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
-    // First element is race result { key: 1, value: null }, second is "task2_done"
+    // First element is race result (null - timer won), second is "task2_done"
+    assert_eq!(workflow_execution.output, Some(json!([null, "task2_done"])));
+}
+
+/* ===================== Promise.any_kv() Integration Tests ===================== */
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_task_any_kv_returns_key_and_value() {
+    let workflow_source = r#"
+        let t1 = Task.run("task1", {})
+        let t2 = Task.run("task2", {})
+        let result = await Promise.any_kv([t1, t2])
+        return result
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("task_any_kv_first_success", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // First run - suspends
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Complete task2 first (task1 still pending)
+    let tasks = get_child_tasks(&pool, &workflow_id).await.unwrap();
+    let task2_id = &tasks[1].0;
+    db::executions::complete_execution(pool.as_ref(), task2_id, json!("winner"))
+        .await
+        .unwrap();
+
+    // Resume - should complete with { key, value }
+    enqueue_and_claim_execution(&pool, &workflow_id, "default")
+        .await
+        .unwrap();
+    let execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, execution).await.unwrap();
+
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
+    // Promise.any_kv returns { key, value }
     let output = workflow_execution.output.unwrap();
-    let race_result = output.get(0).unwrap();
-    assert_eq!(race_result.get("key").unwrap(), &json!(1.0)); // timer won
-    assert_eq!(output.get(1).unwrap(), "task2_done");
+    assert_eq!(output.get("key").unwrap(), &json!(1.0));
+    assert_eq!(output.get("value").unwrap(), "winner");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_task_any_kv_with_object() {
+    let workflow_source = r#"
+        let t1 = Task.run("task1", {})
+        let t2 = Task.run("task2", {})
+        let result = await Promise.any_kv({ first: t1, second: t2 })
+        return result
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("task_any_kv_object", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // First run - suspends
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Complete task1
+    let tasks = get_child_tasks(&pool, &workflow_id).await.unwrap();
+    let task1 = tasks.iter().find(|(_, name)| name == "task1").unwrap();
+    db::executions::complete_execution(pool.as_ref(), &task1.0, json!("first_wins"))
+        .await
+        .unwrap();
+
+    // Resume
+    enqueue_and_claim_execution(&pool, &workflow_id, "default")
+        .await
+        .unwrap();
+    let execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, execution).await.unwrap();
+
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
+    // For object input, key is a string
+    let output = workflow_execution.output.unwrap();
+    assert_eq!(output.get("key").unwrap(), "first");
+    assert_eq!(output.get("value").unwrap(), "first_wins");
+}
+
+/* ===================== Promise.race_kv() Integration Tests ===================== */
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_task_race_kv_returns_key_and_value() {
+    let workflow_source = r#"
+        let t1 = Task.run("task1", {})
+        let t2 = Task.run("task2", {})
+        let result = await Promise.race_kv([t1, t2])
+        return result
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("task_race_kv_first_success", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // First run - suspends
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Complete task1 first
+    let tasks = get_child_tasks(&pool, &workflow_id).await.unwrap();
+    let task1_id = &tasks[0].0;
+    db::executions::complete_execution(pool.as_ref(), task1_id, json!("first"))
+        .await
+        .unwrap();
+
+    // Resume - should complete with { key, value }
+    enqueue_and_claim_execution(&pool, &workflow_id, "default")
+        .await
+        .unwrap();
+    let execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, execution).await.unwrap();
+
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
+    // Promise.race_kv returns { key, value }
+    let output = workflow_execution.output.unwrap();
+    assert_eq!(output.get("key").unwrap(), &json!(0.0));
+    assert_eq!(output.get("value").unwrap(), "first");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_task_race_kv_with_timer_timeout_pattern() {
+    // Race between a task and a 0ms timer (immediate timeout)
+    let workflow_source = r#"
+        let task = Task.run("slow_task", {})
+        let timeout = Timer.delay(0)
+        let result = await Promise.race_kv([task, timeout])
+        return result
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("race_kv_timeout_pattern", workflow_source, json!({})).await;
+    let workflow_id = execution.id.clone();
+
+    // Run - timer fires immediately (0ms), should win the race
+    run_workflow(&pool, execution).await.unwrap();
+
+    let workflow_execution = db::executions::get_execution(&pool, &workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
+    let output = workflow_execution.output.unwrap();
+    // Timer won (index 1), value is null
+    assert_eq!(output.get("key").unwrap(), &json!(1.0));
+    assert_eq!(output.get("value").unwrap(), &json!(null));
 }

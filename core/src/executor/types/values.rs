@@ -26,16 +26,18 @@ pub enum Awaitable {
         is_object: bool,
     },
     /// Wait for first awaitable to succeed. Fail only if all fail.
-    /// Returns { key, value } where key is the winning item's key.
+    /// Returns just the value, or { key, value } if with_kv=true.
     Any {
         items: Vec<(String, Awaitable)>,
         is_object: bool,
+        with_kv: bool,
     },
     /// Wait for first awaitable to settle (success or error).
-    /// Returns { key, value } where key is the winning item's key.
+    /// Returns just the value, or { key, value } if with_kv=true.
     Race {
         items: Vec<(String, Awaitable)>,
         is_object: bool,
+        with_kv: bool,
     },
     /// Wait for a signal on a named channel.
     /// claim_id uniquely identifies this request for idempotent resolution.

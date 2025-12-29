@@ -30,7 +30,9 @@ pub enum StdlibFunc {
     // Promise functions
     PromiseAll,
     PromiseAny,
+    PromiseAnyKv,
     PromiseRace,
+    PromiseRaceKv,
     // Time functions
     TimeDelay,
     // Signal functions
@@ -71,7 +73,9 @@ pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val], outbox: &mut Outbox) ->
         // Promise functions (pure - no outbox needed)
         StdlibFunc::PromiseAll => task::all(args),
         StdlibFunc::PromiseAny => task::any(args),
+        StdlibFunc::PromiseAnyKv => task::any_kv(args),
         StdlibFunc::PromiseRace => task::race(args),
+        StdlibFunc::PromiseRaceKv => task::race_kv(args),
         // Time functions have side effects - outbox required
         StdlibFunc::TimeDelay => timer::delay(args, outbox),
         // Signal functions have side effects - outbox required
@@ -388,7 +392,15 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     let mut promise_obj = std::collections::HashMap::new();
     promise_obj.insert("all".to_string(), Val::NativeFunc(StdlibFunc::PromiseAll));
     promise_obj.insert("any".to_string(), Val::NativeFunc(StdlibFunc::PromiseAny));
+    promise_obj.insert(
+        "any_kv".to_string(),
+        Val::NativeFunc(StdlibFunc::PromiseAnyKv),
+    );
     promise_obj.insert("race".to_string(), Val::NativeFunc(StdlibFunc::PromiseRace));
+    promise_obj.insert(
+        "race_kv".to_string(),
+        Val::NativeFunc(StdlibFunc::PromiseRaceKv),
+    );
 
     // Create Timer object with methods
     let mut timer_obj = std::collections::HashMap::new();

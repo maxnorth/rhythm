@@ -44,12 +44,16 @@ pub fn resolve_awaitable<'a>(
             Awaitable::All { items, is_object } => {
                 resolve_all(pool, items, *is_object, db_now, outbox).await
             }
-            Awaitable::Any { items, is_object } => {
-                resolve_any(pool, items, *is_object, db_now, outbox).await
-            }
-            Awaitable::Race { items, is_object } => {
-                resolve_race(pool, items, *is_object, db_now, outbox).await
-            }
+            Awaitable::Any {
+                items,
+                is_object,
+                with_kv,
+            } => resolve_any(pool, items, *is_object, *with_kv, db_now, outbox).await,
+            Awaitable::Race {
+                items,
+                is_object,
+                with_kv,
+            } => resolve_race(pool, items, *is_object, *with_kv, db_now, outbox).await,
             Awaitable::Signal { name: _, claim_id } => resolve_signal(pool, claim_id, outbox).await,
         }
     })
@@ -167,6 +171,7 @@ async fn resolve_any(
     pool: &PgPool,
     items: &[(String, Awaitable)],
     is_object: bool,
+    with_kv: bool,
     db_now: DateTime<Utc>,
     outbox: &Outbox,
 ) -> Result<AwaitableStatus> {
@@ -175,8 +180,12 @@ async fn resolve_any(
     for (key, awaitable) in items {
         match resolve_awaitable(pool, awaitable, db_now, outbox).await? {
             AwaitableStatus::Success(val) => {
-                // First success - return { key, value }
-                let result = build_winner_result(key, val, is_object);
+                // First success - return value or { key, value } based on with_kv flag
+                let result = if with_kv {
+                    build_winner_result(key, val, is_object)
+                } else {
+                    val
+                };
                 return Ok(AwaitableStatus::Success(result));
             }
             AwaitableStatus::Error(_) => {
@@ -203,14 +212,19 @@ async fn resolve_race(
     pool: &PgPool,
     items: &[(String, Awaitable)],
     is_object: bool,
+    with_kv: bool,
     db_now: DateTime<Utc>,
     outbox: &Outbox,
 ) -> Result<AwaitableStatus> {
     for (key, awaitable) in items {
         match resolve_awaitable(pool, awaitable, db_now, outbox).await? {
             AwaitableStatus::Success(val) => {
-                // First settled (success)
-                let result = build_winner_result(key, val, is_object);
+                // First settled (success) - return value or { key, value } based on with_kv flag
+                let result = if with_kv {
+                    build_winner_result(key, val, is_object)
+                } else {
+                    val
+                };
                 return Ok(AwaitableStatus::Success(result));
             }
             AwaitableStatus::Error(err) => {
