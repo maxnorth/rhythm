@@ -392,9 +392,15 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     let mut promise_obj = std::collections::HashMap::new();
     promise_obj.insert("all".to_string(), Val::NativeFunc(StdlibFunc::PromiseAll));
     promise_obj.insert("any".to_string(), Val::NativeFunc(StdlibFunc::PromiseAny));
-    promise_obj.insert("any_kv".to_string(), Val::NativeFunc(StdlibFunc::PromiseAnyKv));
+    promise_obj.insert(
+        "any_kv".to_string(),
+        Val::NativeFunc(StdlibFunc::PromiseAnyKv),
+    );
     promise_obj.insert("race".to_string(), Val::NativeFunc(StdlibFunc::PromiseRace));
-    promise_obj.insert("race_kv".to_string(), Val::NativeFunc(StdlibFunc::PromiseRaceKv));
+    promise_obj.insert(
+        "race_kv".to_string(),
+        Val::NativeFunc(StdlibFunc::PromiseRaceKv),
+    );
 
     // Create Timer object with methods
     let mut timer_obj = std::collections::HashMap::new();

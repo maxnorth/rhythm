@@ -192,7 +192,7 @@ fn test_task_any_with_object() {
             assert_eq!(items.len(), 2);
             assert!(*is_object);
             assert!(!*with_kv); // Promise.any returns just the value
-            // Keys sorted alphabetically
+                                // Keys sorted alphabetically
             assert_eq!(items[0].0, "alpha");
             assert_eq!(items[1].0, "beta");
         }
@@ -273,7 +273,7 @@ fn test_task_race_with_object() {
             assert_eq!(items.len(), 2);
             assert!(*is_object);
             assert!(!*with_kv); // Promise.race returns just the value
-            // Keys sorted alphabetically
+                                // Keys sorted alphabetically
             assert_eq!(items[0].0, "fast");
             assert_eq!(items[1].0, "slow");
         }
