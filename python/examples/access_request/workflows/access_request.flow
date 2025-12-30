@@ -1,13 +1,13 @@
-try {
-    const { user_email, request_details } = Inputs
+const { user_email, request_details } = Inputs
 
+try {
     // init request
     let { request_id } = await Task.run("init-access-request", { user_email, request_details })
 
     // notify approvers
     let approvers = await Task.run("get-access-request-approvers", { request_id })
     for (let approver of approvers) {
-        await Task.run("send-access-request-approval", {
+        await Task.run("notify-access-request-approver", {
             approver: approver,
             request_id,
         })

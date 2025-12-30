@@ -39,14 +39,14 @@ def get_access_request_approvers(request_id: str) -> list:
     return approvers
 
 
-@rhythm.task(name="send-access-request-approval")
+@rhythm.task(name="notify-access-request-approver")
 def send_access_request_approval(approver: dict, request_id: str) -> dict:
     """Send an approval request notification to an approver."""
     logger.info(f"[STUB] Sending approval request to {approver.get('email', approver)}")
     logger.info(f"  Request ID: {request_id}")
     time.sleep(0.1)
     return {"sent": True, "approver": approver}
-
+    
 
 @rhythm.task(name="reject-access-request")
 def reject_access_request(request_id: str, reason: str) -> dict:
