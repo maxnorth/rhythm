@@ -58,12 +58,11 @@ pub enum Val {
     Promise(Awaitable),
     /// Error value with code and message
     Error(ErrorInfo),
-    /// Native function (standard library)
-    NativeFunc(StdlibFunc),
-    /// Bound method - a method with its receiver (e.g., arr.concat)
-    BoundMethod {
-        receiver: Box<Val>,
-        method: StdlibFunc,
+    /// Native function with optional bound arguments
+    /// Empty bindings = standalone function, non-empty = bound method or partial application
+    Func {
+        func: StdlibFunc,
+        bindings: Vec<Val>,
     },
 }
 

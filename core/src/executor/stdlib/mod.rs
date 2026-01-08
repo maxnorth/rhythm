@@ -423,12 +423,16 @@ pub fn to_string(val: &Val) -> String {
             }
         },
         Val::Error(err) => format!("[Error: {}]", err.message),
-        Val::NativeFunc(_) => "[Function]".to_string(),
-        Val::BoundMethod { .. } => "[Function]".to_string(),
+        Val::Func { .. } => "[Function]".to_string(),
     }
 }
 
 /* ===================== Environment Injection ===================== */
+
+/// Helper to create a standalone function value
+fn func(f: StdlibFunc) -> Val {
+    Val::Func { func: f, bindings: vec![] }
+}
 
 /// Inject standard library objects into the environment
 ///
@@ -437,36 +441,30 @@ pub fn to_string(val: &Val) -> String {
 pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     // Create Math object with methods
     let mut math_obj = std::collections::HashMap::new();
-    math_obj.insert("floor".to_string(), Val::NativeFunc(StdlibFunc::MathFloor));
-    math_obj.insert("ceil".to_string(), Val::NativeFunc(StdlibFunc::MathCeil));
-    math_obj.insert("abs".to_string(), Val::NativeFunc(StdlibFunc::MathAbs));
-    math_obj.insert("round".to_string(), Val::NativeFunc(StdlibFunc::MathRound));
+    math_obj.insert("floor".to_string(), func(StdlibFunc::MathFloor));
+    math_obj.insert("ceil".to_string(), func(StdlibFunc::MathCeil));
+    math_obj.insert("abs".to_string(), func(StdlibFunc::MathAbs));
+    math_obj.insert("round".to_string(), func(StdlibFunc::MathRound));
 
     // Create Task object with methods
     let mut task_obj = std::collections::HashMap::new();
-    task_obj.insert("run".to_string(), Val::NativeFunc(StdlibFunc::TaskRun));
+    task_obj.insert("run".to_string(), func(StdlibFunc::TaskRun));
 
     // Create Promise object with methods
     let mut promise_obj = std::collections::HashMap::new();
-    promise_obj.insert("all".to_string(), Val::NativeFunc(StdlibFunc::PromiseAll));
-    promise_obj.insert("any".to_string(), Val::NativeFunc(StdlibFunc::PromiseAny));
-    promise_obj.insert(
-        "any_kv".to_string(),
-        Val::NativeFunc(StdlibFunc::PromiseAnyKv),
-    );
-    promise_obj.insert("race".to_string(), Val::NativeFunc(StdlibFunc::PromiseRace));
-    promise_obj.insert(
-        "race_kv".to_string(),
-        Val::NativeFunc(StdlibFunc::PromiseRaceKv),
-    );
+    promise_obj.insert("all".to_string(), func(StdlibFunc::PromiseAll));
+    promise_obj.insert("any".to_string(), func(StdlibFunc::PromiseAny));
+    promise_obj.insert("any_kv".to_string(), func(StdlibFunc::PromiseAnyKv));
+    promise_obj.insert("race".to_string(), func(StdlibFunc::PromiseRace));
+    promise_obj.insert("race_kv".to_string(), func(StdlibFunc::PromiseRaceKv));
 
     // Create Timer object with methods
     let mut timer_obj = std::collections::HashMap::new();
-    timer_obj.insert("delay".to_string(), Val::NativeFunc(StdlibFunc::TimeDelay));
+    timer_obj.insert("delay".to_string(), func(StdlibFunc::TimeDelay));
 
     // Create Signal object with methods
     let mut signal_obj = std::collections::HashMap::new();
-    signal_obj.insert("next".to_string(), Val::NativeFunc(StdlibFunc::SignalNext));
+    signal_obj.insert("next".to_string(), func(StdlibFunc::SignalNext));
 
     // Add stdlib objects to environment
     env.insert("Math".to_string(), Val::Obj(math_obj));
@@ -476,17 +474,17 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     env.insert("Signal".to_string(), Val::Obj(signal_obj));
 
     // Add global operator functions
-    env.insert("add".to_string(), Val::NativeFunc(StdlibFunc::Add));
-    env.insert("sub".to_string(), Val::NativeFunc(StdlibFunc::Sub));
-    env.insert("mul".to_string(), Val::NativeFunc(StdlibFunc::Mul));
-    env.insert("div".to_string(), Val::NativeFunc(StdlibFunc::Div));
-    env.insert("eq".to_string(), Val::NativeFunc(StdlibFunc::Eq));
-    env.insert("ne".to_string(), Val::NativeFunc(StdlibFunc::Ne));
-    env.insert("lt".to_string(), Val::NativeFunc(StdlibFunc::Lt));
-    env.insert("lte".to_string(), Val::NativeFunc(StdlibFunc::Lte));
-    env.insert("gt".to_string(), Val::NativeFunc(StdlibFunc::Gt));
-    env.insert("gte".to_string(), Val::NativeFunc(StdlibFunc::Gte));
-    env.insert("and".to_string(), Val::NativeFunc(StdlibFunc::And));
-    env.insert("or".to_string(), Val::NativeFunc(StdlibFunc::Or));
-    env.insert("not".to_string(), Val::NativeFunc(StdlibFunc::Not));
+    env.insert("add".to_string(), func(StdlibFunc::Add));
+    env.insert("sub".to_string(), func(StdlibFunc::Sub));
+    env.insert("mul".to_string(), func(StdlibFunc::Mul));
+    env.insert("div".to_string(), func(StdlibFunc::Div));
+    env.insert("eq".to_string(), func(StdlibFunc::Eq));
+    env.insert("ne".to_string(), func(StdlibFunc::Ne));
+    env.insert("lt".to_string(), func(StdlibFunc::Lt));
+    env.insert("lte".to_string(), func(StdlibFunc::Lte));
+    env.insert("gt".to_string(), func(StdlibFunc::Gt));
+    env.insert("gte".to_string(), func(StdlibFunc::Gte));
+    env.insert("and".to_string(), func(StdlibFunc::And));
+    env.insert("or".to_string(), func(StdlibFunc::Or));
+    env.insert("not".to_string(), func(StdlibFunc::Not));
 }

@@ -171,9 +171,9 @@ pub fn eval_expr(
                                     v: Val::Num(items.len() as f64),
                                 },
                                 "concat" => EvalResult::Value {
-                                    v: Val::BoundMethod {
-                                        receiver: Box::new(Val::List(items)),
-                                        method: super::stdlib::StdlibFunc::ArrayConcat,
+                                    v: Val::Func {
+                                        func: super::stdlib::StdlibFunc::ArrayConcat,
+                                        bindings: vec![Val::List(items)],
                                     },
                                 },
                                 _ => EvalResult::Throw {
@@ -219,10 +219,9 @@ pub fn eval_expr(
                     EvalResult::Throw { error }
                 }
                 EvalResult::Value { v: callee_val } => {
-                    // Step 2: Verify callee is a function and extract receiver if bound
-                    let (func, receiver) = match callee_val {
-                        Val::NativeFunc(f) => (f, None),
-                        Val::BoundMethod { receiver, method } => (method, Some(*receiver)),
+                    // Step 2: Verify callee is a function and extract bindings
+                    let (func, bindings) = match callee_val {
+                        Val::Func { func, bindings } => (func, bindings),
                         _ => {
                             return EvalResult::Throw {
                                 error: Val::Error(ErrorInfo::new(
@@ -234,12 +233,8 @@ pub fn eval_expr(
                     };
 
                     // Step 3: Evaluate all arguments (left to right)
-                    let mut arg_vals = Vec::new();
-
-                    // For bound methods, prepend the receiver as the first argument
-                    if let Some(recv) = receiver {
-                        arg_vals.push(recv);
-                    }
+                    // Start with bindings, then add call arguments
+                    let mut arg_vals = bindings;
 
                     for arg_expr in args {
                         match eval_expr(arg_expr, env, resume_value, outbox) {
