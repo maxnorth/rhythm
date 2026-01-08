@@ -431,7 +431,10 @@ pub fn to_string(val: &Val) -> String {
 
 /// Helper to create a standalone function value
 fn func(f: StdlibFunc) -> Val {
-    Val::Func { func: f, bindings: vec![] }
+    Val::Func {
+        func: f,
+        bindings: vec![],
+    }
 }
 
 /// Inject standard library objects into the environment

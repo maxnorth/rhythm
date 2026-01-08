@@ -29,7 +29,13 @@ pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> 
             context.workflow_definition_id,
         )
     } else {
-        initialize_workflow(pool, &execution.target_name, &execution.inputs, &execution.id).await?
+        initialize_workflow(
+            pool,
+            &execution.target_name,
+            &execution.inputs,
+            &execution.id,
+        )
+        .await?
     };
 
     loop {

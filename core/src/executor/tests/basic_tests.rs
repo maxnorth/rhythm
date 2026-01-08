@@ -85,9 +85,12 @@ fn test_return_ctx() {
     run_until_done(&mut vm);
 
     // ctx should contain executionId
-    assert_eq!(vm.control, Control::Return(Val::Obj(hashmap! {
-        "executionId".to_string() => Val::Str("test-execution-id".to_string())
-    })));
+    assert_eq!(
+        vm.control,
+        Control::Return(Val::Obj(hashmap! {
+            "executionId".to_string() => Val::Str("test-execution-id".to_string())
+        }))
+    );
 }
 
 #[test]
@@ -651,11 +654,9 @@ fn test_array_concat_chained() {
     run_until_done(&mut vm);
     assert_eq!(
         vm.control,
-        Control::Return(Val::List(vec![
-            Val::Num(1.0),
-            Val::Num(2.0),
-            Val::Num(3.0),
-        ]))
+        Control::Return(Val::List(
+            vec![Val::Num(1.0), Val::Num(2.0), Val::Num(3.0),]
+        ))
     );
 }
 
@@ -671,10 +672,8 @@ fn test_array_concat_with_non_array() {
     run_until_done(&mut vm);
     assert_eq!(
         vm.control,
-        Control::Return(Val::List(vec![
-            Val::Num(1.0),
-            Val::Num(2.0),
-            Val::Num(3.0),
-        ]))
+        Control::Return(Val::List(
+            vec![Val::Num(1.0), Val::Num(2.0), Val::Num(3.0),]
+        ))
     );
 }
