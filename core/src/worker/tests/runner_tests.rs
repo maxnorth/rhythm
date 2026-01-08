@@ -1128,6 +1128,7 @@ async fn test_timer_captured_then_awaited_after_task() {
     assert_eq!(workflow_execution.output, Some(json!("task_done")));
 }
 
+// NOTE: This test has been observed to be flaky in CI
 #[tokio::test(flavor = "multi_thread")]
 async fn test_parallel_timer_and_task() {
     // Create both timer and task, await task first, then timer

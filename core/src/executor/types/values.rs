@@ -60,6 +60,11 @@ pub enum Val {
     Error(ErrorInfo),
     /// Native function (standard library)
     NativeFunc(StdlibFunc),
+    /// Bound method - a method with its receiver (e.g., arr.concat)
+    BoundMethod {
+        receiver: Box<Val>,
+        method: StdlibFunc,
+    },
 }
 
 impl Val {

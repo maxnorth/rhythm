@@ -74,6 +74,7 @@ pub fn val_to_json(val: &Val) -> Result<JsonValue> {
         }
         Val::Error(error_info) => serde_json::to_value(error_info)?,
         Val::NativeFunc(_) => JsonValue::Null,
+        Val::BoundMethod { .. } => JsonValue::Null,
     };
     Ok(json)
 }

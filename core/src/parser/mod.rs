@@ -629,74 +629,66 @@ fn build_expression(pair: pest::iterators::Pair<Rule>) -> ParseResult<Expr> {
             })
         }
         Rule::call_expr => {
-            // call_expr = { member_expr ~ call_suffix? }
-            let mut inner = pair.into_inner();
-
-            // Build the member expression (callee)
-            let member_pair = inner.next().unwrap();
-            let mut expr = build_expression(member_pair)?;
-
-            // Check if there's a call suffix
-            if let Some(call_suffix_pair) = inner.next() {
-                // This is a function call - extract args from call_suffix
-                let mut suffix_inner = call_suffix_pair.into_inner();
-
-                let args = if let Some(arg_list_pair) = suffix_inner.next() {
-                    build_arg_list(arg_list_pair)?
-                } else {
-                    // Empty argument list
-                    vec![]
-                };
-
-                expr = Expr::Call {
-                    callee: Box::new(expr),
-                    args,
-                };
-            }
-
-            Ok(expr)
-        }
-        Rule::member_expr => {
-            // member_expr = { primary ~ (member_access)* }
+            // call_expr = { primary ~ postfix* }
+            // Supports chaining: a.concat([2]).concat([3])
             let mut inner = pair.into_inner();
 
             // Start with the primary expression
-            let primary = inner.next().unwrap();
-            let mut expr = build_expression(primary)?;
+            let primary_pair = inner.next().unwrap();
+            let mut expr = build_expression(primary_pair)?;
 
-            // Chain member accesses left-to-right
-            for access_pair in inner {
-                // member_access = { optional_access | regular_access }
-                let access_inner = access_pair.into_inner().next().unwrap();
-                let (optional, property) = match access_inner.as_rule() {
+            // Apply each postfix operation left-to-right
+            for postfix_pair in inner {
+                // postfix = { call_suffix | optional_access | regular_access }
+                let postfix_inner = postfix_pair.into_inner().next().unwrap();
+
+                match postfix_inner.as_rule() {
+                    Rule::call_suffix => {
+                        // call_suffix = { "(" ~ arg_list? ~ ")" }
+                        let mut suffix_inner = postfix_inner.into_inner();
+                        let args = if let Some(arg_list_pair) = suffix_inner.next() {
+                            build_arg_list(arg_list_pair)?
+                        } else {
+                            vec![]
+                        };
+
+                        expr = Expr::Call {
+                            callee: Box::new(expr),
+                            args,
+                        };
+                    }
                     Rule::optional_access => {
                         // optional_access = { "?." ~ identifier }
-                        let prop = access_inner
+                        let prop = postfix_inner
                             .into_inner()
                             .next()
                             .unwrap()
                             .as_str()
                             .to_string();
-                        (true, prop)
+
+                        expr = Expr::Member {
+                            object: Box::new(expr),
+                            property: prop,
+                            optional: true,
+                        };
                     }
                     Rule::regular_access => {
                         // regular_access = { "." ~ identifier }
-                        let prop = access_inner
+                        let prop = postfix_inner
                             .into_inner()
                             .next()
                             .unwrap()
                             .as_str()
                             .to_string();
-                        (false, prop)
-                    }
-                    _ => unreachable!("Unexpected member access rule"),
-                };
 
-                expr = Expr::Member {
-                    object: Box::new(expr),
-                    property,
-                    optional,
-                };
+                        expr = Expr::Member {
+                            object: Box::new(expr),
+                            property: prop,
+                            optional: false,
+                        };
+                    }
+                    _ => unreachable!("Unexpected postfix rule: {:?}", postfix_inner.as_rule()),
+                }
             }
 
             Ok(expr)

@@ -53,6 +53,8 @@ pub enum StdlibFunc {
     And,
     Or,
     Not,
+    // Array methods
+    ArrayConcat,
 }
 
 /* ===================== Stdlib Dispatcher ===================== */
@@ -96,6 +98,8 @@ pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val], outbox: &mut Outbox) ->
         StdlibFunc::And => and(args),
         StdlibFunc::Or => or(args),
         StdlibFunc::Not => not(args),
+        // Array methods
+        StdlibFunc::ArrayConcat => array_concat(args),
     }
 }
 
@@ -312,6 +316,59 @@ fn not(args: &[Val]) -> EvalResult {
     EvalResult::Value { v: Val::Bool(!val) }
 }
 
+/* ===================== Array Methods ===================== */
+
+/// Array.concat - returns a new array with elements from both arrays
+///
+/// JavaScript behavior:
+/// - Immutable: returns a new array, doesn't modify the original
+/// - Flattens array arguments one level: [1,2].concat([3,4]) => [1,2,3,4]
+/// - Non-array arguments are added as-is: [1,2].concat(3) => [1,2,3]
+///
+/// Args: [receiver_array, ...values_to_concat]
+fn array_concat(args: &[Val]) -> EvalResult {
+    if args.is_empty() {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new(
+                "TypeError",
+                "concat called without receiver",
+            )),
+        };
+    }
+
+    // First arg is the receiver (the array we're calling concat on)
+    let receiver = &args[0];
+    let Val::List(base) = receiver else {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new(
+                "TypeError",
+                "concat can only be called on arrays",
+            )),
+        };
+    };
+
+    // Start with a copy of the receiver array
+    let mut result = base.clone();
+
+    // Concat all remaining arguments
+    for arg in &args[1..] {
+        match arg {
+            Val::List(items) => {
+                // Flatten arrays one level (like JavaScript)
+                result.extend(items.clone());
+            }
+            other => {
+                // Non-array values are added as-is
+                result.push(other.clone());
+            }
+        }
+    }
+
+    EvalResult::Value {
+        v: Val::List(result),
+    }
+}
+
 /* ===================== Utilities ===================== */
 
 /// Convert value to string representation
@@ -367,6 +424,7 @@ pub fn to_string(val: &Val) -> String {
         },
         Val::Error(err) => format!("[Error: {}]", err.message),
         Val::NativeFunc(_) => "[Function]".to_string(),
+        Val::BoundMethod { .. } => "[Function]".to_string(),
     }
 }
 

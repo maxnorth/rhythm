@@ -3,7 +3,7 @@
 //! Tests function calls and Math stdlib
 
 use super::helpers::parse_workflow_and_build_vm;
-use crate::executor::{errors, run_until_done, Control, Stmt, Val, VM};
+use crate::executor::{errors, run_until_done, Control, Stmt, Val, WorkflowContext, VM};
 use maplit::hashmap;
 use std::collections::HashMap;
 
@@ -122,7 +122,10 @@ fn test_call_not_a_function() {
         "#;
 
     let program: Stmt = serde_json::from_str(program_json).unwrap();
-    let mut vm = VM::new(program, HashMap::new());
+    let context = WorkflowContext {
+        execution_id: "test-execution-id".to_string(),
+    };
+    let mut vm = VM::new(program, HashMap::new(), context);
     run_until_done(&mut vm);
 
     let Control::Throw(Val::Error(err)) = vm.control else {

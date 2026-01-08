@@ -164,6 +164,26 @@ pub fn eval_expr(
                                 )),
                             },
                         },
+                        Val::List(items) => {
+                            // Handle array properties and methods
+                            match property.as_str() {
+                                "length" => EvalResult::Value {
+                                    v: Val::Num(items.len() as f64),
+                                },
+                                "concat" => EvalResult::Value {
+                                    v: Val::BoundMethod {
+                                        receiver: Box::new(Val::List(items)),
+                                        method: super::stdlib::StdlibFunc::ArrayConcat,
+                                    },
+                                },
+                                _ => EvalResult::Throw {
+                                    error: Val::Error(ErrorInfo::new(
+                                        errors::PROPERTY_NOT_FOUND,
+                                        format!("Property '{}' not found on array", property),
+                                    )),
+                                },
+                            }
+                        }
                         _ => EvalResult::Throw {
                             error: Val::Error(ErrorInfo::new(
                                 errors::TYPE_ERROR,
@@ -199,9 +219,10 @@ pub fn eval_expr(
                     EvalResult::Throw { error }
                 }
                 EvalResult::Value { v: callee_val } => {
-                    // Step 2: Verify callee is a function
-                    let func = match callee_val {
-                        Val::NativeFunc(f) => f,
+                    // Step 2: Verify callee is a function and extract receiver if bound
+                    let (func, receiver) = match callee_val {
+                        Val::NativeFunc(f) => (f, None),
+                        Val::BoundMethod { receiver, method } => (method, Some(*receiver)),
                         _ => {
                             return EvalResult::Throw {
                                 error: Val::Error(ErrorInfo::new(
@@ -214,6 +235,12 @@ pub fn eval_expr(
 
                     // Step 3: Evaluate all arguments (left to right)
                     let mut arg_vals = Vec::new();
+
+                    // For bound methods, prepend the receiver as the first argument
+                    if let Some(recv) = receiver {
+                        arg_vals.push(recv);
+                    }
+
                     for arg_expr in args {
                         match eval_expr(arg_expr, env, resume_value, outbox) {
                             EvalResult::Value { v } => arg_vals.push(v),

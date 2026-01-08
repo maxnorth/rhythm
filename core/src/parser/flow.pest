@@ -96,18 +96,17 @@ multiplicative_expr = { unary_expr ~ ((op_mul | op_div) ~ unary_expr)* }
 // Unary operators: !x
 unary_expr = { op_not ~ unary_expr | call_expr }
 
-// Function calls: foo(), foo.bar(), foo(1, 2, 3)
-call_expr = { member_expr ~ call_suffix? }
+// Function calls and member access: foo(), foo.bar(), foo(1, 2).concat([3])
+// Supports chaining: a.concat([2]).concat([3])
+call_expr = { primary ~ postfix* }
 
+// Postfix operations that can be chained
+postfix = { call_suffix | optional_access | regular_access }
 call_suffix = { "(" ~ arg_list? ~ ")" }
-
-arg_list = { expression ~ ("," ~ expression)* }
-
-// Member access: foo, foo.bar, foo?.bar, foo.bar.baz
-member_expr = { primary ~ (member_access)* }
-member_access = { optional_access | regular_access }
 optional_access = { "?." ~ identifier }
 regular_access = { "." ~ identifier }
+
+arg_list = { expression ~ ("," ~ expression)* }
 
 primary = {
     "(" ~ expression ~ ")"

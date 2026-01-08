@@ -569,6 +569,7 @@ async fn test_signal_with_complex_payload() {
     assert_eq!(workflow_execution.output, Some(expected_output));
 }
 
+// NOTE: This test has been observed to be flaky in CI
 #[tokio::test(flavor = "multi_thread")]
 async fn test_signal_with_null_payload() {
     let workflow_source = r#"

@@ -11,7 +11,9 @@ use super::signals::{
     match_outbox_signals_to_unclaimed, process_signal_outbox, resolve_signal_claims,
 };
 use crate::db;
-use crate::executor::{json_to_val_map, run_until_done, val_map_to_json, val_to_json, Control, VM};
+use crate::executor::{
+    json_to_val_map, run_until_done, val_map_to_json, val_to_json, Control, WorkflowContext, VM,
+};
 use crate::parser::parse_workflow;
 use crate::types::{CreateExecutionParams, ExecutionOutcome, ExecutionType};
 
@@ -27,7 +29,7 @@ pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> 
             context.workflow_definition_id,
         )
     } else {
-        initialize_workflow(pool, &execution.target_name, &execution.inputs).await?
+        initialize_workflow(pool, &execution.target_name, &execution.inputs, &execution.id).await?
     };
 
     loop {
@@ -98,6 +100,7 @@ async fn initialize_workflow(
     pool: &PgPool,
     workflow_name: &str,
     inputs: &JsonValue,
+    execution_id: &str,
 ) -> Result<(VM, i32)> {
     let (workflow_def_id, workflow_source) =
         db::workflow_definitions::get_workflow_by_name(pool, workflow_name).await?;
@@ -106,7 +109,10 @@ async fn initialize_workflow(
         .map_err(|e| anyhow::anyhow!("Failed to parse workflow: {:?}", e))?;
 
     let workflow_inputs = json_to_val_map(inputs)?;
-    let vm = VM::new(workflow_def.body, workflow_inputs);
+    let context = WorkflowContext {
+        execution_id: execution_id.to_string(),
+    };
+    let vm = VM::new(workflow_def.body, workflow_inputs, context);
 
     Ok((vm, workflow_def_id))
 }
