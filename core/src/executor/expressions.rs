@@ -164,6 +164,26 @@ pub fn eval_expr(
                                 )),
                             },
                         },
+                        Val::List(items) => {
+                            // Handle array properties and methods
+                            match property.as_str() {
+                                "length" => EvalResult::Value {
+                                    v: Val::Num(items.len() as f64),
+                                },
+                                "concat" => EvalResult::Value {
+                                    v: Val::Func {
+                                        func: super::stdlib::StdlibFunc::ArrayConcat,
+                                        bindings: vec![Val::List(items)],
+                                    },
+                                },
+                                _ => EvalResult::Throw {
+                                    error: Val::Error(ErrorInfo::new(
+                                        errors::PROPERTY_NOT_FOUND,
+                                        format!("Property '{}' not found on array", property),
+                                    )),
+                                },
+                            }
+                        }
                         _ => EvalResult::Throw {
                             error: Val::Error(ErrorInfo::new(
                                 errors::TYPE_ERROR,
@@ -199,9 +219,9 @@ pub fn eval_expr(
                     EvalResult::Throw { error }
                 }
                 EvalResult::Value { v: callee_val } => {
-                    // Step 2: Verify callee is a function
-                    let func = match callee_val {
-                        Val::NativeFunc(f) => f,
+                    // Step 2: Verify callee is a function and extract bindings
+                    let (func, bindings) = match callee_val {
+                        Val::Func { func, bindings } => (func, bindings),
                         _ => {
                             return EvalResult::Throw {
                                 error: Val::Error(ErrorInfo::new(
@@ -213,7 +233,9 @@ pub fn eval_expr(
                     };
 
                     // Step 3: Evaluate all arguments (left to right)
-                    let mut arg_vals = Vec::new();
+                    // Start with bindings, then add call arguments
+                    let mut arg_vals = bindings;
+
                     for arg_expr in args {
                         match eval_expr(arg_expr, env, resume_value, outbox) {
                             EvalResult::Value { v } => arg_vals.push(v),

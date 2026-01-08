@@ -1820,3 +1820,133 @@ fn test_parse_for_loop_requires_block() {
         "for loops should require a block body, not inline statements"
     );
 }
+
+/* ===================== Method Chaining Tests ===================== */
+
+#[test]
+fn test_parse_method_chaining_basic() {
+    // Test that a.b().c() parses correctly
+    let ast = crate::parser::parse("return a.foo().bar()").expect("Should parse");
+    let stmt = unwrap_block(ast);
+
+    // The AST should be: Call { callee: Member { object: Call { callee: Member { object: a, property: foo } }, property: bar } }
+    match stmt {
+        Stmt::Return { value: Some(expr) } => {
+            // Outer call (bar)
+            match expr {
+                Expr::Call { callee, args } => {
+                    assert!(args.is_empty());
+                    // Inner member access (.bar)
+                    match *callee {
+                        Expr::Member {
+                            object,
+                            property,
+                            optional,
+                        } => {
+                            assert_eq!(property, "bar");
+                            assert!(!optional);
+                            // Inner call (foo)
+                            match *object {
+                                Expr::Call { callee, args } => {
+                                    assert!(args.is_empty());
+                                    // Inner member access (.foo)
+                                    match *callee {
+                                        Expr::Member {
+                                            object,
+                                            property,
+                                            optional,
+                                        } => {
+                                            assert_eq!(property, "foo");
+                                            assert!(!optional);
+                                            // Base identifier (a)
+                                            match *object {
+                                                Expr::Ident { name } => assert_eq!(name, "a"),
+                                                _ => panic!("Expected Ident, got {:?}", object),
+                                            }
+                                        }
+                                        _ => panic!("Expected Member, got {:?}", callee),
+                                    }
+                                }
+                                _ => panic!("Expected Call, got {:?}", object),
+                            }
+                        }
+                        _ => panic!("Expected Member, got {:?}", callee),
+                    }
+                }
+                _ => panic!("Expected Call, got {:?}", expr),
+            }
+        }
+        _ => panic!("Expected Return, got {:?}", stmt),
+    }
+}
+
+#[test]
+fn test_parse_method_chaining_with_args() {
+    // Test that a.concat([1]).concat([2]) parses correctly
+    let ast = crate::parser::parse("return a.concat([1]).concat([2])").expect("Should parse");
+    let stmt = unwrap_block(ast);
+
+    match stmt {
+        Stmt::Return { value: Some(expr) } => {
+            // Outer call (second concat)
+            match expr {
+                Expr::Call { callee, args } => {
+                    assert_eq!(args.len(), 1);
+                    // Verify the argument is an array
+                    match &args[0] {
+                        Expr::LitList { elements } => assert_eq!(elements.len(), 1),
+                        _ => panic!("Expected LitList, got {:?}", args[0]),
+                    }
+                    // Inner member access (.concat)
+                    match *callee {
+                        Expr::Member { property, .. } => {
+                            assert_eq!(property, "concat");
+                        }
+                        _ => panic!("Expected Member, got {:?}", callee),
+                    }
+                }
+                _ => panic!("Expected Call, got {:?}", expr),
+            }
+        }
+        _ => panic!("Expected Return, got {:?}", stmt),
+    }
+}
+
+#[test]
+fn test_parse_property_after_call() {
+    // Test that foo().length parses correctly
+    let ast = crate::parser::parse("return arr.slice().length").expect("Should parse");
+    let stmt = unwrap_block(ast);
+
+    match stmt {
+        Stmt::Return { value: Some(expr) } => {
+            // Outer member access (.length)
+            match expr {
+                Expr::Member {
+                    object,
+                    property,
+                    optional,
+                } => {
+                    assert_eq!(property, "length");
+                    assert!(!optional);
+                    // Inner call (slice)
+                    match *object {
+                        Expr::Call { callee, args } => {
+                            assert!(args.is_empty());
+                            // Inner member access (.slice)
+                            match *callee {
+                                Expr::Member { property, .. } => {
+                                    assert_eq!(property, "slice");
+                                }
+                                _ => panic!("Expected Member"),
+                            }
+                        }
+                        _ => panic!("Expected Call"),
+                    }
+                }
+                _ => panic!("Expected Member"),
+            }
+        }
+        _ => panic!("Expected Return"),
+    }
+}

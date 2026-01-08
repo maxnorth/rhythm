@@ -12,6 +12,31 @@ use super::types::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/* ===================== WorkflowContext ===================== */
+
+/// Runtime context passed to workflows
+///
+/// This struct contains runtime information that workflows can access
+/// via the `Context` global object. It's converted to a Val::Obj when
+/// the VM is initialized.
+#[derive(Debug, Clone, Default)]
+pub struct WorkflowContext {
+    /// The unique identifier for this workflow execution
+    pub execution_id: String,
+}
+
+impl WorkflowContext {
+    /// Convert to a Val::Obj for injection into the workflow environment
+    fn to_val(&self) -> Val {
+        let mut obj = HashMap::new();
+        obj.insert(
+            "executionId".to_string(),
+            Val::Str(self.execution_id.clone()),
+        );
+        Val::Obj(obj)
+    }
+}
+
 /* ===================== VM ===================== */
 
 /// Virtual Machine state
@@ -49,16 +74,16 @@ impl VM {
     /// Create a new VM with a program and workflow inputs
     ///
     /// The VM is initialized with:
-    /// - Context: Empty runtime context object
+    /// - Context: Runtime context with executionId
     /// - Inputs: User-provided workflow inputs
     /// - Stdlib: Math, Task, and other built-in functions
     ///
     /// The program is wrapped in a root frame and execution begins immediately.
-    pub fn new(program: Stmt, inputs: HashMap<String, Val>) -> Self {
+    pub fn new(program: Stmt, inputs: HashMap<String, Val>, context: WorkflowContext) -> Self {
         let mut env = HashMap::new();
 
         // Inject runtime globals
-        env.insert("Context".to_string(), Val::Obj(HashMap::new()));
+        env.insert("Context".to_string(), context.to_val());
         env.insert("Inputs".to_string(), Val::Obj(inputs));
 
         // Inject stdlib objects into environment

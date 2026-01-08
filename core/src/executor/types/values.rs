@@ -58,8 +58,12 @@ pub enum Val {
     Promise(Awaitable),
     /// Error value with code and message
     Error(ErrorInfo),
-    /// Native function (standard library)
-    NativeFunc(StdlibFunc),
+    /// Native function with optional bound arguments
+    /// Empty bindings = standalone function, non-empty = bound method or partial application
+    Func {
+        func: StdlibFunc,
+        bindings: Vec<Val>,
+    },
 }
 
 impl Val {

@@ -84,8 +84,13 @@ fn test_return_ctx() {
     let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
-    // ctx should be an empty object
-    assert_eq!(vm.control, Control::Return(Val::Obj(hashmap! {})));
+    // ctx should contain executionId
+    assert_eq!(
+        vm.control,
+        Control::Return(Val::Obj(hashmap! {
+            "executionId".to_string() => Val::Str("test-execution-id".to_string())
+        }))
+    );
 }
 
 #[test]
@@ -573,4 +578,102 @@ fn test_execute_bare_member_access() {
     let mut vm = parse_workflow_and_build_vm(source, inputs);
     run_until_done(&mut vm);
     assert_eq!(vm.control, Control::Return(Val::Num(789.0)));
+}
+
+/* ===================== Array Methods Tests ===================== */
+
+#[test]
+fn test_array_length() {
+    let source = r#"
+            let arr = [1, 2, 3, 4, 5]
+            return arr.length
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(5.0)));
+}
+
+#[test]
+fn test_array_length_empty() {
+    let source = r#"
+            let arr = []
+            return arr.length
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(0.0)));
+}
+
+#[test]
+fn test_array_concat_basic() {
+    let source = r#"
+            let a = [1, 2]
+            let b = [3, 4]
+            return a.concat(b)
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(
+        vm.control,
+        Control::Return(Val::List(vec![
+            Val::Num(1.0),
+            Val::Num(2.0),
+            Val::Num(3.0),
+            Val::Num(4.0),
+        ]))
+    );
+}
+
+#[test]
+fn test_array_concat_immutable() {
+    // Verify concat doesn't mutate the original array
+    let source = r#"
+            let a = [1, 2]
+            let b = a.concat([3])
+            return a.length
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    // Original array should still have length 2
+    assert_eq!(vm.control, Control::Return(Val::Num(2.0)));
+}
+
+#[test]
+fn test_array_concat_chained() {
+    // Parser now supports method chaining
+    let source = r#"
+            let a = [1]
+            return a.concat([2]).concat([3])
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(
+        vm.control,
+        Control::Return(Val::List(
+            vec![Val::Num(1.0), Val::Num(2.0), Val::Num(3.0),]
+        ))
+    );
+}
+
+#[test]
+fn test_array_concat_with_non_array() {
+    // JavaScript flattens arrays but adds non-arrays as-is
+    let source = r#"
+            let a = [1, 2]
+            return a.concat(3)
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(
+        vm.control,
+        Control::Return(Val::List(
+            vec![Val::Num(1.0), Val::Num(2.0), Val::Num(3.0),]
+        ))
+    );
 }

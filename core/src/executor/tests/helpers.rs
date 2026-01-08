@@ -2,7 +2,7 @@
 //!
 //! Common utilities for parsing workflows and building VMs
 
-use crate::executor::{Val, VM};
+use crate::executor::{Val, WorkflowContext, VM};
 use crate::parser::WorkflowDef;
 use std::collections::HashMap;
 
@@ -28,5 +28,8 @@ pub fn parse_workflow_and_build_vm(source: &str, inputs: HashMap<String, Val>) -
     let workflow: WorkflowDef =
         serde_json::from_str(&json).expect("Workflow deserialization failed");
 
-    VM::new(workflow.body.clone(), inputs)
+    let context = WorkflowContext {
+        execution_id: "test-execution-id".to_string(),
+    };
+    VM::new(workflow.body.clone(), inputs, context)
 }
