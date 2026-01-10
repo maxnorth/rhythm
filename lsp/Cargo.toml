@@ -1,0 +1,42 @@
+[package]
+name = "rhythm-lsp"
+version = "0.1.0"
+edition = "2021"
+description = "Language Server Protocol implementation for Rhythm workflow language"
+license = "MIT"
+repository = "https://github.com/anthropics/rhythm"
+keywords = ["lsp", "language-server", "rhythm", "workflow"]
+categories = ["development-tools"]
+
+[[bin]]
+name = "rhythm-lsp"
+path = "src/main.rs"
+
+[dependencies]
+# LSP
+tower-lsp = "0.20"
+tokio = { version = "1", features = ["full"] }
+
+# Parser (PEST)
+pest = "2.8"
+pest_derive = "2.8"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+thiserror = "1.0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.release-small]
+inherits = "release"
+opt-level = "z"
