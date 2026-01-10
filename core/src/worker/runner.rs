@@ -15,7 +15,7 @@ use crate::executor::{
     json_to_val_map, run_until_done, val_map_to_json, val_to_json, Control, WorkflowContext, VM,
 };
 use crate::parser::parse_workflow;
-use crate::types::{CreateExecutionParams, ExecutionOutcome, ExecutionType};
+use crate::types::{CreateExecutionParams, ExecutionOutcome};
 
 pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> Result<()> {
     let maybe_context = db::workflow_execution_context::get_context(pool, &execution.id).await?;
@@ -58,7 +58,7 @@ pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> 
     }
 
     let mut tx = pool.begin().await?;
-    create_child_tasks(&mut tx, &vm.outbox, &execution.id, &execution.queue).await?;
+    create_child_executions(&mut tx, &vm.outbox, &execution.id, &execution.queue).await?;
     schedule_timers(&mut tx, &vm.outbox, &execution.id, &execution.queue).await?;
     process_signal_outbox(&mut tx, &vm.outbox, &execution.id).await?;
     handle_workflow_result(&mut tx, &vm, &execution.id, workflow_def_id).await?;
@@ -123,33 +123,33 @@ async fn initialize_workflow(
     Ok((vm, workflow_def_id))
 }
 
-async fn create_child_tasks(
+async fn create_child_executions(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     outbox: &crate::executor::Outbox,
     execution_id: &str,
     queue: &str,
 ) -> Result<()> {
-    if outbox.tasks.is_empty() {
+    if outbox.executions.is_empty() {
         return Ok(());
     }
 
-    for task_creation in &outbox.tasks {
-        let task_inputs = val_map_to_json(&task_creation.inputs)?;
+    for exec in &outbox.executions {
+        let inputs_json = val_map_to_json(&exec.inputs)?;
 
         let params = CreateExecutionParams {
-            id: Some(task_creation.task_id.clone()),
-            exec_type: ExecutionType::Task,
-            target_name: task_creation.task_name.clone(),
+            id: Some(exec.id.clone()),
+            exec_type: exec.target_type.clone(),
+            target_name: exec.target_name.clone(),
             queue: queue.to_string(),
-            inputs: task_inputs,
+            inputs: inputs_json,
             parent_workflow_id: Some(execution_id.to_string()),
         };
 
         db::executions::create_execution(tx, params)
             .await
-            .context("Failed to create child task execution")?;
+            .context("Failed to create child execution")?;
 
-        db::work_queue::enqueue_work(&mut **tx, &task_creation.task_id, queue, 0)
+        db::work_queue::enqueue_work(&mut **tx, &exec.id, queue, 0)
             .await
             .context("Failed to enqueue work")?;
     }

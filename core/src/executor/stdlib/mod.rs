@@ -6,6 +6,7 @@ pub mod math;
 pub mod signal;
 pub mod task;
 pub mod timer;
+pub mod workflow;
 
 use super::expressions::EvalResult;
 use super::outbox::Outbox;
@@ -27,6 +28,8 @@ pub enum StdlibFunc {
     MathRound,
     // Task functions
     TaskRun,
+    // Workflow functions
+    WorkflowRun,
     // Promise functions
     PromiseAll,
     PromiseAny,
@@ -72,6 +75,8 @@ pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val], outbox: &mut Outbox) ->
         StdlibFunc::MathRound => math::round(args),
         // Task functions have side effects - outbox required
         StdlibFunc::TaskRun => task::run(args, outbox),
+        // Workflow functions have side effects - outbox required
+        StdlibFunc::WorkflowRun => workflow::run(args, outbox),
         // Promise functions (pure - no outbox needed)
         StdlibFunc::PromiseAll => task::all(args),
         StdlibFunc::PromiseAny => task::any(args),
@@ -405,7 +410,7 @@ pub fn to_string(val: &Val) -> String {
         Val::List(_) => "[object Array]".to_string(),
         Val::Obj(_) => "[object Object]".to_string(),
         Val::Promise(awaitable) => match awaitable {
-            super::types::Awaitable::Task(id) => format!("[Promise Task({})]", id),
+            super::types::Awaitable::Execution(id) => format!("[Promise Execution({})]", id),
             super::types::Awaitable::Timer { fire_at } => {
                 format!("[Promise Timer({})]", fire_at)
             }
@@ -453,6 +458,10 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     let mut task_obj = std::collections::HashMap::new();
     task_obj.insert("run".to_string(), func(StdlibFunc::TaskRun));
 
+    // Create Workflow object with methods
+    let mut workflow_obj = std::collections::HashMap::new();
+    workflow_obj.insert("run".to_string(), func(StdlibFunc::WorkflowRun));
+
     // Create Promise object with methods
     let mut promise_obj = std::collections::HashMap::new();
     promise_obj.insert("all".to_string(), func(StdlibFunc::PromiseAll));
@@ -472,6 +481,7 @@ pub fn inject_stdlib(env: &mut std::collections::HashMap<String, Val>) {
     // Add stdlib objects to environment
     env.insert("Math".to_string(), Val::Obj(math_obj));
     env.insert("Task".to_string(), Val::Obj(task_obj));
+    env.insert("Workflow".to_string(), Val::Obj(workflow_obj));
     env.insert("Promise".to_string(), Val::Obj(promise_obj));
     env.insert("Timer".to_string(), Val::Obj(timer_obj));
     env.insert("Signal".to_string(), Val::Obj(signal_obj));

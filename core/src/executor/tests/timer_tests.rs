@@ -406,10 +406,10 @@ fn test_task_and_timer_in_same_workflow() {
     run_until_done(&mut vm);
 
     // Outbox should have both
-    assert_eq!(vm.outbox.tasks.len(), 1);
+    assert_eq!(vm.outbox.executions.len(), 1);
     assert_eq!(vm.outbox.timers.len(), 1);
 
-    assert_eq!(vm.outbox.tasks[0].task_name, "my_task");
+    assert_eq!(vm.outbox.executions[0].target_name, "my_task");
 }
 
 #[test]
@@ -426,7 +426,7 @@ fn test_await_task_then_timer() {
 
     // Should suspend on task first
     match &vm.control {
-        Control::Suspend(Awaitable::Task(task_id)) => {
+        Control::Suspend(Awaitable::Execution(task_id)) => {
             assert_eq!(task_id.len(), 36); // UUID
         }
         _ => panic!("Expected suspended on task, got {:?}", vm.control),

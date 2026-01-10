@@ -463,7 +463,7 @@ fn test_expression_without_await() {
     // Should return a Promise(Task) value (not suspend)
     // Task ID is a UUID, so we can't predict it - just verify it's a Promise(Task)
     match vm.control {
-        Control::Return(Val::Promise(crate::executor::Awaitable::Task(_task_id))) => {
+        Control::Return(Val::Promise(crate::executor::Awaitable::Execution(_task_id))) => {
             // Success - we got a Promise(Task) value
         }
         _ => panic!(

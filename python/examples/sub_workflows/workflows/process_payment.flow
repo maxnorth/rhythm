@@ -1,0 +1,39 @@
+// Child workflow: Process payment for an order
+// Called by: order_fulfillment workflow
+
+let order_id = Inputs.order_id
+let amount = Inputs.amount
+let payment_method = Inputs.payment_method
+
+// Validate payment method
+let validation = await Task.run("validate_payment_method", {
+    payment_method: payment_method
+})
+
+if (validation.valid != true) {
+    return { status: "error", error: "invalid_payment_method" }
+}
+
+// Charge the payment
+let charge_result = await Task.run("charge_payment", {
+    order_id: order_id,
+    amount: amount,
+    payment_method: payment_method
+})
+
+if (charge_result.success != true) {
+    return { status: "error", error: charge_result.error }
+}
+
+// Record the transaction
+await Task.run("record_transaction", {
+    order_id: order_id,
+    transaction_id: charge_result.transaction_id,
+    amount: amount
+})
+
+return {
+    status: "success",
+    transaction_id: charge_result.transaction_id,
+    amount_charged: amount
+}

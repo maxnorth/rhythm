@@ -22,3 +22,4 @@ mod ternary_tests;
 mod timer_tests;
 mod truthy_tests;
 mod while_tests;
+mod workflow_tests;

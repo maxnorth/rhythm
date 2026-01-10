@@ -222,3 +222,32 @@ pub async fn get_unclaimed_work_count(pool: &PgPool, execution_id: &str) -> Resu
     .await?;
     Ok(count)
 }
+
+/// Helper to get child workflows (not tasks) for a parent workflow
+///
+/// Returns a list of (workflow_id, target_name) tuples ordered by creation time.
+pub async fn get_child_workflows(pool: &PgPool, parent_id: &str) -> Result<Vec<(String, String)>> {
+    let workflows = sqlx::query_as(
+        "SELECT id, target_name FROM executions WHERE parent_workflow_id = $1 AND type = 'workflow' ORDER BY created_at",
+    )
+    .bind(parent_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(workflows)
+}
+
+/// Helper to get child executions by type
+///
+/// Returns a list of (id, target_name, exec_type) tuples ordered by creation time.
+pub async fn get_child_executions_with_type(
+    pool: &PgPool,
+    parent_id: &str,
+) -> Result<Vec<(String, String, String)>> {
+    let executions = sqlx::query_as(
+        "SELECT id, target_name, type::text FROM executions WHERE parent_workflow_id = $1 ORDER BY created_at",
+    )
+    .bind(parent_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(executions)
+}

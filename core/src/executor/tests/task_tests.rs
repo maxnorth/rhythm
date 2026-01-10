@@ -24,26 +24,26 @@ fn test_task_run_basic() {
 
     // Should return a Promise(Task) value with a UUID
     match &vm.control {
-        Control::Return(Val::Promise(Awaitable::Task(task_id))) => {
+        Control::Return(Val::Promise(Awaitable::Execution(task_id))) => {
             // Task ID should be a valid UUID format (36 characters with dashes)
             assert_eq!(task_id.len(), 36);
             assert!(task_id.contains('-'));
         }
         _ => panic!(
-            "Expected Control::Return(Val::Promise(Awaitable::Task(_))), got {:?}",
+            "Expected Control::Return(Val::Promise(Awaitable::Execution(_))), got {:?}",
             vm.control
         ),
     }
 
-    // Check outbox has one task creation
-    assert_eq!(vm.outbox.tasks.len(), 1);
-    let task_creation = &vm.outbox.tasks[0];
-    assert_eq!(task_creation.task_name, "my_task");
-    assert_eq!(task_creation.inputs, inputs_obj);
+    // Check outbox has one execution creation
+    assert_eq!(vm.outbox.executions.len(), 1);
+    let exec = &vm.outbox.executions[0];
+    assert_eq!(exec.target_name, "my_task");
+    assert_eq!(exec.inputs, inputs_obj);
 
-    // Task ID in outbox should match task ID in return value
-    if let Control::Return(Val::Promise(Awaitable::Task(task_id))) = &vm.control {
-        assert_eq!(task_creation.task_id, *task_id);
+    // Execution ID in outbox should match ID in return value
+    if let Control::Return(Val::Promise(Awaitable::Execution(exec_id))) = &vm.control {
+        assert_eq!(exec.id, *exec_id);
     }
 }
 
@@ -60,13 +60,13 @@ fn test_task_run_empty_inputs() {
     // Should return a Promise(Task) value
     assert!(matches!(
         vm.control,
-        Control::Return(Val::Promise(Awaitable::Task(_)))
+        Control::Return(Val::Promise(Awaitable::Execution(_)))
     ));
 
     // Check outbox
-    assert_eq!(vm.outbox.tasks.len(), 1);
-    assert_eq!(vm.outbox.tasks[0].task_name, "simple_task");
-    assert_eq!(vm.outbox.tasks[0].inputs, HashMap::new());
+    assert_eq!(vm.outbox.executions.len(), 1);
+    assert_eq!(vm.outbox.executions[0].target_name, "simple_task");
+    assert_eq!(vm.outbox.executions[0].inputs, HashMap::new());
 }
 
 #[test]
@@ -86,13 +86,13 @@ fn test_task_run_multiple_calls() {
     let mut inputs_obj = HashMap::new();
     inputs_obj.insert("value".to_string(), Val::Num(123.0));
 
-    // Check outbox has two task creations
-    assert_eq!(vm.outbox.tasks.len(), 2);
-    assert_eq!(vm.outbox.tasks[0].task_name, "first_task");
-    assert_eq!(vm.outbox.tasks[1].task_name, "second_task");
+    // Check outbox has two execution creations
+    assert_eq!(vm.outbox.executions.len(), 2);
+    assert_eq!(vm.outbox.executions[0].target_name, "first_task");
+    assert_eq!(vm.outbox.executions[1].target_name, "second_task");
 
-    // Task IDs should be different
-    assert_ne!(vm.outbox.tasks[0].task_id, vm.outbox.tasks[1].task_id);
+    // Execution IDs should be different
+    assert_ne!(vm.outbox.executions[0].id, vm.outbox.executions[1].id);
 }
 
 #[test]
@@ -124,34 +124,34 @@ fn test_fire_and_forget_then_await() {
 
     // VM should be suspended on the awaited task
     match &vm.control {
-        Control::Suspend(Awaitable::Task(task_id)) => {
+        Control::Suspend(Awaitable::Execution(task_id)) => {
             // Should be suspended on the second task (the awaited one)
             assert_eq!(task_id.len(), 36);
         }
         _ => panic!(
-            "Expected Control::Suspend(Awaitable::Task(_)), got {:?}",
+            "Expected Control::Suspend(Awaitable::Execution(_)), got {:?}",
             vm.control
         ),
     }
 
-    // Outbox should contain BOTH tasks
-    assert_eq!(vm.outbox.tasks.len(), 2);
+    // Outbox should contain BOTH executions
+    assert_eq!(vm.outbox.executions.len(), 2);
 
-    // First task (fire-and-forget)
-    assert_eq!(vm.outbox.tasks[0].task_name, "fire_and_forget_task");
-    assert_eq!(vm.outbox.tasks[0].inputs, inputs1);
+    // First execution (fire-and-forget)
+    assert_eq!(vm.outbox.executions[0].target_name, "fire_and_forget_task");
+    assert_eq!(vm.outbox.executions[0].inputs, inputs1);
 
-    // Second task (awaited)
-    assert_eq!(vm.outbox.tasks[1].task_name, "awaited_task");
-    assert_eq!(vm.outbox.tasks[1].inputs, inputs2);
+    // Second execution (awaited)
+    assert_eq!(vm.outbox.executions[1].target_name, "awaited_task");
+    assert_eq!(vm.outbox.executions[1].inputs, inputs2);
 
-    // The suspended task ID should match the second task in the outbox
-    if let Control::Suspend(Awaitable::Task(suspended_id)) = &vm.control {
-        assert_eq!(vm.outbox.tasks[1].task_id, *suspended_id);
+    // The suspended execution ID should match the second execution in the outbox
+    if let Control::Suspend(Awaitable::Execution(suspended_id)) = &vm.control {
+        assert_eq!(vm.outbox.executions[1].id, *suspended_id);
     }
 
-    // Task IDs should be different
-    assert_ne!(vm.outbox.tasks[0].task_id, vm.outbox.tasks[1].task_id);
+    // Execution IDs should be different
+    assert_ne!(vm.outbox.executions[0].id, vm.outbox.executions[1].id);
 
     // Frames should be preserved (not popped due to suspension)
     assert_eq!(vm.frames.len(), 2); // Block + Return frames

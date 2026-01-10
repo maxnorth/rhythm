@@ -12,9 +12,9 @@ use serde_json::json;
 use super::super::run_workflow;
 use crate::db;
 use crate::test_helpers::{
-    enqueue_and_claim_execution, get_child_task_count, get_child_tasks, get_task_by_target_name,
-    get_unclaimed_work_count, get_work_queue_count, setup_workflow_test,
-    setup_workflow_test_with_pool,
+    enqueue_and_claim_execution, get_child_executions_with_type, get_child_task_count,
+    get_child_tasks, get_child_workflows, get_task_by_target_name, get_unclaimed_work_count,
+    get_work_queue_count, setup_workflow_test, setup_workflow_test_with_pool,
 };
 use crate::types::ExecutionStatus;
 
@@ -1184,4 +1184,508 @@ async fn test_parallel_timer_and_task() {
         .unwrap();
     assert_eq!(workflow_execution.status, ExecutionStatus::Completed);
     assert_eq!(workflow_execution.output, Some(json!("work_done")));
+}
+
+/* ===================== Sub-Workflow Integration Tests ===================== */
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sub_workflow_basic() {
+    // Parent workflow that spawns and awaits a child workflow
+    let parent_source = r#"
+        result = await Workflow.run("child_workflow", {value: 10})
+        return result * 2
+    "#;
+
+    // Child workflow source
+    let child_source = r#"
+        return Inputs.value + 5
+    "#;
+
+    let (pool, execution) = setup_workflow_test("parent_workflow", parent_source, json!({})).await;
+    let parent_id = execution.id.clone();
+
+    // Register the child workflow definition
+    db::workflow_definitions::create_workflow_definition(
+        &pool,
+        "child_workflow",
+        "test-child_workflow",
+        child_source,
+    )
+    .await
+    .unwrap();
+
+    // First run: parent suspends on child workflow
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify parent suspended
+    let parent_execution = db::executions::get_execution(&pool, &parent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(parent_execution.status, ExecutionStatus::Suspended);
+
+    // Verify child workflow was created with correct type
+    let child_workflows = get_child_workflows(&pool, &parent_id).await.unwrap();
+    assert_eq!(child_workflows.len(), 1);
+    let (child_id, child_name) = &child_workflows[0];
+    assert_eq!(child_name, "child_workflow");
+
+    // Verify child workflow has correct inputs
+    let child_execution = db::executions::get_execution(&pool, child_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(child_execution.inputs, json!({"value": 10.0}));
+
+    // Run the child workflow to completion
+    enqueue_and_claim_execution(&pool, child_id, "default")
+        .await
+        .unwrap();
+    let child_exec = db::executions::get_execution(&pool, child_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, child_exec).await.unwrap();
+
+    // Verify child completed with correct output (10 + 5 = 15)
+    let child_execution = db::executions::get_execution(&pool, child_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(child_execution.status, ExecutionStatus::Completed);
+    assert_eq!(child_execution.output, Some(json!(15.0)));
+
+    // Resume parent workflow
+    enqueue_and_claim_execution(&pool, &parent_id, "default")
+        .await
+        .unwrap();
+    let parent_exec = db::executions::get_execution(&pool, &parent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, parent_exec).await.unwrap();
+
+    // Verify parent completed with correct output (15 * 2 = 30)
+    let parent_execution = db::executions::get_execution(&pool, &parent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(parent_execution.status, ExecutionStatus::Completed);
+    assert_eq!(parent_execution.output, Some(json!(30.0)));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sub_workflow_fire_and_forget() {
+    // Parent workflow that spawns a child workflow without awaiting it
+    let parent_source = r#"
+        Workflow.run("background_workflow", {data: "process_this"})
+        return "parent_done"
+    "#;
+
+    // Child workflow source
+    let child_source = r#"
+        return Inputs.data + "_processed"
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("fire_forget_parent", parent_source, json!({})).await;
+    let parent_id = execution.id.clone();
+
+    // Register the child workflow definition
+    db::workflow_definitions::create_workflow_definition(
+        &pool,
+        "background_workflow",
+        "test-background_workflow",
+        child_source,
+    )
+    .await
+    .unwrap();
+
+    // Run parent - should complete immediately
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify parent completed
+    let parent_execution = db::executions::get_execution(&pool, &parent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(parent_execution.status, ExecutionStatus::Completed);
+    assert_eq!(parent_execution.output, Some(json!("parent_done")));
+
+    // Verify child workflow was created but not completed
+    let child_workflows = get_child_workflows(&pool, &parent_id).await.unwrap();
+    assert_eq!(child_workflows.len(), 1);
+    let (child_id, _) = &child_workflows[0];
+
+    let child_execution = db::executions::get_execution(&pool, child_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(child_execution.status, ExecutionStatus::Pending);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sub_workflow_sequential() {
+    // Parent workflow that awaits multiple child workflows in sequence
+    let parent_source = r#"
+        first = await Workflow.run("step_one", {input: 1})
+        second = await Workflow.run("step_two", {input: first})
+        third = await Workflow.run("step_three", {input: second})
+        return third
+    "#;
+
+    // Child workflow sources (each multiplies by 2)
+    let step_source = r#"
+        return Inputs.input * 2
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("sequential_parent", parent_source, json!({})).await;
+    let parent_id = execution.id.clone();
+
+    // Register all child workflow definitions
+    for name in ["step_one", "step_two", "step_three"] {
+        db::workflow_definitions::create_workflow_definition(
+            &pool,
+            name,
+            &format!("test-{}", name),
+            step_source,
+        )
+        .await
+        .unwrap();
+    }
+
+    // Run parent - suspends on first child
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Process all three children
+    for step_name in ["step_one", "step_two", "step_three"] {
+        // Find and run the child
+        let child_id = get_task_by_target_name(&pool, &parent_id, step_name)
+            .await
+            .unwrap();
+
+        enqueue_and_claim_execution(&pool, &child_id, "default")
+            .await
+            .unwrap();
+        let child_exec = db::executions::get_execution(&pool, &child_id)
+            .await
+            .unwrap()
+            .unwrap();
+        run_workflow(&pool, child_exec).await.unwrap();
+
+        // Resume parent
+        enqueue_and_claim_execution(&pool, &parent_id, "default")
+            .await
+            .unwrap();
+        let parent_exec = db::executions::get_execution(&pool, &parent_id)
+            .await
+            .unwrap()
+            .unwrap();
+        run_workflow(&pool, parent_exec).await.unwrap();
+    }
+
+    // Verify parent completed with correct output (1 * 2 * 2 * 2 = 8)
+    let parent_execution = db::executions::get_execution(&pool, &parent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(parent_execution.status, ExecutionStatus::Completed);
+    assert_eq!(parent_execution.output, Some(json!(8.0)));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_mixed_tasks_and_workflows() {
+    // Parent workflow that spawns both tasks and workflows
+    let parent_source = r#"
+        task_result = await Task.run("my_task", {value: 5})
+        workflow_result = await Workflow.run("my_child_workflow", {value: task_result})
+        return task_result + workflow_result
+    "#;
+
+    // Child workflow source
+    let child_source = r#"
+        return Inputs.value * 10
+    "#;
+
+    let (pool, execution) = setup_workflow_test("mixed_parent", parent_source, json!({})).await;
+    let parent_id = execution.id.clone();
+
+    // Register child workflow
+    db::workflow_definitions::create_workflow_definition(
+        &pool,
+        "my_child_workflow",
+        "test-my_child_workflow",
+        child_source,
+    )
+    .await
+    .unwrap();
+
+    // First run: parent suspends on task
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Verify parent suspended and task created
+    let parent_execution = db::executions::get_execution(&pool, &parent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(parent_execution.status, ExecutionStatus::Suspended);
+
+    // Verify child executions have correct types
+    let children = get_child_executions_with_type(&pool, &parent_id)
+        .await
+        .unwrap();
+    assert_eq!(children.len(), 1);
+    assert_eq!(children[0].1, "my_task");
+    assert_eq!(children[0].2, "task");
+
+    // Complete the task
+    db::executions::complete_execution(pool.as_ref(), &children[0].0, json!(5))
+        .await
+        .unwrap();
+
+    // Resume parent - now suspends on workflow
+    enqueue_and_claim_execution(&pool, &parent_id, "default")
+        .await
+        .unwrap();
+    let parent_exec = db::executions::get_execution(&pool, &parent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, parent_exec).await.unwrap();
+
+    // Verify child workflow was created
+    let children = get_child_executions_with_type(&pool, &parent_id)
+        .await
+        .unwrap();
+    assert_eq!(children.len(), 2);
+    assert_eq!(children[1].1, "my_child_workflow");
+    assert_eq!(children[1].2, "workflow");
+
+    // Run the child workflow
+    let child_workflow_id = &children[1].0;
+    enqueue_and_claim_execution(&pool, child_workflow_id, "default")
+        .await
+        .unwrap();
+    let child_exec = db::executions::get_execution(&pool, child_workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, child_exec).await.unwrap();
+
+    // Verify child workflow completed (5 * 10 = 50)
+    let child_execution = db::executions::get_execution(&pool, child_workflow_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(child_execution.status, ExecutionStatus::Completed);
+    assert_eq!(child_execution.output, Some(json!(50.0)));
+
+    // Resume parent to completion
+    enqueue_and_claim_execution(&pool, &parent_id, "default")
+        .await
+        .unwrap();
+    let parent_exec = db::executions::get_execution(&pool, &parent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, parent_exec).await.unwrap();
+
+    // Verify parent completed (5 + 50 = 55)
+    let parent_execution = db::executions::get_execution(&pool, &parent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(parent_execution.status, ExecutionStatus::Completed);
+    assert_eq!(parent_execution.output, Some(json!(55.0)));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sub_workflow_chain() {
+    // Grandparent -> Parent -> Child workflow chain
+    // Each workflow adds 10 to the result from its child
+    let grandparent_source = r#"
+        result = await Workflow.run("parent_wf", {depth: 1})
+        return result + 10
+    "#;
+
+    let parent_source = r#"
+        result = await Workflow.run("child_wf", {depth: Inputs.depth + 1})
+        return result + 10
+    "#;
+
+    let child_source = r#"
+        return Inputs.depth
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("grandparent_wf", grandparent_source, json!({})).await;
+    let grandparent_id = execution.id.clone();
+
+    // Register workflow definitions
+    db::workflow_definitions::create_workflow_definition(
+        &pool,
+        "parent_wf",
+        "test-parent_wf",
+        parent_source,
+    )
+    .await
+    .unwrap();
+    db::workflow_definitions::create_workflow_definition(
+        &pool,
+        "child_wf",
+        "test-child_wf",
+        child_source,
+    )
+    .await
+    .unwrap();
+
+    // Run grandparent - suspends on parent
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Get parent workflow
+    let parent_workflows = get_child_workflows(&pool, &grandparent_id).await.unwrap();
+    assert_eq!(parent_workflows.len(), 1);
+    let parent_id = &parent_workflows[0].0;
+
+    // Run parent - suspends on child
+    enqueue_and_claim_execution(&pool, parent_id, "default")
+        .await
+        .unwrap();
+    let parent_exec = db::executions::get_execution(&pool, parent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, parent_exec).await.unwrap();
+
+    // Get child workflow
+    let child_workflows = get_child_workflows(&pool, parent_id).await.unwrap();
+    assert_eq!(child_workflows.len(), 1);
+    let child_id = &child_workflows[0].0;
+
+    // Run child - completes
+    enqueue_and_claim_execution(&pool, child_id, "default")
+        .await
+        .unwrap();
+    let child_exec = db::executions::get_execution(&pool, child_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, child_exec).await.unwrap();
+
+    // Verify child completed (depth was 2: grandparent passed 1, parent added 1)
+    let child_execution = db::executions::get_execution(&pool, child_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(child_execution.status, ExecutionStatus::Completed);
+    assert_eq!(child_execution.output, Some(json!(2.0)));
+
+    // Resume parent - completes
+    enqueue_and_claim_execution(&pool, parent_id, "default")
+        .await
+        .unwrap();
+    let parent_exec = db::executions::get_execution(&pool, parent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, parent_exec).await.unwrap();
+
+    // Verify parent completed (child returned 2, parent adds 10 = 12)
+    let parent_execution = db::executions::get_execution(&pool, parent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(parent_execution.status, ExecutionStatus::Completed);
+    assert_eq!(parent_execution.output, Some(json!(12.0)));
+
+    // Resume grandparent - completes
+    enqueue_and_claim_execution(&pool, &grandparent_id, "default")
+        .await
+        .unwrap();
+    let grandparent_exec = db::executions::get_execution(&pool, &grandparent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, grandparent_exec).await.unwrap();
+
+    // Verify grandparent completed (parent returned 12, grandparent adds 10 = 22)
+    let grandparent_execution = db::executions::get_execution(&pool, &grandparent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(grandparent_execution.status, ExecutionStatus::Completed);
+    assert_eq!(grandparent_execution.output, Some(json!(22.0)));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sub_workflow_with_failed_child() {
+    // Parent workflow that awaits a child workflow that will fail
+    let parent_source = r#"
+        result = await Workflow.run("failing_child", {})
+        return result
+    "#;
+
+    // Child workflow that throws an error
+    let child_source = r#"
+        return undefined_variable
+    "#;
+
+    let (pool, execution) =
+        setup_workflow_test("parent_with_failing_child", parent_source, json!({})).await;
+    let parent_id = execution.id.clone();
+
+    // Register child workflow
+    db::workflow_definitions::create_workflow_definition(
+        &pool,
+        "failing_child",
+        "test-failing_child",
+        child_source,
+    )
+    .await
+    .unwrap();
+
+    // Run parent - suspends on child
+    run_workflow(&pool, execution).await.unwrap();
+
+    // Get and run child workflow - it will fail
+    let child_workflows = get_child_workflows(&pool, &parent_id).await.unwrap();
+    let child_id = &child_workflows[0].0;
+
+    enqueue_and_claim_execution(&pool, child_id, "default")
+        .await
+        .unwrap();
+    let child_exec = db::executions::get_execution(&pool, child_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, child_exec).await.unwrap();
+
+    // Verify child failed
+    let child_execution = db::executions::get_execution(&pool, child_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(child_execution.status, ExecutionStatus::Failed);
+
+    // Resume parent - should complete with the error result
+    enqueue_and_claim_execution(&pool, &parent_id, "default")
+        .await
+        .unwrap();
+    let parent_exec = db::executions::get_execution(&pool, &parent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    run_workflow(&pool, parent_exec).await.unwrap();
+
+    // Verify parent completed with the error output from child
+    let parent_execution = db::executions::get_execution(&pool, &parent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(parent_execution.status, ExecutionStatus::Completed);
+
+    // The parent returns the error output from the child
+    let output = parent_execution.output.unwrap();
+    assert_eq!(output.get("code").unwrap(), "INTERNAL_ERROR");
 }
