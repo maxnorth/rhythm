@@ -269,9 +269,7 @@ fn find_expr_at_offset(stmt: &Stmt, offset: usize) -> Option<Expr> {
                 return Some(e);
             }
         }
-        StmtKind::Return {
-            value: Some(value),
-        } => {
+        StmtKind::Return { value: Some(value) } => {
             if let Some(e) = find_expr_at_offset_in_expr(value, offset) {
                 return Some(e);
             }
