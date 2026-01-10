@@ -170,11 +170,11 @@ pub fn push_stmt(vm: &mut VM, stmt: &Stmt) {
             idx: 0,
         },
 
-        Stmt::Break => FrameKind::Break {
+        Stmt::Break { .. } => FrameKind::Break {
             phase: BreakPhase::Execute,
         },
 
-        Stmt::Continue => FrameKind::Continue {
+        Stmt::Continue { .. } => FrameKind::Continue {
             phase: ContinuePhase::Execute,
         },
 

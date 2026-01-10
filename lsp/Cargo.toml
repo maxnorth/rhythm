@@ -17,9 +17,8 @@ path = "src/main.rs"
 tower-lsp = "0.20"
 tokio = { version = "1", features = ["full"] }
 
-# Parser (PEST)
-pest = "2.8"
-pest_derive = "2.8"
+# Rhythm core (parser, AST, types)
+rhythm-core = { path = "../core" }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

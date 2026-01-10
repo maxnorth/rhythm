@@ -53,17 +53,17 @@ pub fn eval_expr(
     outbox: &mut Outbox,
 ) -> EvalResult {
     match expr {
-        Expr::LitBool { v } => EvalResult::Value { v: Val::Bool(*v) },
+        Expr::LitBool { v, .. } => EvalResult::Value { v: Val::Bool(*v) },
 
-        Expr::LitNum { v } => EvalResult::Value { v: Val::Num(*v) },
+        Expr::LitNum { v, .. } => EvalResult::Value { v: Val::Num(*v) },
 
-        Expr::LitStr { v } => EvalResult::Value {
+        Expr::LitStr { v, .. } => EvalResult::Value {
             v: Val::Str(v.clone()),
         },
 
-        Expr::LitNull => EvalResult::Value { v: Val::Null },
+        Expr::LitNull { .. } => EvalResult::Value { v: Val::Null },
 
-        Expr::LitList { elements } => {
+        Expr::LitList { elements, .. } => {
             // Evaluate all elements (left to right)
             let mut vals = Vec::new();
             for elem_expr in elements {
@@ -87,10 +87,10 @@ pub fn eval_expr(
             EvalResult::Value { v: Val::List(vals) }
         }
 
-        Expr::LitObj { properties } => {
+        Expr::LitObj { properties, .. } => {
             // Evaluate all property values (in order)
             let mut map = HashMap::new();
-            for (key, val_expr) in properties {
+            for (key, _key_span, val_expr) in properties {
                 match eval_expr(val_expr, env, resume_value, outbox) {
                     EvalResult::Value { v } => {
                         map.insert(key.clone(), v);
@@ -113,7 +113,7 @@ pub fn eval_expr(
             EvalResult::Value { v: Val::Obj(map) }
         }
 
-        Expr::Ident { name } => match env.get(name).cloned() {
+        Expr::Ident { name, .. } => match env.get(name).cloned() {
             Some(val) => EvalResult::Value { v: val },
             None => EvalResult::Throw {
                 error: Val::Error(ErrorInfo::new(
@@ -127,6 +127,7 @@ pub fn eval_expr(
             object,
             property,
             optional,
+            ..
         } => {
             // First, evaluate the object expression
             let obj_result = eval_expr(object, env, resume_value, outbox);
@@ -224,7 +225,7 @@ pub fn eval_expr(
             }
         }
 
-        Expr::Call { callee, args } => {
+        Expr::Call { callee, args, .. } => {
             // Step 1: Evaluate the callee expression to get the function
             let callee_result = eval_expr(callee, env, resume_value, outbox);
 
@@ -287,7 +288,7 @@ pub fn eval_expr(
             }
         }
 
-        Expr::Await { inner } => {
+        Expr::Await { inner, .. } => {
             // Check if we're resuming from a previous suspension
             if let Some(val) = resume_value.take() {
                 // We're resuming - return the resume value
@@ -329,7 +330,7 @@ pub fn eval_expr(
             }
         }
 
-        Expr::BinaryOp { op, left, right } => {
+        Expr::BinaryOp { op, left, right, .. } => {
             // Short-circuit evaluation for &&, ||, and ??
             // Evaluate left operand first
             let left_result = eval_expr(left, env, resume_value, outbox);
@@ -436,6 +437,7 @@ pub fn eval_expr(
             condition,
             consequent,
             alternate,
+            ..
         } => {
             // Evaluate the condition first
             let cond_result = eval_expr(condition, env, resume_value, outbox);
