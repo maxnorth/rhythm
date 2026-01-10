@@ -68,7 +68,7 @@ The extension requires the `rhythm-lsp` language server to be installed. It will
 
 ## Development
 
-See the [Language Server README](../../lsp/README.md) for information about building the language server.
+See the [Language Server README](../lsp/README.md) for information about building the language server.
 
 ## License
 

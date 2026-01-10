@@ -4,14 +4,14 @@ on:
   push:
     branches: [main]
     paths:
-      - 'lsp/**'
+      - 'editors/lsp/**'
       - '.github/workflows/lsp.yml'
     tags:
       - 'v*'
   pull_request:
     branches: [main]
     paths:
-      - 'lsp/**'
+      - 'editors/lsp/**'
       - '.github/workflows/lsp.yml'
   workflow_dispatch:
 
@@ -58,19 +58,19 @@ jobs:
 
       - name: Build (cross)
         if: matrix.cross
-        working-directory: lsp
+        working-directory: editors/lsp
         run: cross build --release --target ${{ matrix.target }}
 
       - name: Build (native)
         if: "!matrix.cross"
-        working-directory: lsp
+        working-directory: editors/lsp
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare artifact
         shell: bash
         run: |
           mkdir -p dist
-          cp lsp/target/${{ matrix.target }}/release/rhythm-lsp${{ matrix.ext }} dist/rhythm-lsp-${{ matrix.name }}${{ matrix.ext }}
+          cp editors/lsp/target/${{ matrix.target }}/release/rhythm-lsp${{ matrix.ext }} dist/rhythm-lsp-${{ matrix.name }}${{ matrix.ext }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -90,15 +90,15 @@ jobs:
           components: rustfmt, clippy
 
       - name: Run tests
-        working-directory: lsp
+        working-directory: editors/lsp
         run: cargo test
 
       - name: Check formatting
-        working-directory: lsp
+        working-directory: editors/lsp
         run: cargo fmt -- --check
 
       - name: Run clippy
-        working-directory: lsp
+        working-directory: editors/lsp
         run: cargo clippy -- -D warnings
 
   vscode-extension:

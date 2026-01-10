@@ -26,7 +26,7 @@ Available platforms:
 ### Building from Source
 
 ```bash
-cd lsp
+cd editors/lsp
 cargo build --release
 ```
 
@@ -44,7 +44,7 @@ rhythm-lsp --stdio
 
 ### VS Code
 
-Install the [Rhythm VS Code extension](../editors/vscode/README.md) which bundles the language server.
+Install the [Rhythm VS Code extension](../vscode/README.md) which bundles the language server.
 
 ### Neovim (nvim-lspconfig)
 

@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 echo "=== Building rhythm-lsp (debug) ==="
-cd "$PROJECT_ROOT/lsp"
+cd "$PROJECT_ROOT/editors/lsp"
 cargo build
 
 echo ""
@@ -34,16 +34,29 @@ fi
 npm run compile
 
 echo ""
+echo "=== Creating symlink for local development ==="
+EXTENSIONS_DIR="$HOME/.vscode/extensions"
+SYMLINK_PATH="$EXTENSIONS_DIR/rhythm-lang"
+
+if [ -L "$SYMLINK_PATH" ]; then
+    echo "Symlink already exists at $SYMLINK_PATH"
+elif [ -e "$SYMLINK_PATH" ]; then
+    echo "Warning: $SYMLINK_PATH exists but is not a symlink. Skipping."
+else
+    mkdir -p "$EXTENSIONS_DIR"
+    ln -s "$PROJECT_ROOT/editors/vscode" "$SYMLINK_PATH"
+    echo "Created symlink: $SYMLINK_PATH -> $PROJECT_ROOT/editors/vscode"
+fi
+
+echo ""
 echo "=== Setup complete! ==="
 echo ""
-echo "To test the extension in VS Code:"
+echo "The extension is now installed in your VS Code."
+echo "Restart VS Code or run 'Developer: Reload Window' to load it."
 echo ""
-echo "  1. Open VS Code in the extension directory:"
-echo "     code $PROJECT_ROOT/editors/vscode"
+echo "After making changes:"
+echo "  - LSP changes: Run 'cargo build' in editors/lsp/, then 'Rhythm: Restart Language Server'"
+echo "  - Extension changes: Run 'npm run compile' in editors/vscode/, then reload VS Code"
 echo ""
-echo "  2. Press F5 to launch a new VS Code window with the extension loaded"
-echo ""
-echo "  3. Open a .flow file to test the extension"
-echo ""
-echo "The extension will use the debug build of rhythm-lsp at:"
-echo "  $PROJECT_ROOT/lsp/target/debug/rhythm-lsp"
+echo "The extension uses the debug build of rhythm-lsp at:"
+echo "  $PROJECT_ROOT/editors/lsp/target/debug/rhythm-lsp"

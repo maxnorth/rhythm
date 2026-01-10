@@ -36,15 +36,18 @@ function findLspExecutable(context: ExtensionContext): string | undefined {
         binaryName = 'rhythm-lsp.exe';
     }
 
+    // Resolve symlinks to get the real extension path (for local development)
+    const realExtensionPath = fs.realpathSync(context.extensionPath);
+
     // Check for bundled binary in extension
     const bundledPaths = [
         // Platform-specific subdirectory
         path.join(context.extensionPath, 'bin', `${platform}-${arch}`, binaryName),
         // Generic bin directory
         path.join(context.extensionPath, 'bin', binaryName),
-        // Server directory (for development)
-        path.join(context.extensionPath, '..', '..', 'lsp', 'target', 'release', binaryName),
-        path.join(context.extensionPath, '..', '..', 'lsp', 'target', 'debug', binaryName),
+        // Server directory (for development) - use real path to handle symlinks
+        path.join(realExtensionPath, '..', 'lsp', 'target', 'release', binaryName),
+        path.join(realExtensionPath, '..', 'lsp', 'target', 'debug', binaryName),
     ];
 
     for (const bundledPath of bundledPaths) {

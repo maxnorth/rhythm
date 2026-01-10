@@ -16,12 +16,12 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 INSTALL_DIR="${1:-$HOME/.local/bin}"
 
 echo "Building rhythm-lsp..."
-cd "$PROJECT_ROOT/lsp"
+cd "$PROJECT_ROOT/editors/lsp"
 cargo build --release
 
 echo "Installing to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
-cp "$PROJECT_ROOT/lsp/target/release/rhythm-lsp" "$INSTALL_DIR/"
+cp "$PROJECT_ROOT/editors/lsp/target/release/rhythm-lsp" "$INSTALL_DIR/"
 
 echo "Done! rhythm-lsp installed to $INSTALL_DIR/rhythm-lsp"
 
