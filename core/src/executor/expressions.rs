@@ -176,10 +176,36 @@ pub fn eval_expr(
                                         bindings: vec![Val::List(items)],
                                     },
                                 },
+                                "includes" => EvalResult::Value {
+                                    v: Val::Func {
+                                        func: super::stdlib::StdlibFunc::ArrayIncludes,
+                                        bindings: vec![Val::List(items)],
+                                    },
+                                },
                                 _ => EvalResult::Throw {
                                     error: Val::Error(ErrorInfo::new(
                                         errors::PROPERTY_NOT_FOUND,
                                         format!("Property '{}' not found on array", property),
+                                    )),
+                                },
+                            }
+                        }
+                        Val::Str(s) => {
+                            // Handle string properties and methods
+                            match property.as_str() {
+                                "length" => EvalResult::Value {
+                                    v: Val::Num(s.len() as f64),
+                                },
+                                "includes" => EvalResult::Value {
+                                    v: Val::Func {
+                                        func: super::stdlib::StdlibFunc::StringIncludes,
+                                        bindings: vec![Val::Str(s)],
+                                    },
+                                },
+                                _ => EvalResult::Throw {
+                                    error: Val::Error(ErrorInfo::new(
+                                        errors::PROPERTY_NOT_FOUND,
+                                        format!("Property '{}' not found on string", property),
                                     )),
                                 },
                             }

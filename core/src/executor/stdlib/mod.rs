@@ -58,6 +58,9 @@ pub enum StdlibFunc {
     Not,
     // Array methods
     ArrayConcat,
+    ArrayIncludes,
+    // String methods
+    StringIncludes,
 }
 
 /* ===================== Stdlib Dispatcher ===================== */
@@ -105,6 +108,9 @@ pub fn call_stdlib_func(func: &StdlibFunc, args: &[Val], outbox: &mut Outbox) ->
         StdlibFunc::Not => not(args),
         // Array methods
         StdlibFunc::ArrayConcat => array_concat(args),
+        StdlibFunc::ArrayIncludes => array_includes(args),
+        // String methods
+        StdlibFunc::StringIncludes => string_includes(args),
     }
 }
 
@@ -119,9 +125,25 @@ fn add(args: &[Val]) -> EvalResult {
         };
     }
     match (&args[0], &args[1]) {
+        // Number + Number = Number
         (Val::Num(a), Val::Num(b)) => EvalResult::Value { v: Val::Num(a + b) },
+        // String + String = String concatenation
+        (Val::Str(a), Val::Str(b)) => EvalResult::Value {
+            v: Val::Str(format!("{}{}", a, b)),
+        },
+        // String + anything = String concatenation (JavaScript behavior)
+        (Val::Str(a), other) => EvalResult::Value {
+            v: Val::Str(format!("{}{}", a, to_string(other))),
+        },
+        // anything + String = String concatenation (JavaScript behavior)
+        (other, Val::Str(b)) => EvalResult::Value {
+            v: Val::Str(format!("{}{}", to_string(other), b)),
+        },
         _ => EvalResult::Throw {
-            error: Val::Error(ErrorInfo::new("TypeError", "add expects two numbers")),
+            error: Val::Error(ErrorInfo::new(
+                "TypeError",
+                "add expects two numbers or strings",
+            )),
         },
     }
 }
@@ -371,6 +393,111 @@ fn array_concat(args: &[Val]) -> EvalResult {
 
     EvalResult::Value {
         v: Val::List(result),
+    }
+}
+
+/// Array.includes - check if array contains an element
+///
+/// JavaScript behavior:
+/// - Returns true if array contains the element, false otherwise
+/// - Uses strict equality (===) for comparison
+///
+/// Args: [receiver_array, search_element]
+fn array_includes(args: &[Val]) -> EvalResult {
+    if args.len() < 2 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "includes expects 1 argument")),
+        };
+    }
+
+    // First arg is the receiver (the array we're calling includes on)
+    let receiver = &args[0];
+    let Val::List(items) = receiver else {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new(
+                "TypeError",
+                "includes can only be called on arrays",
+            )),
+        };
+    };
+
+    let search_element = &args[1];
+
+    // Check if any element matches using value equality
+    for item in items {
+        if values_equal(item, search_element) {
+            return EvalResult::Value { v: Val::Bool(true) };
+        }
+    }
+
+    EvalResult::Value {
+        v: Val::Bool(false),
+    }
+}
+
+/// Helper: Check if two values are equal (for includes)
+fn values_equal(a: &Val, b: &Val) -> bool {
+    match (a, b) {
+        (Val::Null, Val::Null) => true,
+        (Val::Bool(a), Val::Bool(b)) => a == b,
+        (Val::Num(a), Val::Num(b)) => a == b,
+        (Val::Str(a), Val::Str(b)) => a == b,
+        // For complex types, use structural equality
+        (Val::List(a), Val::List(b)) => {
+            if a.len() != b.len() {
+                return false;
+            }
+            a.iter().zip(b.iter()).all(|(x, y)| values_equal(x, y))
+        }
+        (Val::Obj(a), Val::Obj(b)) => {
+            if a.len() != b.len() {
+                return false;
+            }
+            a.iter()
+                .all(|(k, v)| b.get(k).is_some_and(|bv| values_equal(v, bv)))
+        }
+        _ => false,
+    }
+}
+
+/* ===================== String Methods ===================== */
+
+/// String.includes - check if string contains a substring
+///
+/// JavaScript behavior:
+/// - Returns true if substring is found, false otherwise
+///
+/// Args: [receiver_string, search_string]
+fn string_includes(args: &[Val]) -> EvalResult {
+    if args.len() < 2 {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new("TypeError", "includes expects 1 argument")),
+        };
+    }
+
+    // First arg is the receiver (the string we're calling includes on)
+    let receiver = &args[0];
+    let Val::Str(haystack) = receiver else {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new(
+                "TypeError",
+                "includes can only be called on strings",
+            )),
+        };
+    };
+
+    let needle = &args[1];
+    let Val::Str(search_string) = needle else {
+        return EvalResult::Throw {
+            error: Val::Error(ErrorInfo::new(
+                "TypeError",
+                "includes search value must be a string",
+            )),
+        };
+    };
+
+    EvalResult::Value {
+        v: Val::Bool(haystack.contains(search_string.as_str())),
     }
 }
 

@@ -677,3 +677,211 @@ fn test_array_concat_with_non_array() {
         ))
     );
 }
+
+/* ===================== Array.includes Tests ===================== */
+
+#[test]
+fn test_array_includes_found() {
+    let source = r#"
+            let a = [1, 2, 3]
+            return a.includes(2)
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
+}
+
+#[test]
+fn test_array_includes_not_found() {
+    let source = r#"
+            let a = [1, 2, 3]
+            return a.includes(5)
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(false)));
+}
+
+#[test]
+fn test_array_includes_string() {
+    let source = r#"
+            let a = ["apple", "banana", "cherry"]
+            return a.includes("banana")
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
+}
+
+#[test]
+fn test_array_includes_empty_array() {
+    let source = r#"
+            let a = []
+            return a.includes(1)
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(false)));
+}
+
+#[test]
+fn test_array_includes_null() {
+    let source = r#"
+            let a = [1, null, 3]
+            return a.includes(null)
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
+}
+
+/* ===================== String.includes Tests ===================== */
+
+#[test]
+fn test_string_includes_found() {
+    let source = r#"
+            let s = "hello world"
+            return s.includes("world")
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
+}
+
+#[test]
+fn test_string_includes_not_found() {
+    let source = r#"
+            let s = "hello world"
+            return s.includes("xyz")
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(false)));
+}
+
+#[test]
+fn test_string_includes_empty_substring() {
+    let source = r#"
+            let s = "hello"
+            return s.includes("")
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
+}
+
+#[test]
+fn test_string_includes_exact_match() {
+    let source = r#"
+            let s = "hello"
+            return s.includes("hello")
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Bool(true)));
+}
+
+#[test]
+fn test_string_length() {
+    let source = r#"
+            let s = "hello"
+            return s.length
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Num(5.0)));
+}
+
+/* ===================== String Concatenation Tests ===================== */
+
+#[test]
+fn test_string_concat_basic() {
+    let source = r#"
+            return "hello" + " world"
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(
+        vm.control,
+        Control::Return(Val::Str("hello world".to_string()))
+    );
+}
+
+#[test]
+fn test_string_concat_with_number() {
+    let source = r#"
+            return "value: " + 42
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(
+        vm.control,
+        Control::Return(Val::Str("value: 42".to_string()))
+    );
+}
+
+#[test]
+fn test_number_concat_with_string() {
+    let source = r#"
+            return 42 + " is the answer"
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(
+        vm.control,
+        Control::Return(Val::Str("42 is the answer".to_string()))
+    );
+}
+
+#[test]
+fn test_string_concat_chained() {
+    let source = r#"
+            return "a" + "b" + "c"
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(vm.control, Control::Return(Val::Str("abc".to_string())));
+}
+
+#[test]
+fn test_string_concat_with_variables() {
+    let source = r#"
+            let name = "world"
+            return "hello " + name
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(
+        vm.control,
+        Control::Return(Val::Str("hello world".to_string()))
+    );
+}
+
+#[test]
+fn test_string_concat_with_bool() {
+    let source = r#"
+            return "result: " + true
+        "#;
+
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    run_until_done(&mut vm);
+    assert_eq!(
+        vm.control,
+        Control::Return(Val::Str("result: true".to_string()))
+    );
+}

@@ -137,7 +137,7 @@ element_list = { expression ~ ("," ~ expression)* ~ ","? }
 // Literals
 number = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 boolean = { "true" | "false" }
-string = { "\"" ~ string_content ~ "\"" }
+string = ${ "\"" ~ string_content ~ "\"" }
 string_content = @{ (!("\"") ~ ANY)* }
 null_lit = { "null" }
 
