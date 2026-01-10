@@ -3,14 +3,14 @@
 # Install rhythm-lsp locally
 #
 # Usage:
-#   ./scripts/install-lsp.sh           # Install to ~/.local/bin
-#   ./scripts/install-lsp.sh /usr/local/bin  # Install to custom location
+#   ./editors/scripts/install-lsp.sh           # Install to ~/.local/bin
+#   ./editors/scripts/install-lsp.sh /usr/local/bin  # Install to custom location
 #
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
 # Default install location
 INSTALL_DIR="${1:-$HOME/.local/bin}"
