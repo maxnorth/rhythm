@@ -1201,8 +1201,7 @@ async fn test_sub_workflow_basic() {
         return Inputs.value + 5
     "#;
 
-    let (pool, execution) =
-        setup_workflow_test("parent_workflow", parent_source, json!({})).await;
+    let (pool, execution) = setup_workflow_test("parent_workflow", parent_source, json!({})).await;
     let parent_id = execution.id.clone();
 
     // Register the child workflow definition
@@ -1409,8 +1408,7 @@ async fn test_mixed_tasks_and_workflows() {
         return Inputs.value * 10
     "#;
 
-    let (pool, execution) =
-        setup_workflow_test("mixed_parent", parent_source, json!({})).await;
+    let (pool, execution) = setup_workflow_test("mixed_parent", parent_source, json!({})).await;
     let parent_id = execution.id.clone();
 
     // Register child workflow

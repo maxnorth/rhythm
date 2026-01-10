@@ -262,10 +262,7 @@ fn test_await_task_then_workflow() {
     run_until_done(&mut vm);
 
     // Should return the workflow result
-    assert_eq!(
-        vm.control,
-        Control::Return(Val::Str("done".to_string()))
-    );
+    assert_eq!(vm.control, Control::Return(Val::Str("done".to_string())));
 }
 
 /* ===================== Workflow.run() Error Tests ===================== */
