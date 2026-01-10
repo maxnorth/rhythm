@@ -355,30 +355,4 @@ fn convert_member_access(access: &rhythm_core::executor::types::ast::MemberAcces
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_simple() {
-        let source = "let x = 42\nreturn x";
-        let result = parse_workflow(source);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_parse_error_location() {
-        let source = "let x = @invalid";
-        let result = parse_workflow(source);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.span.is_some());
-    }
-
-    #[test]
-    fn test_span_tracking() {
-        let source = "let x = 42";
-        let result = parse_workflow(source).unwrap();
-        assert_eq!(result.span.start, 0);
-        assert_eq!(result.span.end, 10);
-    }
-}
+mod tests;

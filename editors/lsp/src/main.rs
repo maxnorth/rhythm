@@ -51,20 +51,3 @@ async fn main() {
 
     Server::new(stdin, stdout, socket).serve(service).await;
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parser_integration() {
-        let source = r#"
-let orderId = Inputs.orderId
-let result = await Task.run("process", { id: orderId })
-return result
-"#;
-
-        let result = parser::parse_workflow(source);
-        assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
-    }
-}
