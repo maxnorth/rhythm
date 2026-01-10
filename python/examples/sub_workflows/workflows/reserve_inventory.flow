@@ -1,0 +1,42 @@
+// Child workflow: Reserve inventory for order items
+// Called by: order_fulfillment workflow
+
+let order_id = Inputs.order_id
+let items = Inputs.items
+let all_available = true
+
+// Check and reserve each item
+for (let item of items) {
+    let availability = await Task.run("check_inventory", {
+        product_id: item.product_id,
+        quantity: item.quantity
+    })
+
+    if (availability.available != true) {
+        all_available = false
+    } else {
+        // Reserve the item
+        await Task.run("reserve_item", {
+            order_id: order_id,
+            product_id: item.product_id,
+            quantity: item.quantity
+        })
+    }
+}
+
+// If not all items available, release reservations
+if (all_available != true) {
+    // Release all reservations for this order
+    for (let item of items) {
+        await Task.run("release_reservation", {
+            order_id: order_id,
+            product_id: item.product_id
+        })
+    }
+    return { status: "error", error: "items_unavailable" }
+}
+
+return {
+    status: "success",
+    item_count: items.length
+}

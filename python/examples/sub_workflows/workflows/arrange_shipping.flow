@@ -1,0 +1,37 @@
+// Child workflow: Arrange shipping for an order
+// Called by: order_fulfillment workflow
+
+let order_id = Inputs.order_id
+let items = Inputs.items
+let customer_email = Inputs.customer_email
+
+// Get shipping address
+let address = await Task.run("get_customer_address", {
+    customer_email: customer_email
+})
+
+// Calculate shipping cost and method
+let shipping_details = await Task.run("calculate_shipping", {
+    items: items,
+    destination: address
+})
+
+// Create shipment
+let shipment = await Task.run("create_shipment", {
+    order_id: order_id,
+    items: items,
+    address: address,
+    shipping_method: shipping_details.method
+})
+
+// Schedule pickup
+await Task.run("schedule_pickup", {
+    shipment_id: shipment.shipment_id
+})
+
+return {
+    status: "success",
+    shipment_id: shipment.shipment_id,
+    tracking_number: shipment.tracking_number,
+    estimated_delivery: shipping_details.estimated_days
+}

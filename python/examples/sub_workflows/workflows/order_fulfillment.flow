@@ -1,0 +1,72 @@
+// Parent workflow that orchestrates order fulfillment using child workflows
+// Demonstrates: Workflow.run(), passing data between workflows
+
+let order_id = Inputs.order_id
+let customer_email = Inputs.customer_email
+let items = Inputs.items
+let payment_method = Inputs.payment_method
+
+// Calculate order total
+let total = 0
+for (let item of items) {
+    total = total + (item.price * item.quantity)
+}
+
+// Step 1: Process payment using child workflow
+let payment_result = await Workflow.run("process_payment", {
+    order_id: order_id,
+    amount: total,
+    payment_method: payment_method
+})
+
+// Check payment result
+if (payment_result.status != "success") {
+    await Task.run("send_email", {
+        to: customer_email,
+        subject: "Payment Failed",
+        body: "Your payment could not be processed."
+    })
+    return { status: "failed", reason: "payment_failed" }
+}
+
+// Step 2: Reserve inventory using child workflow
+let inventory_result = await Workflow.run("reserve_inventory", {
+    order_id: order_id,
+    items: items
+})
+
+if (inventory_result.status != "success") {
+    // Refund payment if inventory reservation fails
+    await Task.run("refund_payment", {
+        order_id: order_id,
+        transaction_id: payment_result.transaction_id
+    })
+    await Task.run("send_email", {
+        to: customer_email,
+        subject: "Order Cancelled",
+        body: "Some items in your order are no longer available."
+    })
+    return { status: "failed", reason: "inventory_unavailable" }
+}
+
+// Step 3: Arrange shipping using child workflow
+let shipping_result = await Workflow.run("arrange_shipping", {
+    order_id: order_id,
+    items: items,
+    customer_email: customer_email
+})
+
+// Step 4: Send confirmation email
+await Task.run("send_email", {
+    to: customer_email,
+    subject: "Order Confirmed!",
+    body: "Your order has been confirmed."
+})
+
+return {
+    status: "completed",
+    order_id: order_id,
+    transaction_id: payment_result.transaction_id,
+    tracking_number: shipping_result.tracking_number,
+    total: total
+}
