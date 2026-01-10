@@ -330,7 +330,9 @@ pub fn eval_expr(
             }
         }
 
-        Expr::BinaryOp { op, left, right, .. } => {
+        Expr::BinaryOp {
+            op, left, right, ..
+        } => {
             // Short-circuit evaluation for &&, ||, and ??
             // Evaluate left operand first
             let left_result = eval_expr(left, env, resume_value, outbox);

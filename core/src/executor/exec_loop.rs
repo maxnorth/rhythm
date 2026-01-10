@@ -48,7 +48,9 @@ pub fn step(vm: &mut VM) {
 
     // Dispatch to statement handler
     match (kind, node) {
-        (FrameKind::Return { phase }, Stmt::Return { value, .. }) => execute_return(vm, phase, value),
+        (FrameKind::Return { phase }, Stmt::Return { value, .. }) => {
+            execute_return(vm, phase, value)
+        }
 
         (
             FrameKind::Block {
@@ -75,9 +77,12 @@ pub fn step(vm: &mut VM) {
 
         (FrameKind::Expr { phase }, Stmt::Expr { expr, .. }) => execute_expr(vm, phase, expr),
 
-        (FrameKind::Assign { phase }, Stmt::Assign { var, path, value, .. }) => {
-            execute_assign(vm, phase, var, path, value)
-        }
+        (
+            FrameKind::Assign { phase },
+            Stmt::Assign {
+                var, path, value, ..
+            },
+        ) => execute_assign(vm, phase, var, path, value),
 
         (
             FrameKind::If { phase },

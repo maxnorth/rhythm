@@ -880,7 +880,9 @@ fn test_parse_simple_assignment() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Assign { var, path, value, .. } => {
+                Stmt::Assign {
+                    var, path, value, ..
+                } => {
                     assert_eq!(var, "x");
                     assert_eq!(path.len(), 0); // No property path
                     assert!(matches!(value, Expr::LitNum { v, .. } if *v == 42.0));
@@ -905,7 +907,9 @@ fn test_parse_property_assignment() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Assign { var, path, value, .. } => {
+                Stmt::Assign {
+                    var, path, value, ..
+                } => {
                     assert_eq!(var, "obj");
                     assert_eq!(path.len(), 1);
                     match &path[0] {
@@ -934,7 +938,9 @@ fn test_parse_nested_property_assignment() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Assign { var, path, value, .. } => {
+                Stmt::Assign {
+                    var, path, value, ..
+                } => {
                     assert_eq!(var, "obj");
                     assert_eq!(path.len(), 2);
                     match &path[0] {
@@ -967,7 +973,9 @@ fn test_parse_assignment_with_expression() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Assign { var, path, value, .. } => {
+                Stmt::Assign {
+                    var, path, value, ..
+                } => {
                     assert_eq!(var, "x");
                     assert_eq!(path.len(), 0);
                     assert!(matches!(value, Expr::Call { .. }));
@@ -985,7 +993,9 @@ fn test_parse_assignment_standalone() {
     let ast = crate::parser::parse("x = 42").expect("Should parse");
     let stmt = unwrap_block(ast);
     match stmt {
-        Stmt::Assign { var, path, value, .. } => {
+        Stmt::Assign {
+            var, path, value, ..
+        } => {
             assert_eq!(var, "x");
             assert_eq!(path.len(), 0);
             assert!(matches!(value, Expr::LitNum { v, .. } if v == 42.0));
@@ -1009,7 +1019,9 @@ fn test_parse_empty_object_literal() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitObj { properties, .. } => {
                         assert_eq!(properties.len(), 0);
                     }
@@ -1035,7 +1047,9 @@ fn test_parse_object_literal_single_property() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitObj { properties, .. } => {
                         assert_eq!(properties.len(), 1);
                         assert_eq!(properties[0].0, "code");
@@ -1063,7 +1077,9 @@ fn test_parse_object_literal_multiple_properties() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitObj { properties, .. } => {
                         assert_eq!(properties.len(), 3);
                         assert_eq!(properties[0].0, "code");
@@ -1096,17 +1112,23 @@ fn test_parse_object_literal_shorthand() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitObj { properties, .. } => {
                         assert_eq!(properties.len(), 2);
 
                         // First property: name: name
                         assert_eq!(properties[0].0, "name");
-                        assert!(matches!(&properties[0].2, Expr::Ident { name, .. } if name == "name"));
+                        assert!(
+                            matches!(&properties[0].2, Expr::Ident { name, .. } if name == "name")
+                        );
 
                         // Second property: age: age
                         assert_eq!(properties[1].0, "age");
-                        assert!(matches!(&properties[1].2, Expr::Ident { name, .. } if name == "age"));
+                        assert!(
+                            matches!(&properties[1].2, Expr::Ident { name, .. } if name == "age")
+                        );
                     }
                     _ => panic!("Expected LitObj expression"),
                 },
@@ -1130,13 +1152,17 @@ fn test_parse_object_literal_mixed_shorthand() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitObj { properties, .. } => {
                         assert_eq!(properties.len(), 3);
 
                         // name (shorthand)
                         assert_eq!(properties[0].0, "name");
-                        assert!(matches!(&properties[0].2, Expr::Ident { name, .. } if name == "name"));
+                        assert!(
+                            matches!(&properties[0].2, Expr::Ident { name, .. } if name == "name")
+                        );
 
                         // value: 42 (regular)
                         assert_eq!(properties[1].0, "value");
@@ -1144,7 +1170,9 @@ fn test_parse_object_literal_mixed_shorthand() {
 
                         // age (shorthand)
                         assert_eq!(properties[2].0, "age");
-                        assert!(matches!(&properties[2].2, Expr::Ident { name, .. } if name == "age"));
+                        assert!(
+                            matches!(&properties[2].2, Expr::Ident { name, .. } if name == "age")
+                        );
                     }
                     _ => panic!("Expected LitObj expression"),
                 },
@@ -1168,7 +1196,9 @@ fn test_parse_object_literal_with_trailing_comma() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitObj { properties, .. } => {
                         assert_eq!(properties.len(), 2);
                     }
@@ -1194,7 +1224,9 @@ fn test_parse_object_literal_nested() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitObj { properties, .. } => {
                         assert_eq!(properties.len(), 1);
                         assert_eq!(properties[0].0, "outer");
@@ -1234,7 +1266,9 @@ fn test_parse_object_literal_in_assignment() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Assign { var, path, value, .. } => {
+                Stmt::Assign {
+                    var, path, value, ..
+                } => {
                     assert_eq!(var, "obj");
                     assert_eq!(path.len(), 0);
                     match value {
@@ -1266,7 +1300,9 @@ fn test_parse_object_literal_with_expression_values() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitObj { properties, .. } => {
                         assert_eq!(properties.len(), 2);
                         assert_eq!(properties[0].0, "x");
@@ -1301,7 +1337,9 @@ fn test_parse_object_literal_multiline() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitObj { properties, .. } => {
                         assert_eq!(properties.len(), 3);
                         assert_eq!(properties[0].0, "name");
@@ -1334,7 +1372,9 @@ fn test_parse_function_call_multiline() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::Call { callee, args, .. } => {
                         assert_eq!(args.len(), 2);
                         // Verify callee is the 'add' identifier
@@ -1370,7 +1410,9 @@ fn test_parse_function_call_with_multiline_object() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::Call { callee, args, .. } => {
                         assert_eq!(args.len(), 2);
 
@@ -1418,7 +1460,9 @@ fn test_parse_empty_array_literal() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitList { elements, .. } => {
                         assert_eq!(elements.len(), 0);
                     }
@@ -1444,7 +1488,9 @@ fn test_parse_array_literal_single_element() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitList { elements, .. } => {
                         assert_eq!(elements.len(), 1);
                         assert!(matches!(&elements[0], Expr::LitNum { v, .. } if *v == 42.0));
@@ -1471,7 +1517,9 @@ fn test_parse_array_literal_multiple_elements() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitList { elements, .. } => {
                         assert_eq!(elements.len(), 5);
                         for (i, elem) in elements.iter().enumerate() {
@@ -1500,7 +1548,9 @@ fn test_parse_array_literal_mixed_types() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitList { elements, .. } => {
                         assert_eq!(elements.len(), 4);
                         assert!(matches!(&elements[0], Expr::LitNum { v, .. } if *v == 1.0));
@@ -1530,7 +1580,9 @@ fn test_parse_array_literal_with_trailing_comma() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitList { elements, .. } => {
                         assert_eq!(elements.len(), 3);
                     }
@@ -1556,12 +1608,16 @@ fn test_parse_array_literal_nested() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitList { elements, .. } => {
                         assert_eq!(elements.len(), 2);
                         // Check first nested array
                         match &elements[0] {
-                            Expr::LitList { elements: inner, .. } => {
+                            Expr::LitList {
+                                elements: inner, ..
+                            } => {
                                 assert_eq!(inner.len(), 2);
                                 assert!(matches!(&inner[0], Expr::LitNum { v, .. } if *v == 1.0));
                                 assert!(matches!(&inner[1], Expr::LitNum { v, .. } if *v == 2.0));
@@ -1570,7 +1626,9 @@ fn test_parse_array_literal_nested() {
                         }
                         // Check second nested array
                         match &elements[1] {
-                            Expr::LitList { elements: inner, .. } => {
+                            Expr::LitList {
+                                elements: inner, ..
+                            } => {
                                 assert_eq!(inner.len(), 2);
                                 assert!(matches!(&inner[0], Expr::LitNum { v, .. } if *v == 3.0));
                                 assert!(matches!(&inner[1], Expr::LitNum { v, .. } if *v == 4.0));
@@ -1600,7 +1658,9 @@ fn test_parse_array_literal_in_assignment() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Assign { var, path, value, .. } => {
+                Stmt::Assign {
+                    var, path, value, ..
+                } => {
                     assert_eq!(var, "arr");
                     assert_eq!(path.len(), 0);
                     match value {
@@ -1630,7 +1690,9 @@ fn test_parse_array_literal_with_expression_elements() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitList { elements, .. } => {
                         assert_eq!(elements.len(), 3);
                         assert!(matches!(&elements[0], Expr::Call { .. }));
@@ -1659,7 +1721,9 @@ fn test_parse_array_with_object_elements() {
         Stmt::Block { body, .. } => {
             assert_eq!(body.len(), 1);
             match &body[0] {
-                Stmt::Return { value: Some(expr), .. } => match expr {
+                Stmt::Return {
+                    value: Some(expr), ..
+                } => match expr {
                     Expr::LitList { elements, .. } => {
                         assert_eq!(elements.len(), 2);
                         assert!(matches!(&elements[0], Expr::LitObj { .. }));
@@ -1855,7 +1919,9 @@ fn test_parse_method_chaining_basic() {
 
     // The AST should be: Call { callee: Member { object: Call { callee: Member { object: a, property: foo } }, property: bar } }
     match stmt {
-        Stmt::Return { value: Some(expr), .. } => {
+        Stmt::Return {
+            value: Some(expr), ..
+        } => {
             // Outer call (bar)
             match expr {
                 Expr::Call { callee, args, .. } => {
@@ -1913,7 +1979,9 @@ fn test_parse_method_chaining_with_args() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(expr), .. } => {
+        Stmt::Return {
+            value: Some(expr), ..
+        } => {
             // Outer call (second concat)
             match expr {
                 Expr::Call { callee, args, .. } => {
@@ -1945,7 +2013,9 @@ fn test_parse_property_after_call() {
     let stmt = unwrap_block(ast);
 
     match stmt {
-        Stmt::Return { value: Some(expr), .. } => {
+        Stmt::Return {
+            value: Some(expr), ..
+        } => {
             // Outer member access (.length)
             match expr {
                 Expr::Member {

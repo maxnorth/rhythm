@@ -189,7 +189,11 @@ pub fn parse(source: &str) -> ParseResult<Stmt> {
 
 /* ===================== AST Builder ===================== */
 
-fn build_bare_workflow(pair: pest::iterators::Pair<Rule>, source: &str, program_span: Span) -> ParseResult<WorkflowDef> {
+fn build_bare_workflow(
+    pair: pest::iterators::Pair<Rule>,
+    source: &str,
+    program_span: Span,
+) -> ParseResult<WorkflowDef> {
     let inner = pair.into_inner();
     let mut front_matter = None;
     let mut statements = Vec::new();
@@ -215,19 +219,38 @@ fn build_bare_workflow(pair: pest::iterators::Pair<Rule>, source: &str, program_
     let body_span = if statements.is_empty() {
         program_span
     } else {
-        statements.first().unwrap().span().merge(&statements.last().unwrap().span())
+        statements
+            .first()
+            .unwrap()
+            .span()
+            .merge(&statements.last().unwrap().span())
     };
 
-    let body = Stmt::Block { body: statements, span: body_span };
-    Ok(WorkflowDef { body, front_matter, span: program_span })
+    let body = Stmt::Block {
+        body: statements,
+        span: body_span,
+    };
+    Ok(WorkflowDef {
+        body,
+        front_matter,
+        span: program_span,
+    })
 }
 
-fn build_main_function(pair: pest::iterators::Pair<Rule>, source: &str, program_span: Span) -> ParseResult<WorkflowDef> {
+fn build_main_function(
+    pair: pest::iterators::Pair<Rule>,
+    source: &str,
+    program_span: Span,
+) -> ParseResult<WorkflowDef> {
     let mut inner = pair.into_inner();
     let block_pair = inner.next().unwrap();
     let body = build_block(block_pair, source)?;
 
-    Ok(WorkflowDef { body, front_matter: None, span: program_span })
+    Ok(WorkflowDef {
+        body,
+        front_matter: None,
+        span: program_span,
+    })
 }
 
 fn build_block(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult<Stmt> {
@@ -237,7 +260,10 @@ fn build_block(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult<S
         .map(|stmt_pair| build_statement(stmt_pair, source))
         .collect();
 
-    Ok(Stmt::Block { body: statements?, span })
+    Ok(Stmt::Block {
+        body: statements?,
+        span,
+    })
 }
 
 fn build_if_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult<Stmt> {
@@ -257,7 +283,12 @@ fn build_if_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult
         None
     };
 
-    Ok(Stmt::If { test, then_s: Box::new(then_s), else_s, span })
+    Ok(Stmt::If {
+        test,
+        then_s: Box::new(then_s),
+        else_s,
+        span,
+    })
 }
 
 fn build_while_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult<Stmt> {
@@ -270,7 +301,11 @@ fn build_while_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseRes
     let body_pair = inner.next().unwrap();
     let body = build_statement(body_pair, source)?;
 
-    Ok(Stmt::While { test, body: Box::new(body), span })
+    Ok(Stmt::While {
+        test,
+        body: Box::new(body),
+        span,
+    })
 }
 
 fn build_for_loop_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult<Stmt> {
@@ -281,10 +316,12 @@ fn build_for_loop_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> Parse
     let _var_kind = match kind_pair.as_str() {
         "let" => VarKind::Let,
         "const" => VarKind::Const,
-        _ => return Err(ParseError::BuildError(
-            format!("Expected 'let' or 'const', got: {}", kind_pair.as_str()),
-            Some(pair_to_span(&kind_pair, source)),
-        )),
+        _ => {
+            return Err(ParseError::BuildError(
+                format!("Expected 'let' or 'const', got: {}", kind_pair.as_str()),
+                Some(pair_to_span(&kind_pair, source)),
+            ))
+        }
     };
 
     let binding_pair = inner.next().unwrap();
@@ -295,10 +332,12 @@ fn build_for_loop_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> Parse
     let kind = match kind_pair.as_str() {
         "of" => ForLoopKind::Of,
         "in" => ForLoopKind::In,
-        _ => return Err(ParseError::BuildError(
-            format!("Expected 'of' or 'in', got: {}", kind_pair.as_str()),
-            Some(pair_to_span(&kind_pair, source)),
-        )),
+        _ => {
+            return Err(ParseError::BuildError(
+                format!("Expected 'of' or 'in', got: {}", kind_pair.as_str()),
+                Some(pair_to_span(&kind_pair, source)),
+            ))
+        }
     };
 
     let iterable_pair = inner.next().unwrap();
@@ -307,7 +346,14 @@ fn build_for_loop_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> Parse
     let body_pair = inner.next().unwrap();
     let body = build_statement(body_pair, source)?;
 
-    Ok(Stmt::ForLoop { kind, binding, binding_span, iterable, body: Box::new(body), span })
+    Ok(Stmt::ForLoop {
+        kind,
+        binding,
+        binding_span,
+        iterable,
+        body: Box::new(body),
+        span,
+    })
 }
 
 fn build_declare_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult<Stmt> {
@@ -318,10 +364,12 @@ fn build_declare_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseR
     let var_kind = match kind_pair.as_str() {
         "let" => VarKind::Let,
         "const" => VarKind::Const,
-        _ => return Err(ParseError::BuildError(
-            format!("Expected 'let' or 'const', got: {}", kind_pair.as_str()),
-            Some(pair_to_span(&kind_pair, source)),
-        )),
+        _ => {
+            return Err(ParseError::BuildError(
+                format!("Expected 'let' or 'const', got: {}", kind_pair.as_str()),
+                Some(pair_to_span(&kind_pair, source)),
+            ))
+        }
     };
 
     let target_pair = inner.next().unwrap();
@@ -340,15 +388,26 @@ fn build_declare_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseR
         ));
     }
 
-    Ok(Stmt::Declare { var_kind, target, init, span })
+    Ok(Stmt::Declare {
+        var_kind,
+        target,
+        init,
+        span,
+    })
 }
 
-fn build_declare_target(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult<DeclareTarget> {
+fn build_declare_target(
+    pair: pest::iterators::Pair<Rule>,
+    source: &str,
+) -> ParseResult<DeclareTarget> {
     let inner = pair.into_inner().next().unwrap();
     let inner_span = pair_to_span(&inner, source);
 
     match inner.as_rule() {
-        Rule::identifier => Ok(DeclareTarget::Simple { name: inner.as_str().to_string(), span: inner_span }),
+        Rule::identifier => Ok(DeclareTarget::Simple {
+            name: inner.as_str().to_string(),
+            span: inner_span,
+        }),
         Rule::destructure_pattern => {
             let props_pair = inner.into_inner().next().unwrap();
             let mut names = Vec::new();
@@ -357,7 +416,11 @@ fn build_declare_target(pair: pest::iterators::Pair<Rule>, source: &str) -> Pars
                 names.push(id.as_str().to_string());
                 spans.push(pair_to_span(&id, source));
             }
-            Ok(DeclareTarget::Destructure { names, spans, span: inner_span })
+            Ok(DeclareTarget::Destructure {
+                names,
+                spans,
+                span: inner_span,
+            })
         }
         _ => Err(ParseError::BuildError(
             format!("Unexpected declare target rule: {:?}", inner.as_rule()),
@@ -380,7 +443,13 @@ fn build_try_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResul
     let catch_body_pair = inner.next().unwrap();
     let catch_body = build_statement(catch_body_pair, source)?;
 
-    Ok(Stmt::Try { body: Box::new(body), catch_var, catch_var_span, catch_body: Box::new(catch_body), span })
+    Ok(Stmt::Try {
+        body: Box::new(body),
+        catch_var,
+        catch_var_span,
+        catch_body: Box::new(catch_body),
+        span,
+    })
 }
 
 fn build_assign_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult<Stmt> {
@@ -401,11 +470,17 @@ fn build_assign_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseRe
                 let segment_inner = pair.into_inner().next().unwrap();
                 match segment_inner.as_rule() {
                     Rule::identifier => {
-                        path.push(MemberAccess::Prop { property: segment_inner.as_str().to_string(), span: segment_span });
+                        path.push(MemberAccess::Prop {
+                            property: segment_inner.as_str().to_string(),
+                            span: segment_span,
+                        });
                     }
                     Rule::expression => {
                         let index_expr = build_expression(segment_inner, source)?;
-                        path.push(MemberAccess::Index { expr: index_expr, span: segment_span });
+                        path.push(MemberAccess::Index {
+                            expr: index_expr,
+                            span: segment_span,
+                        });
                     }
                     _ => {}
                 }
@@ -419,7 +494,13 @@ fn build_assign_stmt(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseRe
     }
 
     let value = build_expression(expr_pair.unwrap(), source)?;
-    Ok(Stmt::Assign { var, var_span, path, value, span })
+    Ok(Stmt::Assign {
+        var,
+        var_span,
+        path,
+        value,
+        span,
+    })
 }
 
 fn build_binary_expr(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult<Expr> {
@@ -427,7 +508,10 @@ fn build_binary_expr(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseRe
     let inner_pairs: Vec<_> = pair.into_inner().collect();
 
     if inner_pairs.is_empty() {
-        return Err(ParseError::BuildError("Empty binary expression".to_string(), Some(span)));
+        return Err(ParseError::BuildError(
+            "Empty binary expression".to_string(),
+            Some(span),
+        ));
     }
 
     let mut left = build_expression(inner_pairs[0].clone(), source)?;
@@ -438,16 +522,34 @@ fn build_binary_expr(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseRe
 
         i += 1;
         if i >= inner_pairs.len() {
-            return Err(ParseError::BuildError("Missing right operand after operator".to_string(), Some(span)));
+            return Err(ParseError::BuildError(
+                "Missing right operand after operator".to_string(),
+                Some(span),
+            ));
         }
 
         let right = build_expression(inner_pairs[i].clone(), source)?;
         let new_span = left.span().merge(&right.span());
 
         left = match op_rule {
-            Rule::op_and => Expr::BinaryOp { op: BinaryOp::And, left: Box::new(left), right: Box::new(right), span: new_span },
-            Rule::op_or => Expr::BinaryOp { op: BinaryOp::Or, left: Box::new(left), right: Box::new(right), span: new_span },
-            Rule::op_nullish => Expr::BinaryOp { op: BinaryOp::Nullish, left: Box::new(left), right: Box::new(right), span: new_span },
+            Rule::op_and => Expr::BinaryOp {
+                op: BinaryOp::And,
+                left: Box::new(left),
+                right: Box::new(right),
+                span: new_span,
+            },
+            Rule::op_or => Expr::BinaryOp {
+                op: BinaryOp::Or,
+                left: Box::new(left),
+                right: Box::new(right),
+                span: new_span,
+            },
+            Rule::op_nullish => Expr::BinaryOp {
+                op: BinaryOp::Nullish,
+                left: Box::new(left),
+                right: Box::new(right),
+                span: new_span,
+            },
             _ => {
                 let func_name = match op_rule {
                     Rule::op_eq => "eq",
@@ -460,14 +562,23 @@ fn build_binary_expr(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseRe
                     Rule::op_sub => "sub",
                     Rule::op_mul => "mul",
                     Rule::op_div => "div",
-                    _ => return Err(ParseError::BuildError(
-                        format!("Expected operator rule at index {}, got {:?}", i - 1, op_rule),
-                        Some(span),
-                    )),
+                    _ => {
+                        return Err(ParseError::BuildError(
+                            format!(
+                                "Expected operator rule at index {}, got {:?}",
+                                i - 1,
+                                op_rule
+                            ),
+                            Some(span),
+                        ))
+                    }
                 };
 
                 Expr::Call {
-                    callee: Box::new(Expr::Ident { name: func_name.to_string(), span: new_span }),
+                    callee: Box::new(Expr::Ident {
+                        name: func_name.to_string(),
+                        span: new_span,
+                    }),
                     args: vec![left, right],
                     span: new_span,
                 }
@@ -492,7 +603,10 @@ fn build_statement(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResu
             let mut inner = pair.into_inner();
             let expr_pair = inner.next().unwrap();
             let expr = build_expression(expr_pair, source)?;
-            Ok(Stmt::Return { value: Some(expr), span })
+            Ok(Stmt::Return {
+                value: Some(expr),
+                span,
+            })
         }
         Rule::if_stmt => build_if_stmt(pair, source),
         Rule::while_stmt => build_while_stmt(pair, source),
@@ -508,7 +622,10 @@ fn build_statement(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResu
             let expr = build_expression(expr_pair, source)?;
             Ok(Stmt::Expr { expr, span })
         }
-        _ => Err(ParseError::BuildError(format!("Unexpected statement rule: {:?}", pair.as_rule()), Some(span))),
+        _ => Err(ParseError::BuildError(
+            format!("Unexpected statement rule: {:?}", pair.as_rule()),
+            Some(span),
+        )),
     }
 }
 
@@ -539,9 +656,13 @@ fn build_expression(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseRes
                 Ok(condition)
             }
         }
-        Rule::nullish_expr | Rule::logical_or_expr | Rule::logical_and_expr |
-        Rule::equality_expr | Rule::comparison_expr | Rule::additive_expr |
-        Rule::multiplicative_expr => build_binary_expr(pair, source),
+        Rule::nullish_expr
+        | Rule::logical_or_expr
+        | Rule::logical_and_expr
+        | Rule::equality_expr
+        | Rule::comparison_expr
+        | Rule::additive_expr
+        | Rule::multiplicative_expr => build_binary_expr(pair, source),
         Rule::unary_expr => {
             let mut inner = pair.into_inner();
             let first = inner.next().unwrap();
@@ -551,7 +672,10 @@ fn build_expression(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseRes
                     let operand_pair = inner.next().unwrap();
                     let operand = build_expression(operand_pair, source)?;
                     Ok(Expr::Call {
-                        callee: Box::new(Expr::Ident { name: "not".to_string(), span }),
+                        callee: Box::new(Expr::Ident {
+                            name: "not".to_string(),
+                            span,
+                        }),
                         args: vec![operand],
                         span,
                     })
@@ -563,7 +687,10 @@ fn build_expression(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseRes
             let mut inner = pair.into_inner();
             let expr_pair = inner.next().unwrap();
             let inner_expr = build_expression(expr_pair, source)?;
-            Ok(Expr::Await { inner: Box::new(inner_expr), span })
+            Ok(Expr::Await {
+                inner: Box::new(inner_expr),
+                span,
+            })
         }
         Rule::call_expr => {
             let mut inner = pair.into_inner();
@@ -583,21 +710,37 @@ fn build_expression(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseRes
                             vec![]
                         };
                         let new_span = expr.span().merge(&postfix_span);
-                        expr = Expr::Call { callee: Box::new(expr), args, span: new_span };
+                        expr = Expr::Call {
+                            callee: Box::new(expr),
+                            args,
+                            span: new_span,
+                        };
                     }
                     Rule::optional_access => {
                         let prop_pair = postfix_inner.into_inner().next().unwrap();
                         let property_span = pair_to_span(&prop_pair, source);
                         let prop = prop_pair.as_str().to_string();
                         let new_span = expr.span().merge(&postfix_span);
-                        expr = Expr::Member { object: Box::new(expr), property: prop, property_span, optional: true, span: new_span };
+                        expr = Expr::Member {
+                            object: Box::new(expr),
+                            property: prop,
+                            property_span,
+                            optional: true,
+                            span: new_span,
+                        };
                     }
                     Rule::regular_access => {
                         let prop_pair = postfix_inner.into_inner().next().unwrap();
                         let property_span = pair_to_span(&prop_pair, source);
                         let prop = prop_pair.as_str().to_string();
                         let new_span = expr.span().merge(&postfix_span);
-                        expr = Expr::Member { object: Box::new(expr), property: prop, property_span, optional: false, span: new_span };
+                        expr = Expr::Member {
+                            object: Box::new(expr),
+                            property: prop,
+                            property_span,
+                            optional: false,
+                            span: new_span,
+                        };
                     }
                     _ => unreachable!("Unexpected postfix rule: {:?}", postfix_inner.as_rule()),
                 }
@@ -620,7 +763,10 @@ fn build_expression(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseRes
         Rule::number => {
             let num_str = pair.as_str();
             let value = num_str.parse::<f64>().map_err(|e| {
-                ParseError::BuildError(format!("Failed to parse number '{}': {}", num_str, e), Some(span))
+                ParseError::BuildError(
+                    format!("Failed to parse number '{}': {}", num_str, e),
+                    Some(span),
+                )
             })?;
             Ok(Expr::LitNum { v: value, span })
         }
@@ -637,12 +783,17 @@ fn build_expression(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseRes
         Rule::null_lit => Ok(Expr::LitNull { span }),
         Rule::object_lit => build_object_literal(pair, source),
         Rule::array_lit => build_array_literal(pair, source),
-        _ => Err(ParseError::BuildError(format!("Unexpected expression rule: {:?}", pair.as_rule()), Some(span))),
+        _ => Err(ParseError::BuildError(
+            format!("Unexpected expression rule: {:?}", pair.as_rule()),
+            Some(span),
+        )),
     }
 }
 
 fn build_arg_list(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult<Vec<Expr>> {
-    pair.into_inner().map(|expr_pair| build_expression(expr_pair, source)).collect()
+    pair.into_inner()
+        .map(|expr_pair| build_expression(expr_pair, source))
+        .collect()
 }
 
 fn build_object_literal(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult<Expr> {
@@ -658,11 +809,19 @@ fn build_object_literal(pair: pest::iterators::Pair<Rule>, source: &str) -> Pars
     Ok(Expr::LitObj { properties, span })
 }
 
-fn build_property_list(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult<Vec<(String, Span, Expr)>> {
-    pair.into_inner().map(|property_pair| build_property(property_pair, source)).collect()
+fn build_property_list(
+    pair: pest::iterators::Pair<Rule>,
+    source: &str,
+) -> ParseResult<Vec<(String, Span, Expr)>> {
+    pair.into_inner()
+        .map(|property_pair| build_property(property_pair, source))
+        .collect()
 }
 
-fn build_property(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult<(String, Span, Expr)> {
+fn build_property(
+    pair: pest::iterators::Pair<Rule>,
+    source: &str,
+) -> ParseResult<(String, Span, Expr)> {
     let inner = pair.into_inner().next().unwrap();
     let inner_span = pair_to_span(&inner, source);
 
@@ -678,10 +837,16 @@ fn build_property(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResul
         }
         Rule::property_shorthand => {
             let key = inner.as_str().to_string();
-            let value = Expr::Ident { name: key.clone(), span: inner_span };
+            let value = Expr::Ident {
+                name: key.clone(),
+                span: inner_span,
+            };
             Ok((key, inner_span, value))
         }
-        _ => Err(ParseError::BuildError(format!("Unexpected property rule: {:?}", inner.as_rule()), Some(inner_span))),
+        _ => Err(ParseError::BuildError(
+            format!("Unexpected property rule: {:?}", inner.as_rule()),
+            Some(inner_span),
+        )),
     }
 }
 
@@ -699,5 +864,7 @@ fn build_array_literal(pair: pest::iterators::Pair<Rule>, source: &str) -> Parse
 }
 
 fn build_element_list(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseResult<Vec<Expr>> {
-    pair.into_inner().map(|expr_pair| build_expression(expr_pair, source)).collect()
+    pair.into_inner()
+        .map(|expr_pair| build_expression(expr_pair, source))
+        .collect()
 }
