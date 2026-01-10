@@ -15,7 +15,7 @@ use crate::executor::{
     json_to_val_map, run_until_done, val_map_to_json, val_to_json, Control, WorkflowContext, VM,
 };
 use crate::parser::parse_workflow;
-use crate::types::{CreateExecutionParams, ExecutionOutcome, ExecutionType};
+use crate::types::{CreateExecutionParams, ExecutionOutcome};
 
 pub async fn run_workflow(pool: &PgPool, execution: crate::types::Execution) -> Result<()> {
     let maybe_context = db::workflow_execution_context::get_context(pool, &execution.id).await?;
@@ -138,7 +138,7 @@ async fn create_child_tasks(
 
         let params = CreateExecutionParams {
             id: Some(task_creation.task_id.clone()),
-            exec_type: ExecutionType::Task,
+            exec_type: task_creation.target_type.clone(),
             target_name: task_creation.task_name.clone(),
             queue: queue.to_string(),
             inputs: task_inputs,

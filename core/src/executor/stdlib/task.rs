@@ -4,6 +4,7 @@ use crate::executor::errors::{self, ErrorInfo};
 use crate::executor::expressions::EvalResult;
 use crate::executor::outbox::{Outbox, TaskCreation};
 use crate::executor::types::{Awaitable, Val};
+use crate::types::ExecutionType;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -52,7 +53,12 @@ pub fn run(args: &[Val], outbox: &mut Outbox) -> EvalResult {
     let task_id = Uuid::new_v4().to_string();
 
     // Record side effect in outbox
-    outbox.push_task(TaskCreation::new(task_id.clone(), task_name, inputs));
+    outbox.push_task(TaskCreation::new(
+        task_id.clone(),
+        task_name,
+        inputs,
+        ExecutionType::Task,
+    ));
 
     // Return Promise value wrapping the task
     EvalResult::Value {
