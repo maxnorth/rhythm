@@ -193,14 +193,14 @@ fn test_array_in_task_run() {
     // Should return a Promise(Task) value
     assert!(matches!(
         vm.control,
-        Control::Return(Val::Promise(crate::executor::Awaitable::Task(_)))
+        Control::Return(Val::Promise(crate::executor::Awaitable::Execution(_)))
     ));
 
-    // Check outbox has the task with array in inputs
-    assert_eq!(vm.outbox.tasks.len(), 1);
-    assert_eq!(vm.outbox.tasks[0].task_name, "my_task");
+    // Check outbox has the execution with array in inputs
+    assert_eq!(vm.outbox.executions.len(), 1);
+    assert_eq!(vm.outbox.executions[0].target_name, "my_task");
 
-    let items = vm.outbox.tasks[0].inputs.get("items").unwrap();
+    let items = vm.outbox.executions[0].inputs.get("items").unwrap();
     assert_eq!(
         items,
         &Val::List(vec![Val::Num(1.0), Val::Num(2.0), Val::Num(3.0)])
@@ -265,14 +265,14 @@ fn test_task_run_with_multiline_object() {
     // Should return a Promise(Task) value
     assert!(matches!(
         vm.control,
-        Control::Return(Val::Promise(crate::executor::Awaitable::Task(_)))
+        Control::Return(Val::Promise(crate::executor::Awaitable::Execution(_)))
     ));
 
-    // Check outbox has the task with correct inputs
-    assert_eq!(vm.outbox.tasks.len(), 1);
-    assert_eq!(vm.outbox.tasks[0].task_name, "processOrder");
+    // Check outbox has the execution with correct inputs
+    assert_eq!(vm.outbox.executions.len(), 1);
+    assert_eq!(vm.outbox.executions[0].target_name, "processOrder");
 
-    let inputs = &vm.outbox.tasks[0].inputs;
+    let inputs = &vm.outbox.executions[0].inputs;
     assert_eq!(inputs.get("orderId").unwrap(), &Val::Num(123.0));
     assert_eq!(inputs.get("userId").unwrap(), &Val::Num(456.0));
     assert_eq!(inputs.get("total").unwrap(), &Val::Num(99.99));

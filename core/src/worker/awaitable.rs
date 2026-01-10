@@ -1,6 +1,6 @@
 //! Awaitable resolution logic
 //!
-//! Recursively resolves awaitables (Task, Timer, All, Any, Race, Signal) to determine
+//! Recursively resolves awaitables (Execution, Timer, All, Any, Race, Signal) to determine
 //! if they're ready and what value to resume with.
 
 use anyhow::Result;
@@ -39,7 +39,9 @@ pub fn resolve_awaitable<'a>(
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<AwaitableStatus>> + Send + 'a>> {
     Box::pin(async move {
         match awaitable {
-            Awaitable::Task(task_id) => resolve_task(pool, task_id, outbox).await,
+            Awaitable::Execution(execution_id) => {
+                resolve_execution(pool, execution_id, outbox).await
+            }
             Awaitable::Timer { fire_at } => Ok(resolve_timer(*fire_at, db_now)),
             Awaitable::All { items, is_object } => {
                 resolve_all(pool, items, *is_object, db_now, outbox).await
@@ -88,16 +90,20 @@ async fn resolve_signal(pool: &PgPool, claim_id: &str, outbox: &Outbox) -> Resul
     }
 }
 
-async fn resolve_task(pool: &PgPool, task_id: &str, outbox: &Outbox) -> Result<AwaitableStatus> {
-    // If task is in outbox, it was just created this run - skip DB query
-    if outbox.has_task(task_id) {
+async fn resolve_execution(
+    pool: &PgPool,
+    execution_id: &str,
+    outbox: &Outbox,
+) -> Result<AwaitableStatus> {
+    // If execution is in outbox, it was just created this run - skip DB query
+    if outbox.has_execution(execution_id) {
         return Ok(AwaitableStatus::Pending);
     }
 
-    if let Some(task_execution) = db::executions::get_execution(pool, task_id).await? {
-        match task_execution.status {
+    if let Some(execution) = db::executions::get_execution(pool, execution_id).await? {
+        match execution.status {
             ExecutionStatus::Completed => {
-                let result = task_execution
+                let result = execution
                     .output
                     .map(|json| json_to_val(&json))
                     .transpose()?
@@ -105,7 +111,7 @@ async fn resolve_task(pool: &PgPool, task_id: &str, outbox: &Outbox) -> Result<A
                 Ok(AwaitableStatus::Success(result))
             }
             ExecutionStatus::Failed => {
-                let result = task_execution
+                let result = execution
                     .output
                     .map(|json| json_to_val(&json))
                     .transpose()?
@@ -115,7 +121,7 @@ async fn resolve_task(pool: &PgPool, task_id: &str, outbox: &Outbox) -> Result<A
             _ => Ok(AwaitableStatus::Pending),
         }
     } else {
-        // Task not in DB yet
+        // Execution not in DB yet
         Ok(AwaitableStatus::Pending)
     }
 }

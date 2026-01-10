@@ -15,7 +15,7 @@ fn test_await_suspend_basic() {
         "#;
 
     let inputs = hashmap! {
-        "task".to_string() => Val::Promise(Awaitable::Task("task-123".to_string())),
+        "task".to_string() => Val::Promise(Awaitable::Execution("task-123".to_string())),
     };
 
     let mut vm = parse_workflow_and_build_vm(source, inputs);
@@ -24,7 +24,7 @@ fn test_await_suspend_basic() {
     // Should suspend on the task
     assert_eq!(
         vm.control,
-        Control::Suspend(Awaitable::Task("task-123".to_string()))
+        Control::Suspend(Awaitable::Execution("task-123".to_string()))
     );
 
     // Frame should still be on the stack (not popped)
@@ -39,7 +39,7 @@ fn test_await_resume() {
         "#;
 
     let inputs = hashmap! {
-        "task".to_string() => Val::Promise(Awaitable::Task("task-123".to_string())),
+        "task".to_string() => Val::Promise(Awaitable::Execution("task-123".to_string())),
     };
 
     let mut vm = parse_workflow_and_build_vm(source, inputs);
@@ -48,7 +48,7 @@ fn test_await_resume() {
     // Should suspend on the task
     assert_eq!(
         vm.control,
-        Control::Suspend(Awaitable::Task("task-123".to_string()))
+        Control::Suspend(Awaitable::Execution("task-123".to_string()))
     );
 
     // Serialize the suspended VM
@@ -60,7 +60,7 @@ fn test_await_resume() {
     // Should still be suspended
     assert_eq!(
         vm2.control,
-        Control::Suspend(Awaitable::Task("task-123".to_string()))
+        Control::Suspend(Awaitable::Execution("task-123".to_string()))
     );
 
     // Resume with a result
@@ -85,7 +85,7 @@ fn test_await_resume_with_num() {
         "#;
 
     let inputs = hashmap! {
-        "task".to_string() => Val::Promise(Awaitable::Task("task-456".to_string())),
+        "task".to_string() => Val::Promise(Awaitable::Execution("task-456".to_string())),
     };
 
     let mut vm = parse_workflow_and_build_vm(source, inputs);
@@ -93,7 +93,7 @@ fn test_await_resume_with_num() {
 
     assert_eq!(
         vm.control,
-        Control::Suspend(Awaitable::Task("task-456".to_string()))
+        Control::Suspend(Awaitable::Execution("task-456".to_string()))
     );
 
     // Serialize and deserialize
@@ -165,7 +165,7 @@ fn test_await_preserves_frames() {
         "#;
 
     let inputs = hashmap! {
-        "task".to_string() => Val::Promise(Awaitable::Task("task-789".to_string())),
+        "task".to_string() => Val::Promise(Awaitable::Execution("task-789".to_string())),
     };
 
     let mut vm = parse_workflow_and_build_vm(source, inputs);
@@ -174,7 +174,7 @@ fn test_await_preserves_frames() {
     // Should suspend
     assert_eq!(
         vm.control,
-        Control::Suspend(Awaitable::Task("task-789".to_string()))
+        Control::Suspend(Awaitable::Execution("task-789".to_string()))
     );
 
     // Should have 4 frames: workflow body Block, outer nested Block, inner nested Block, Return
@@ -206,7 +206,7 @@ fn test_serialization_with_suspend() {
         "#;
 
     let inputs = hashmap! {
-        "task".to_string() => Val::Promise(Awaitable::Task("task-serial".to_string())),
+        "task".to_string() => Val::Promise(Awaitable::Execution("task-serial".to_string())),
     };
 
     let mut vm = parse_workflow_and_build_vm(source, inputs);
@@ -215,7 +215,7 @@ fn test_serialization_with_suspend() {
     // Should suspend
     assert_eq!(
         vm.control,
-        Control::Suspend(Awaitable::Task("task-serial".to_string()))
+        Control::Suspend(Awaitable::Execution("task-serial".to_string()))
     );
 
     // Serialize the VM
@@ -227,7 +227,7 @@ fn test_serialization_with_suspend() {
     // Should still be suspended
     assert_eq!(
         vm2.control,
-        Control::Suspend(Awaitable::Task("task-serial".to_string()))
+        Control::Suspend(Awaitable::Execution("task-serial".to_string()))
     );
 
     // Resume and finish
@@ -246,7 +246,7 @@ fn test_step_by_step_suspension() {
         "#;
 
     let inputs = hashmap! {
-        "task".to_string() => Val::Promise(Awaitable::Task("task-step".to_string())),
+        "task".to_string() => Val::Promise(Awaitable::Execution("task-step".to_string())),
     };
 
     let mut vm = parse_workflow_and_build_vm(source, inputs);
@@ -255,7 +255,7 @@ fn test_step_by_step_suspension() {
     // Should have suspended
     assert_eq!(
         vm.control,
-        Control::Suspend(Awaitable::Task("task-step".to_string()))
+        Control::Suspend(Awaitable::Execution("task-step".to_string()))
     );
 
     // Serialize and deserialize
@@ -289,16 +289,16 @@ fn test_await_task_run_with_multiline_object() {
     run_until_done(&mut vm);
 
     // Should suspend on the task
-    let Control::Suspend(Awaitable::Task(task_id)) = &vm.control else {
+    let Control::Suspend(Awaitable::Execution(task_id)) = &vm.control else {
         panic!("Expected Suspend on Task, got {:?}", vm.control);
     };
 
-    // Check outbox has the task with correct inputs
-    assert_eq!(vm.outbox.tasks.len(), 1);
-    assert_eq!(vm.outbox.tasks[0].task_name, "processOrder");
-    assert_eq!(&vm.outbox.tasks[0].task_id, task_id);
+    // Check outbox has the execution with correct inputs
+    assert_eq!(vm.outbox.executions.len(), 1);
+    assert_eq!(vm.outbox.executions[0].target_name, "processOrder");
+    assert_eq!(&vm.outbox.executions[0].id, task_id);
 
-    let inputs = &vm.outbox.tasks[0].inputs;
+    let inputs = &vm.outbox.executions[0].inputs;
     assert_eq!(inputs.get("orderId").unwrap(), &Val::Num(123.0));
     assert_eq!(inputs.get("userId").unwrap(), &Val::Num(456.0));
     assert_eq!(inputs.get("total").unwrap(), &Val::Num(99.99));

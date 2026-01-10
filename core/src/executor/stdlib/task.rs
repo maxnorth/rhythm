@@ -2,7 +2,7 @@
 
 use crate::executor::errors::{self, ErrorInfo};
 use crate::executor::expressions::EvalResult;
-use crate::executor::outbox::{Outbox, TaskCreation};
+use crate::executor::outbox::{ExecutionCreation, Outbox};
 use crate::executor::types::{Awaitable, Val};
 use crate::types::ExecutionType;
 use std::collections::HashMap;
@@ -50,11 +50,11 @@ pub fn run(args: &[Val], outbox: &mut Outbox) -> EvalResult {
     };
 
     // Generate UUID for the task
-    let task_id = Uuid::new_v4().to_string();
+    let execution_id = Uuid::new_v4().to_string();
 
     // Record side effect in outbox
-    outbox.push_task(TaskCreation::new(
-        task_id.clone(),
+    outbox.push_execution(ExecutionCreation::new(
+        execution_id.clone(),
         task_name,
         inputs,
         ExecutionType::Task,
@@ -62,7 +62,7 @@ pub fn run(args: &[Val], outbox: &mut Outbox) -> EvalResult {
 
     // Return Promise value wrapping the task
     EvalResult::Value {
-        v: Val::Promise(Awaitable::Task(task_id)),
+        v: Val::Promise(Awaitable::Execution(execution_id)),
     }
 }
 

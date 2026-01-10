@@ -26,8 +26,8 @@ fn test_task_all_with_array() {
             assert_eq!(items[0].0, "0");
             assert_eq!(items[1].0, "1");
             // Both should be Task awaitables
-            assert!(matches!(items[0].1, Awaitable::Task(_)));
-            assert!(matches!(items[1].1, Awaitable::Task(_)));
+            assert!(matches!(items[0].1, Awaitable::Execution(_)));
+            assert!(matches!(items[1].1, Awaitable::Execution(_)));
         }
         _ => panic!(
             "Expected Control::Return(Val::Promise(Awaitable::All)), got {:?}",
@@ -326,8 +326,8 @@ fn test_await_task_all_suspends() {
         ),
     }
 
-    // Outbox should have 2 tasks
-    assert_eq!(vm.outbox.tasks.len(), 2);
+    // Outbox should have 2 executions
+    assert_eq!(vm.outbox.executions.len(), 2);
 }
 
 #[test]
@@ -430,7 +430,7 @@ fn test_task_race_mixed_task_and_timer() {
             assert_eq!(items.len(), 2);
             assert!(!*is_object);
             // First should be Task, second should be Timer
-            assert!(matches!(items[0].1, Awaitable::Task(_)));
+            assert!(matches!(items[0].1, Awaitable::Execution(_)));
             assert!(matches!(items[1].1, Awaitable::Timer { .. }));
         }
         _ => panic!(

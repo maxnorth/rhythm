@@ -410,7 +410,7 @@ pub fn to_string(val: &Val) -> String {
         Val::List(_) => "[object Array]".to_string(),
         Val::Obj(_) => "[object Object]".to_string(),
         Val::Promise(awaitable) => match awaitable {
-            super::types::Awaitable::Task(id) => format!("[Promise Task({})]", id),
+            super::types::Awaitable::Execution(id) => format!("[Promise Execution({})]", id),
             super::types::Awaitable::Timer { fire_at } => {
                 format!("[Promise Timer({})]", fire_at)
             }

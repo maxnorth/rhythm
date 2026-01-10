@@ -9,14 +9,14 @@ use std::collections::HashMap;
 /// Represents something that can be awaited
 ///
 /// This is the identity of what a workflow is waiting on:
-/// - Task: waiting for a child task to complete (identified by task_id for DB lookup)
+/// - Execution: waiting for a child execution (task or workflow) to complete
 /// - Timer: waiting for a specific time to pass (identified by fire_at timestamp)
 /// - All/Any/Race: composite awaitables that combine multiple awaitables
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "t", content = "v")]
 pub enum Awaitable {
-    /// A child task identified by its ID
-    Task(String),
+    /// A child execution (task or workflow) identified by its ID
+    Execution(String),
     /// A timer that fires at a specific time
     Timer { fire_at: DateTime<Utc> },
     /// Wait for all awaitables to complete. Fail-fast on first error.
@@ -54,7 +54,7 @@ pub enum Val {
     Str(String),
     List(Vec<Val>),
     Obj(HashMap<String, Val>),
-    /// A promise representing an awaitable (task or timer)
+    /// A promise representing an awaitable (execution, timer, etc.)
     Promise(Awaitable),
     /// Error value with code and message
     Error(ErrorInfo),
