@@ -301,7 +301,7 @@ impl CompletionContext {
             let before_dot = &trimmed[..trimmed.len() - 1];
             before_dot
                 .split(|c: char| !c.is_alphanumeric() && c != '_')
-                .last()
+                .next_back()
                 .map(|s| s.to_string())
                 .filter(|s| !s.is_empty())
         } else {
@@ -429,11 +429,7 @@ pub fn get_completions(ctx: &CompletionContext) -> Vec<CompletionItem> {
 }
 
 /// Get signature help for a function call
-pub fn get_signature_help(
-    source: &str,
-    line: u32,
-    character: u32,
-) -> Option<SignatureHelp> {
+pub fn get_signature_help(source: &str, line: u32, character: u32) -> Option<SignatureHelp> {
     let lines: Vec<&str> = source.lines().collect();
     let current_line = lines.get(line as usize)?;
 
@@ -543,9 +539,7 @@ fn collect_variables_from_stmt(stmt: &Stmt, vars: &mut Vec<(String, Span)>) {
             vars.push((catch_var.clone(), *catch_var_span));
             collect_variables_from_stmt(catch_body, vars);
         }
-        StmtKind::If {
-            then_s, else_s, ..
-        } => {
+        StmtKind::If { then_s, else_s, .. } => {
             collect_variables_from_stmt(then_s, vars);
             if let Some(else_s) = else_s {
                 collect_variables_from_stmt(else_s, vars);

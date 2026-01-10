@@ -131,9 +131,8 @@ fn get_hover_context(source: &str, line: u32, character: u32) -> HoverContext {
     // Check if there's a dot before the word
     if word_start > 0 {
         let before_word = &prefix[..word_start];
-        if before_word.ends_with('.') {
+        if let Some(before_dot) = before_word.strip_suffix('.') {
             // Get the identifier before the dot
-            let before_dot = &before_word[..before_word.len() - 1];
             let module_start = before_dot
                 .rfind(|c: char| !c.is_alphanumeric() && c != '_')
                 .map(|i| i + 1)
@@ -225,11 +224,11 @@ fn find_expr_at_offset(stmt: &Stmt, offset: usize) -> Option<Expr> {
                 }
             }
         }
-        StmtKind::Declare { init, .. } => {
-            if let Some(init) = init {
-                if let Some(e) = find_expr_at_offset_in_expr(init, offset) {
-                    return Some(e);
-                }
+        StmtKind::Declare {
+            init: Some(init), ..
+        } => {
+            if let Some(e) = find_expr_at_offset_in_expr(init, offset) {
+                return Some(e);
             }
         }
         StmtKind::Assign { value, .. } => {
@@ -237,7 +236,11 @@ fn find_expr_at_offset(stmt: &Stmt, offset: usize) -> Option<Expr> {
                 return Some(e);
             }
         }
-        StmtKind::If { test, then_s, else_s } => {
+        StmtKind::If {
+            test,
+            then_s,
+            else_s,
+        } => {
             if let Some(e) = find_expr_at_offset_in_expr(test, offset) {
                 return Some(e);
             }
@@ -266,14 +269,16 @@ fn find_expr_at_offset(stmt: &Stmt, offset: usize) -> Option<Expr> {
                 return Some(e);
             }
         }
-        StmtKind::Return { value } => {
-            if let Some(value) = value {
-                if let Some(e) = find_expr_at_offset_in_expr(value, offset) {
-                    return Some(e);
-                }
+        StmtKind::Return {
+            value: Some(value),
+        } => {
+            if let Some(e) = find_expr_at_offset_in_expr(value, offset) {
+                return Some(e);
             }
         }
-        StmtKind::Try { body, catch_body, .. } => {
+        StmtKind::Try {
+            body, catch_body, ..
+        } => {
             if let Some(e) = find_expr_at_offset(body, offset) {
                 return Some(e);
             }
@@ -324,7 +329,11 @@ fn find_expr_at_offset_in_expr(expr: &Expr, offset: usize) -> Option<Expr> {
                     return Some(e);
                 }
             }
-            ExprKind::Ternary { condition, consequent, alternate } => {
+            ExprKind::Ternary {
+                condition,
+                consequent,
+                alternate,
+            } => {
                 if let Some(e) = find_expr_at_offset_in_expr(condition, offset) {
                     return Some(e);
                 }

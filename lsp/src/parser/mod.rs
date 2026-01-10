@@ -17,6 +17,7 @@ pub struct ParseError {
 }
 
 impl ParseError {
+    #[allow(dead_code)]
     pub fn new(message: String, span: Option<Span>) -> Self {
         Self { message, span }
     }
@@ -179,9 +180,12 @@ fn convert_stmt(stmt: &rhythm_core::executor::types::ast::Stmt) -> Stmt {
             convert_span(*span),
         ),
 
-        CoreStmt::Expr { expr, span } => {
-            Spanned::new(StmtKind::Expr { expr: convert_expr(expr) }, convert_span(*span))
-        }
+        CoreStmt::Expr { expr, span } => Spanned::new(
+            StmtKind::Expr {
+                expr: convert_expr(expr),
+            },
+            convert_span(*span),
+        ),
 
         CoreStmt::Break { span } => Spanned::new(StmtKind::Break, convert_span(*span)),
 
@@ -335,9 +339,7 @@ fn convert_declare_target(
     }
 }
 
-fn convert_member_access(
-    access: &rhythm_core::executor::types::ast::MemberAccess,
-) -> MemberAccess {
+fn convert_member_access(access: &rhythm_core::executor::types::ast::MemberAccess) -> MemberAccess {
     use rhythm_core::executor::types::ast::MemberAccess as CoreAccess;
 
     match access {

@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Source location span
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Span {
     /// Start offset (byte index)
     pub start: usize,
@@ -23,6 +23,7 @@ pub struct Span {
 }
 
 impl Span {
+    #[allow(dead_code)]
     pub fn new(
         start: usize,
         end: usize,
@@ -42,6 +43,7 @@ impl Span {
     }
 
     /// Create a span that covers both self and other
+    #[allow(dead_code)]
     pub fn merge(&self, other: &Span) -> Span {
         Span {
             start: self.start.min(other.start),
@@ -66,19 +68,6 @@ impl Span {
             } else {
                 other.end_col
             },
-        }
-    }
-}
-
-impl Default for Span {
-    fn default() -> Self {
-        Self {
-            start: 0,
-            end: 0,
-            start_line: 0,
-            start_col: 0,
-            end_line: 0,
-            end_col: 0,
         }
     }
 }
@@ -115,8 +104,14 @@ pub enum ForLoopKind {
 /// Target for variable declaration (simple identifier or destructure pattern)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DeclareTarget {
-    Simple { name: String, span: Span },
-    Destructure { names: Vec<(String, Span)>, span: Span },
+    Simple {
+        name: String,
+        span: Span,
+    },
+    Destructure {
+        names: Vec<(String, Span)>,
+        span: Span,
+    },
 }
 
 impl DeclareTarget {
