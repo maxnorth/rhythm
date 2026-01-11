@@ -18,6 +18,9 @@ mod completions;
 mod hover;
 mod parser;
 
+#[cfg(test)]
+mod tests;
+
 use backend::RhythmBackend;
 
 #[tokio::main]

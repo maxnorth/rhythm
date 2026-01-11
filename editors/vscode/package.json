@@ -3,10 +3,10 @@
   "displayName": "Rhythm",
   "description": "Language support for Rhythm workflow language",
   "version": "0.1.0",
-  "publisher": "anthropic",
+  "publisher": "maxnorth",
   "repository": {
     "type": "git",
-    "url": "https://github.com/anthropics/rhythm"
+    "url": "https://github.com/maxnorth/rhythm"
   },
   "license": "MIT",
   "engines": {

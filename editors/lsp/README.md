@@ -16,7 +16,7 @@ A Language Server Protocol (LSP) implementation for the Rhythm workflow language
 
 ### Pre-built Binaries
 
-Download pre-built binaries from the [releases page](https://github.com/anthropics/rhythm/releases).
+Download pre-built binaries from the [releases page](https://github.com/maxnorth/rhythm/releases).
 
 Available platforms:
 - Linux (x86_64, aarch64)

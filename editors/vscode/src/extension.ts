@@ -17,49 +17,6 @@ import {
 
 let client: LanguageClient | undefined;
 
-/**
- * Find the rhythm-lsp executable
- */
-function findLspExecutable(context: ExtensionContext): string | undefined {
-    // First, check user configuration
-    const configPath = workspace.getConfiguration('rhythm.lsp').get<string>('path');
-    if (configPath && fs.existsSync(configPath)) {
-        return configPath;
-    }
-
-    // Determine platform-specific binary name
-    const platform = os.platform();
-    const arch = os.arch();
-
-    let binaryName = 'rhythm-lsp';
-    if (platform === 'win32') {
-        binaryName = 'rhythm-lsp.exe';
-    }
-
-    // Resolve symlinks to get the real extension path (for local development)
-    const realExtensionPath = fs.realpathSync(context.extensionPath);
-
-    // Check for bundled binary in extension
-    const bundledPaths = [
-        // Platform-specific subdirectory
-        path.join(context.extensionPath, 'bin', `${platform}-${arch}`, binaryName),
-        // Generic bin directory
-        path.join(context.extensionPath, 'bin', binaryName),
-        // Server directory (for development) - use real path to handle symlinks
-        path.join(realExtensionPath, '..', 'lsp', 'target', 'release', binaryName),
-        path.join(realExtensionPath, '..', 'lsp', 'target', 'debug', binaryName),
-    ];
-
-    for (const bundledPath of bundledPaths) {
-        if (fs.existsSync(bundledPath)) {
-            return bundledPath;
-        }
-    }
-
-    // Fall back to PATH
-    return binaryName;
-}
-
 export async function activate(context: ExtensionContext): Promise<void> {
     const lspPath = findLspExecutable(context);
 
@@ -121,4 +78,48 @@ export async function deactivate(): Promise<void> {
     if (client) {
         await client.stop();
     }
+}
+
+
+/**
+ * Find the rhythm-lsp executable
+ */
+function findLspExecutable(context: ExtensionContext): string | undefined {
+    // First, check user configuration
+    const configPath = workspace.getConfiguration('rhythm.lsp').get<string>('path');
+    if (configPath && fs.existsSync(configPath)) {
+        return configPath;
+    }
+
+    // Determine platform-specific binary name
+    const platform = os.platform();
+    const arch = os.arch();
+
+    let binaryName = 'rhythm-lsp';
+    if (platform === 'win32') {
+        binaryName = 'rhythm-lsp.exe';
+    }
+
+    // Resolve symlinks to get the real extension path (for local development)
+    const realExtensionPath = fs.realpathSync(context.extensionPath);
+
+    // Check for bundled binary in extension
+    const bundledPaths = [
+        // Platform-specific subdirectory
+        path.join(context.extensionPath, 'bin', `${platform}-${arch}`, binaryName),
+        // Generic bin directory
+        path.join(context.extensionPath, 'bin', binaryName),
+        // Server directory (for development) - use real path to handle symlinks
+        path.join(realExtensionPath, '..', 'lsp', 'target', 'release', binaryName),
+        path.join(realExtensionPath, '..', 'lsp', 'target', 'debug', binaryName),
+    ];
+
+    for (const bundledPath of bundledPaths) {
+        if (fs.existsSync(bundledPath)) {
+            return bundledPath;
+        }
+    }
+
+    // Fall back to PATH
+    return binaryName;
 }

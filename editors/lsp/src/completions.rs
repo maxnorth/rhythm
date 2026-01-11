@@ -8,7 +8,7 @@
 
 use tower_lsp::lsp_types::*;
 
-use crate::parser::ast::*;
+use crate::parser::{DeclareTarget, Span, Stmt};
 
 /// All Rhythm keywords
 pub const KEYWORDS: &[(&str, &str)] = &[
@@ -504,23 +504,24 @@ pub fn collect_variables(stmt: &Stmt) -> Vec<(String, Span)> {
 }
 
 fn collect_variables_from_stmt(stmt: &Stmt, vars: &mut Vec<(String, Span)>) {
-    match &stmt.node {
-        StmtKind::Block { body } => {
+    match stmt {
+        Stmt::Block { body, .. } => {
             for s in body {
                 collect_variables_from_stmt(s, vars);
             }
         }
-        StmtKind::Declare { target, .. } => match target {
+        Stmt::Declare { target, .. } => match target {
             DeclareTarget::Simple { name, span } => {
                 vars.push((name.clone(), *span));
             }
-            DeclareTarget::Destructure { names, .. } => {
-                for (name, span) in names {
+            DeclareTarget::Destructure { names, spans, .. } => {
+                // Core uses parallel arrays for names and spans
+                for (name, span) in names.iter().zip(spans.iter()) {
                     vars.push((name.clone(), *span));
                 }
             }
         },
-        StmtKind::ForLoop {
+        Stmt::ForLoop {
             binding,
             binding_span,
             body,
@@ -529,23 +530,24 @@ fn collect_variables_from_stmt(stmt: &Stmt, vars: &mut Vec<(String, Span)>) {
             vars.push((binding.clone(), *binding_span));
             collect_variables_from_stmt(body, vars);
         }
-        StmtKind::Try {
+        Stmt::Try {
             body,
             catch_var,
             catch_var_span,
             catch_body,
+            ..
         } => {
             collect_variables_from_stmt(body, vars);
             vars.push((catch_var.clone(), *catch_var_span));
             collect_variables_from_stmt(catch_body, vars);
         }
-        StmtKind::If { then_s, else_s, .. } => {
+        Stmt::If { then_s, else_s, .. } => {
             collect_variables_from_stmt(then_s, vars);
             if let Some(else_s) = else_s {
                 collect_variables_from_stmt(else_s, vars);
             }
         }
-        StmtKind::While { body, .. } => {
+        Stmt::While { body, .. } => {
             collect_variables_from_stmt(body, vars);
         }
         _ => {}

@@ -1,6 +1,6 @@
 # Rhythm Language Support for VS Code
 
-This extension provides rich language support for the [Rhythm](https://github.com/anthropics/rhythm) workflow language.
+This extension provides rich language support for the [Rhythm](https://github.com/maxnorth/rhythm) workflow language.
 
 ## Features
 
@@ -35,7 +35,7 @@ The extension provides IntelliSense for all Rhythm built-in modules:
 
 ### From VSIX
 
-1. Download the `.vsix` file from the [releases page](https://github.com/anthropics/rhythm/releases)
+1. Download the `.vsix` file from the [releases page](https://github.com/maxnorth/rhythm/releases)
 2. In VS Code, go to Extensions
 3. Click the `...` menu and select "Install from VSIX..."
 4. Select the downloaded file

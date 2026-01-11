@@ -7,7 +7,7 @@ use tower_lsp::lsp_types::*;
 use crate::completions::{
     get_array_methods, get_module_methods, get_string_methods, BUILTIN_MODULES, KEYWORDS,
 };
-use crate::parser::ast::*;
+use crate::parser::{Expr, Stmt, WorkflowDef};
 
 /// Get hover information for a position in the source
 pub fn get_hover(source: &str, line: u32, character: u32) -> Option<Hover> {
@@ -216,30 +216,31 @@ fn line_col_to_offset(source: &str, line: usize, col: usize) -> usize {
 }
 
 fn find_expr_at_offset(stmt: &Stmt, offset: usize) -> Option<Expr> {
-    match &stmt.node {
-        StmtKind::Block { body } => {
+    match stmt {
+        Stmt::Block { body, .. } => {
             for s in body {
                 if let Some(e) = find_expr_at_offset(s, offset) {
                     return Some(e);
                 }
             }
         }
-        StmtKind::Declare {
+        Stmt::Declare {
             init: Some(init), ..
         } => {
             if let Some(e) = find_expr_at_offset_in_expr(init, offset) {
                 return Some(e);
             }
         }
-        StmtKind::Assign { value, .. } => {
+        Stmt::Assign { value, .. } => {
             if let Some(e) = find_expr_at_offset_in_expr(value, offset) {
                 return Some(e);
             }
         }
-        StmtKind::If {
+        Stmt::If {
             test,
             then_s,
             else_s,
+            ..
         } => {
             if let Some(e) = find_expr_at_offset_in_expr(test, offset) {
                 return Some(e);
@@ -253,7 +254,7 @@ fn find_expr_at_offset(stmt: &Stmt, offset: usize) -> Option<Expr> {
                 }
             }
         }
-        StmtKind::While { test, body } => {
+        Stmt::While { test, body, .. } => {
             if let Some(e) = find_expr_at_offset_in_expr(test, offset) {
                 return Some(e);
             }
@@ -261,7 +262,7 @@ fn find_expr_at_offset(stmt: &Stmt, offset: usize) -> Option<Expr> {
                 return Some(e);
             }
         }
-        StmtKind::ForLoop { iterable, body, .. } => {
+        Stmt::ForLoop { iterable, body, .. } => {
             if let Some(e) = find_expr_at_offset_in_expr(iterable, offset) {
                 return Some(e);
             }
@@ -269,12 +270,14 @@ fn find_expr_at_offset(stmt: &Stmt, offset: usize) -> Option<Expr> {
                 return Some(e);
             }
         }
-        StmtKind::Return { value: Some(value) } => {
+        Stmt::Return {
+            value: Some(value), ..
+        } => {
             if let Some(e) = find_expr_at_offset_in_expr(value, offset) {
                 return Some(e);
             }
         }
-        StmtKind::Try {
+        Stmt::Try {
             body, catch_body, ..
         } => {
             if let Some(e) = find_expr_at_offset(body, offset) {
@@ -284,7 +287,7 @@ fn find_expr_at_offset(stmt: &Stmt, offset: usize) -> Option<Expr> {
                 return Some(e);
             }
         }
-        StmtKind::Expr { expr } => {
+        Stmt::Expr { expr, .. } => {
             if let Some(e) = find_expr_at_offset_in_expr(expr, offset) {
                 return Some(e);
             }
@@ -295,16 +298,17 @@ fn find_expr_at_offset(stmt: &Stmt, offset: usize) -> Option<Expr> {
 }
 
 fn find_expr_at_offset_in_expr(expr: &Expr, offset: usize) -> Option<Expr> {
+    let span = expr.span();
     // Check if offset is within this expression's span
-    if offset >= expr.span.start && offset <= expr.span.end {
+    if offset >= span.start && offset <= span.end {
         // Try to find a more specific child expression
-        match &expr.node {
-            ExprKind::Member { object, .. } => {
+        match expr {
+            Expr::Member { object, .. } => {
                 if let Some(e) = find_expr_at_offset_in_expr(object, offset) {
                     return Some(e);
                 }
             }
-            ExprKind::Call { callee, args } => {
+            Expr::Call { callee, args, .. } => {
                 if let Some(e) = find_expr_at_offset_in_expr(callee, offset) {
                     return Some(e);
                 }
@@ -314,12 +318,12 @@ fn find_expr_at_offset_in_expr(expr: &Expr, offset: usize) -> Option<Expr> {
                     }
                 }
             }
-            ExprKind::Await { inner } => {
+            Expr::Await { inner, .. } => {
                 if let Some(e) = find_expr_at_offset_in_expr(inner, offset) {
                     return Some(e);
                 }
             }
-            ExprKind::BinaryOp { left, right, .. } => {
+            Expr::BinaryOp { left, right, .. } => {
                 if let Some(e) = find_expr_at_offset_in_expr(left, offset) {
                     return Some(e);
                 }
@@ -327,10 +331,11 @@ fn find_expr_at_offset_in_expr(expr: &Expr, offset: usize) -> Option<Expr> {
                     return Some(e);
                 }
             }
-            ExprKind::Ternary {
+            Expr::Ternary {
                 condition,
                 consequent,
                 alternate,
+                ..
             } => {
                 if let Some(e) = find_expr_at_offset_in_expr(condition, offset) {
                     return Some(e);
@@ -342,14 +347,14 @@ fn find_expr_at_offset_in_expr(expr: &Expr, offset: usize) -> Option<Expr> {
                     return Some(e);
                 }
             }
-            ExprKind::LitList { elements } => {
+            Expr::LitList { elements, .. } => {
                 for elem in elements {
                     if let Some(e) = find_expr_at_offset_in_expr(elem, offset) {
                         return Some(e);
                     }
                 }
             }
-            ExprKind::LitObj { properties } => {
+            Expr::LitObj { properties, .. } => {
                 for (_, _, value) in properties {
                     if let Some(e) = find_expr_at_offset_in_expr(value, offset) {
                         return Some(e);
@@ -365,8 +370,8 @@ fn find_expr_at_offset_in_expr(expr: &Expr, offset: usize) -> Option<Expr> {
 }
 
 fn hover_for_expr(expr: &Expr) -> Option<Hover> {
-    match &expr.node {
-        ExprKind::Ident { name } => {
+    match expr {
+        Expr::Ident { name, .. } => {
             // Check if it's a builtin
             for (module, description) in BUILTIN_MODULES {
                 if name == *module {
@@ -388,28 +393,28 @@ fn hover_for_expr(expr: &Expr) -> Option<Hover> {
                 range: None,
             })
         }
-        ExprKind::LitBool { v } => Some(Hover {
+        Expr::LitBool { v, .. } => Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value: format!("**boolean**: `{}`", v),
             }),
             range: None,
         }),
-        ExprKind::LitNum { v } => Some(Hover {
+        Expr::LitNum { v, .. } => Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value: format!("**number**: `{}`", v),
             }),
             range: None,
         }),
-        ExprKind::LitStr { v } => Some(Hover {
+        Expr::LitStr { v, .. } => Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value: format!("**string**: `\"{}\"`", v),
             }),
             range: None,
         }),
-        ExprKind::LitNull => Some(Hover {
+        Expr::LitNull { .. } => Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value: "**null**".to_string(),
