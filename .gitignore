@@ -46,7 +46,6 @@ htmlcov/
 
 # Rust
 target/
-Cargo.lock
 **/*.rs.bk
 *.pdb
 
@@ -67,3 +66,12 @@ dmypy.json
 .signoz/
 .claude/
 .ignore/
+
+# VS Code extension
+editors/vscode/node_modules/
+editors/vscode/out/
+editors/vscode/*.vsix
+editors/vscode/bin/
+
+# Keep the .vscode folder for the extension (needed for dev)
+!editors/vscode/.vscode/

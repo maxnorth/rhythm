@@ -1,4 +1,4 @@
-.PHONY: core-test core-fmt core-fmt-check core-lint help migrate python-docs workflow-docs
+.PHONY: core-test core-fmt core-fmt-check core-lint help migrate python-docs workflow-docs lsp-install lsp-dev
 
 help:
 	@echo "Available targets:"
@@ -9,6 +9,8 @@ help:
 	@echo "  migrate        Run database migrations"
 	@echo "  python-docs    Generate Python API documentation (YAML + Markdown)"
 	@echo "  workflow-docs  Generate Workflow API documentation (Markdown)"
+	@echo "  lsp-install    Install rhythm-lsp to ~/.local/bin"
+	@echo "  lsp-dev        Set up VS Code extension for local development"
 
 db:
 	docker compose up -d
@@ -43,3 +45,9 @@ python-docs:
 
 workflow-docs:
 	python/.venv/bin/python docs/gen/render_api_docs.py core/docs/workflow-api.yml docs/workflow_reference.md
+
+lsp-install:
+	./editors/scripts/install-lsp.sh
+
+lsp-dev:
+	./editors/scripts/dev-vscode.sh

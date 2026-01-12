@@ -1,0 +1,103 @@
+{
+  "name": "rhythm",
+  "displayName": "Rhythm",
+  "description": "Language support for Rhythm workflow (.flow) files",
+  "version": "0.1.0",
+  "publisher": "maxnorth",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maxnorth/rhythm"
+  },
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "rhythm",
+    "workflow",
+    "durable execution"
+  ],
+  "activationEvents": [
+    "onLanguage:rhythm"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "rhythm",
+        "aliases": [
+          "Rhythm",
+          "rhythm",
+          "Flow"
+        ],
+        "extensions": [
+          ".flow"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/rhythm-light.svg",
+          "dark": "./icons/rhythm-dark.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "rhythm",
+        "scopeName": "source.rhythm",
+        "path": "./syntaxes/rhythm.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Rhythm",
+      "properties": {
+        "rhythm.lsp.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the rhythm-lsp executable. If empty, uses the bundled binary or searches PATH."
+        },
+        "rhythm.lsp.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the Rhythm language server."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "rhythm.restartServer",
+        "title": "Rhythm: Restart Language Server"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@vscode/vsce": "^2.22.0",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.0"
+  }
+}

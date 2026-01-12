@@ -1,0 +1,5 @@
+# Build output
+/target/
+
+# Cargo.lock is usually not committed for libraries, but we commit it for binaries
+# Cargo.lock

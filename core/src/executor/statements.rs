@@ -54,10 +54,10 @@ pub fn execute_block(
             // If this is a declaration, track declared names for cleanup
             if let Stmt::Declare { target, .. } = child_stmt {
                 match target {
-                    DeclareTarget::Simple { name } => {
+                    DeclareTarget::Simple { name, .. } => {
                         declared_vars.push(name.clone());
                     }
-                    DeclareTarget::Destructure { names } => {
+                    DeclareTarget::Destructure { names, .. } => {
                         declared_vars.extend(names.clone());
                     }
                 }
@@ -209,11 +209,11 @@ pub fn execute_assign(
             let mut path_segments: Vec<(String, bool)> = Vec::new(); // (key, is_prop)
             for segment in &path {
                 match segment {
-                    MemberAccess::Prop { property } => {
+                    MemberAccess::Prop { property, .. } => {
                         // Static property - use as-is
                         path_segments.push((property.clone(), true));
                     }
-                    MemberAccess::Index { expr } => {
+                    MemberAccess::Index { expr, .. } => {
                         // Evaluate the index expression and convert to string key
                         match eval_expr(expr, &vm.env, &mut vm.resume_value, &mut vm.outbox) {
                             EvalResult::Value { v } => {
@@ -650,10 +650,10 @@ pub fn execute_declare(
 
             // Insert variable(s) into the environment based on target type
             match target {
-                DeclareTarget::Simple { name } => {
+                DeclareTarget::Simple { name, .. } => {
                     vm.env.insert(name, value);
                 }
-                DeclareTarget::Destructure { names } => {
+                DeclareTarget::Destructure { names, .. } => {
                     // Value must be an object for destructuring
                     let obj = match value {
                         Val::Obj(map) => map,

@@ -48,7 +48,9 @@ pub fn step(vm: &mut VM) {
 
     // Dispatch to statement handler
     match (kind, node) {
-        (FrameKind::Return { phase }, Stmt::Return { value }) => execute_return(vm, phase, value),
+        (FrameKind::Return { phase }, Stmt::Return { value, .. }) => {
+            execute_return(vm, phase, value)
+        }
 
         (
             FrameKind::Block {
@@ -56,7 +58,7 @@ pub fn step(vm: &mut VM) {
                 idx,
                 declared_vars,
             },
-            Stmt::Block { body },
+            Stmt::Block { body, .. },
         ) => {
             // Clone once to get ownership
             let declared_vars = declared_vars.clone();
@@ -69,14 +71,18 @@ pub fn step(vm: &mut VM) {
                 body,
                 catch_var: _,
                 catch_body,
+                ..
             },
         ) => execute_try(vm, phase, catch_var, body, catch_body),
 
-        (FrameKind::Expr { phase }, Stmt::Expr { expr }) => execute_expr(vm, phase, expr),
+        (FrameKind::Expr { phase }, Stmt::Expr { expr, .. }) => execute_expr(vm, phase, expr),
 
-        (FrameKind::Assign { phase }, Stmt::Assign { var, path, value }) => {
-            execute_assign(vm, phase, var, path, value)
-        }
+        (
+            FrameKind::Assign { phase },
+            Stmt::Assign {
+                var, path, value, ..
+            },
+        ) => execute_assign(vm, phase, var, path, value),
 
         (
             FrameKind::If { phase },
@@ -84,10 +90,11 @@ pub fn step(vm: &mut VM) {
                 test,
                 then_s,
                 else_s,
+                ..
             },
         ) => execute_if(vm, phase, test, then_s, else_s),
 
-        (FrameKind::While { phase, label }, Stmt::While { test, body }) => {
+        (FrameKind::While { phase, label }, Stmt::While { test, body, .. }) => {
             execute_while(vm, phase, label, test, body)
         }
 
@@ -98,12 +105,13 @@ pub fn step(vm: &mut VM) {
                 binding,
                 iterable,
                 body,
+                ..
             },
         ) => execute_for_loop(vm, phase, items, idx, kind, binding, iterable, body),
 
-        (FrameKind::Break { phase }, Stmt::Break) => execute_break(vm, phase),
+        (FrameKind::Break { phase }, Stmt::Break { .. }) => execute_break(vm, phase),
 
-        (FrameKind::Continue { phase }, Stmt::Continue) => execute_continue(vm, phase),
+        (FrameKind::Continue { phase }, Stmt::Continue { .. }) => execute_continue(vm, phase),
 
         (
             FrameKind::Declare { phase },
@@ -111,6 +119,7 @@ pub fn step(vm: &mut VM) {
                 var_kind,
                 target,
                 init,
+                ..
             },
         ) => execute_declare(vm, phase, var_kind, target, init),
 
