@@ -1,7 +1,7 @@
 {
   "name": "rhythm",
   "displayName": "Rhythm",
-  "description": "Language support for Rhythm .flow files",
+  "description": "Language support for Rhythm workflow (.flow) files",
   "version": "0.1.0",
   "publisher": "maxnorth",
   "repository": {
