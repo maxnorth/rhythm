@@ -12,6 +12,7 @@ use tower_lsp::{Client, LanguageServer};
 use crate::completions::{get_completions, get_signature_help, CompletionContext};
 use crate::hover::get_hover_from_ast;
 use crate::parser::{parse_workflow, ParseError, WorkflowDef};
+use crate::validation::Validator;
 
 /// Document state stored for each open file
 #[derive(Debug, Clone)]
@@ -76,6 +77,7 @@ impl RhythmBackend {
         };
 
         let diagnostics = if let Some(err) = &doc.parse_error {
+            // Parse error - report that first
             let range = if let Some(span) = &err.span {
                 Range {
                     start: Position {
@@ -111,6 +113,14 @@ impl RhythmBackend {
                 tags: None,
                 data: None,
             }]
+        } else if let Some(workflow) = &doc.workflow {
+            // Parse succeeded - run semantic validation
+            let validator = Validator::new();
+            validator
+                .validate(workflow, &doc.content)
+                .into_iter()
+                .map(|d| d.to_lsp_diagnostic())
+                .collect()
         } else {
             vec![]
         };

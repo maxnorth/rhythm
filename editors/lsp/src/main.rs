@@ -17,6 +17,7 @@ mod backend;
 mod completions;
 mod hover;
 mod parser;
+mod validation;
 
 #[cfg(test)]
 mod tests;
