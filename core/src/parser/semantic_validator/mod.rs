@@ -173,6 +173,7 @@ impl Validator {
                 // Error rules - these indicate bugs
                 Box::new(rules::UndefinedVariableRule),
                 Box::new(rules::UnreachableCodeRule),
+                Box::new(rules::NestedAwaitRule),
                 // Warning rules - these are suggestions
                 Box::new(rules::UnusedVariableRule),
             ],

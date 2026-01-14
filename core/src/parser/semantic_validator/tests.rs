@@ -285,3 +285,145 @@ return y
     let errors = validate(source);
     assert!(errors.is_empty(), "Clean code should have no errors");
 }
+
+// ============================================================================
+// Nested Await Tests
+// ============================================================================
+
+#[test]
+fn test_nested_await_valid_expression_statement() {
+    let source = r#"await task.run("foo", {})"#;
+
+    let errors = validate(source);
+    let await_errors = for_rule(&errors, "nested-await");
+    assert!(
+        await_errors.is_empty(),
+        "await as expression statement should be valid"
+    );
+}
+
+#[test]
+fn test_nested_await_valid_declaration() {
+    let source = r#"let x = await task.run("foo", {})"#;
+
+    let errors = validate(source);
+    let await_errors = for_rule(&errors, "nested-await");
+    assert!(
+        await_errors.is_empty(),
+        "await in declaration should be valid"
+    );
+}
+
+#[test]
+fn test_nested_await_valid_assignment() {
+    let source = r#"
+let x = null
+x = await task.run("foo", {})
+"#;
+
+    let errors = validate(source);
+    let await_errors = for_rule(&errors, "nested-await");
+    assert!(
+        await_errors.is_empty(),
+        "await in assignment should be valid"
+    );
+}
+
+#[test]
+fn test_nested_await_valid_return() {
+    let source = r#"return await task.run("foo", {})"#;
+
+    let errors = validate(source);
+    let await_errors = for_rule(&errors, "nested-await");
+    assert!(await_errors.is_empty(), "await in return should be valid");
+}
+
+#[test]
+fn test_nested_await_invalid_binary_op() {
+    // Note: In Rhythm, `a + b` becomes `add(a, b)`, so this tests await in call args.
+    // Must use parens because `await` has highest precedence: `await x + 1` parses as `await(x + 1)`.
+    let source = r#"let x = (await task.run("foo", {})) + 1"#;
+
+    let errors = validate(source);
+    assert!(has_rule(&errors, "nested-await"));
+
+    let await_errors = for_rule(&errors, "nested-await");
+    assert_eq!(await_errors.len(), 1);
+    assert!(await_errors[0].message.contains("statement level"));
+}
+
+#[test]
+fn test_nested_await_invalid_call_args() {
+    let source = r#"
+let foo = task.run
+foo("bar", await task.run("baz", {}))
+"#;
+
+    let errors = validate(source);
+    assert!(has_rule(&errors, "nested-await"));
+}
+
+#[test]
+fn test_nested_await_invalid_array_literal() {
+    let source = r#"let arr = [await task.run("foo", {})]"#;
+
+    let errors = validate(source);
+    assert!(has_rule(&errors, "nested-await"));
+}
+
+#[test]
+fn test_nested_await_invalid_object_literal() {
+    let source = r#"let obj = { result: await task.run("foo", {}) }"#;
+
+    let errors = validate(source);
+    assert!(has_rule(&errors, "nested-await"));
+}
+
+#[test]
+fn test_nested_await_invalid_if_condition() {
+    let source = r#"
+if (await task.run("foo", {})) {
+    return 1
+}
+"#;
+
+    let errors = validate(source);
+    assert!(has_rule(&errors, "nested-await"));
+}
+
+#[test]
+fn test_nested_await_invalid_while_condition() {
+    let source = r#"
+while (await task.run("check", {})) {
+    return 1
+}
+"#;
+
+    let errors = validate(source);
+    assert!(has_rule(&errors, "nested-await"));
+}
+
+#[test]
+fn test_nested_await_invalid_ternary() {
+    let source = r#"let x = true ? await task.run("foo", {}) : 0"#;
+
+    let errors = validate(source);
+    assert!(has_rule(&errors, "nested-await"));
+}
+
+#[test]
+fn test_nested_await_invalid_double_await() {
+    let source = r#"let x = await await task.run("foo", {})"#;
+
+    let errors = validate(source);
+    assert!(has_rule(&errors, "nested-await"));
+}
+
+#[test]
+fn test_nested_await_multiple_errors() {
+    let source = r#"let x = (await task.run("a", {})) + (await task.run("b", {}))"#;
+
+    let errors = validate(source);
+    let await_errors = for_rule(&errors, "nested-await");
+    assert_eq!(await_errors.len(), 2, "Should report both nested awaits");
+}
