@@ -18,8 +18,10 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::parser::{DeclareTarget, Expr, Span, Stmt, WorkflowDef};
-use crate::validation::{Diagnostic, ValidationRule};
+use crate::executor::types::ast::{DeclareTarget, Expr, Span, Stmt};
+use crate::parser::WorkflowDef;
+
+use super::super::{ValidationError, ValidationRule};
 
 /// Rule that checks for unused variable declarations.
 pub struct UnusedVariableRule;
@@ -33,7 +35,7 @@ impl ValidationRule for UnusedVariableRule {
         "Variables should be used after declaration"
     }
 
-    fn validate(&self, workflow: &WorkflowDef, _source: &str) -> Vec<Diagnostic> {
+    fn validate(&self, workflow: &WorkflowDef, _source: &str) -> Vec<ValidationError> {
         // Phase 1: Collect all declarations
         let mut declarations: HashMap<String, Span> = HashMap::new();
         collect_declarations(&workflow.body, &mut declarations);
@@ -43,7 +45,7 @@ impl ValidationRule for UnusedVariableRule {
         collect_usages(&workflow.body, &mut usages);
 
         // Phase 3: Report unused declarations
-        let mut diagnostics = Vec::new();
+        let mut errors = Vec::new();
         for (name, span) in declarations {
             // Skip variables starting with underscore (intentionally unused)
             if name.starts_with('_') {
@@ -51,7 +53,7 @@ impl ValidationRule for UnusedVariableRule {
             }
 
             if !usages.contains(&name) {
-                diagnostics.push(Diagnostic::warning(
+                errors.push(ValidationError::warning(
                     span,
                     format!("Variable '{}' is declared but never used", name),
                     self.id(),
@@ -59,7 +61,7 @@ impl ValidationRule for UnusedVariableRule {
             }
         }
 
-        diagnostics
+        errors
     }
 }
 
@@ -82,8 +84,6 @@ fn collect_declarations(stmt: &Stmt, declarations: &mut HashMap<String, Span>) {
             }
         },
 
-        // Note: for loop bindings and catch variables are also declarations,
-        // but they're typically used within their block, so we include them
         Stmt::ForLoop {
             binding,
             binding_span,
@@ -170,19 +170,9 @@ fn collect_usages(stmt: &Stmt, usages: &mut HashSet<String>) {
             collect_usages(body, usages);
         }
 
-        Stmt::ForLoop {
-            binding,
-            iterable,
-            body,
-            ..
-        } => {
+        Stmt::ForLoop { iterable, body, .. } => {
             collect_expr_usages(iterable, usages);
-            // The binding itself isn't a "usage" - we want to detect if it's used in body
-            // But we need to check for uses of the binding in the body
             collect_usages(body, usages);
-            // Check if binding is referenced - if we collected it, it was used
-            // (this happens in collect_expr_usages when we see Ident)
-            let _ = binding; // Already handled via Ident in body
         }
 
         Stmt::Try {

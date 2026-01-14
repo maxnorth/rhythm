@@ -12,7 +12,7 @@ use tower_lsp::{Client, LanguageServer};
 use crate::completions::{get_completions, get_signature_help, CompletionContext};
 use crate::hover::get_hover_from_ast;
 use crate::parser::{parse_workflow, ParseError, WorkflowDef};
-use crate::validation::Validator;
+use crate::validation;
 
 /// Document state stored for each open file
 #[derive(Debug, Clone)]
@@ -115,12 +115,7 @@ impl RhythmBackend {
             }]
         } else if let Some(workflow) = &doc.workflow {
             // Parse succeeded - run semantic validation
-            let validator = Validator::new();
-            validator
-                .validate(workflow, &doc.content)
-                .into_iter()
-                .map(|d| d.to_lsp_diagnostic())
-                .collect()
+            validation::validate_workflow(workflow, &doc.content)
         } else {
             vec![]
         };
