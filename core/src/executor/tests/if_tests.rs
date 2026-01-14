@@ -200,6 +200,7 @@ fn test_if_with_error_in_test() {
 #[test]
 fn test_if_with_try_catch() {
     // result = "not_set"; if (true) { try { throw {code: "E", message: "msg"}; } catch (e) { result = "caught"; } } return result;
+    // Simple assignments propagate to outer scope at runtime AND in validation.
     let source = r#"
             result = "not_set"
             if (true) {

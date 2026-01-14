@@ -150,6 +150,7 @@ fn test_while_with_error_in_test() {
 #[test]
 fn test_while_with_try_catch() {
     // i = 0; while (i < 5) { try { if (i == 3) { throw {code: "E", message: "msg"}; } i = i + 1; } catch (e) { i = 10; } } return i;
+    // Simple assignments (without `let`) propagate to outer scope at runtime AND in validation.
     let source = r#"
             i = 0
             while (lt(i, 5)) {

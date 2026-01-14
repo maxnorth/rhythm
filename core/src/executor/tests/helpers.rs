@@ -22,8 +22,13 @@ use std::collections::HashMap;
 /// A VM ready to execute with `run_until_done()` or `step()`
 pub fn parse_workflow_and_build_vm(source: &str, inputs: HashMap<String, Val>) -> VM {
     let workflow = crate::parser::parse_workflow(source).expect("Parse workflow failed");
-    crate::parser::semantic_validator::validate_workflow(&workflow)
-        .expect("Workflow validation failed");
+    let errors = crate::parser::semantic_validator::validate_workflow(&workflow, source);
+    let validation_errors: Vec<_> = errors.iter().filter(|e| e.is_error()).collect();
+    assert!(
+        validation_errors.is_empty(),
+        "Workflow validation failed: {:?}",
+        validation_errors
+    );
     let json = serde_json::to_string(&workflow).expect("Workflow serialization failed");
     let workflow: WorkflowDef =
         serde_json::from_str(&json).expect("Workflow deserialization failed");
@@ -33,3 +38,4 @@ pub fn parse_workflow_and_build_vm(source: &str, inputs: HashMap<String, Val>) -
     };
     VM::new(workflow.body.clone(), inputs, context)
 }
+

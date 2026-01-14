@@ -103,22 +103,13 @@ fn test_fire_and_forget_then_await() {
     // 2. Awaited tasks also get recorded in the outbox
     // 3. VM suspends on the await, preserving state
     let source = r#"
+            let inputs1 = { background: true }
+            let inputs2 = { foreground: true }
             Task.run("fire_and_forget_task", inputs1)
             return await Task.run("awaited_task", inputs2)
         "#;
 
     let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
-
-    // Manually add inputs1 and inputs2 to env (not parameters, just env variables)
-    let mut inputs1 = HashMap::new();
-    inputs1.insert("background".to_string(), Val::Bool(true));
-    vm.env
-        .insert("inputs1".to_string(), Val::Obj(inputs1.clone()));
-
-    let mut inputs2 = HashMap::new();
-    inputs2.insert("foreground".to_string(), Val::Bool(true));
-    vm.env
-        .insert("inputs2".to_string(), Val::Obj(inputs2.clone()));
 
     run_until_done(&mut vm);
 
@@ -138,12 +129,16 @@ fn test_fire_and_forget_then_await() {
     assert_eq!(vm.outbox.executions.len(), 2);
 
     // First execution (fire-and-forget)
+    let mut expected_inputs1 = HashMap::new();
+    expected_inputs1.insert("background".to_string(), Val::Bool(true));
     assert_eq!(vm.outbox.executions[0].target_name, "fire_and_forget_task");
-    assert_eq!(vm.outbox.executions[0].inputs, inputs1);
+    assert_eq!(vm.outbox.executions[0].inputs, expected_inputs1);
 
     // Second execution (awaited)
+    let mut expected_inputs2 = HashMap::new();
+    expected_inputs2.insert("foreground".to_string(), Val::Bool(true));
     assert_eq!(vm.outbox.executions[1].target_name, "awaited_task");
-    assert_eq!(vm.outbox.executions[1].inputs, inputs2);
+    assert_eq!(vm.outbox.executions[1].inputs, expected_inputs2);
 
     // The suspended execution ID should match the second execution in the outbox
     if let Control::Suspend(Awaitable::Execution(suspended_id)) = &vm.control {

@@ -48,13 +48,10 @@ expr_stmt = { expression }
 // Identifiers
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
-expression = { await_expr | ternary_expr }
+expression = { ternary_expr }
 
 // Ternary: condition ? then : else
 ternary_expr = { nullish_expr ~ ("?" ~ expression ~ ":" ~ expression)? }
-
-// Await expression: await foo(), await task
-await_expr = { "await" ~ expression }
 
 // Operator tokens (captured as named rules)
 op_nullish = { "??" }
@@ -93,8 +90,10 @@ additive_expr = { multiplicative_expr ~ ((op_add | op_sub) ~ multiplicative_expr
 // Multiplication/Division: a * b, a / b
 multiplicative_expr = { unary_expr ~ ((op_mul | op_div) ~ unary_expr)* }
 
-// Unary operators: !x
-unary_expr = { op_not ~ unary_expr | call_expr }
+// Unary operators: !x, await x
+// await has same precedence as unary, so `await x + 1` parses as `(await x) + 1`
+unary_expr = { op_not ~ unary_expr | await_expr }
+await_expr = { "await" ~ unary_expr | call_expr }
 
 // Function calls and member access: foo(), foo.bar(), foo(1, 2).concat([3])
 // Supports chaining: a.concat([2]).concat([3])

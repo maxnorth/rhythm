@@ -368,8 +368,8 @@ fn test_error_in_catch_handler() {
 
 #[test]
 fn test_try_block_variables_not_accessible_in_catch() {
-    // Variables declared in try block are NOT accessible in catch block
-    // This is standard JavaScript scoping - try and catch are separate block scopes
+    // Variables declared with `let` in try block are NOT accessible in catch block.
+    // Semantic validation catches this error.
     let source = r#"
             let obj = {}
             try {
@@ -380,21 +380,12 @@ fn test_try_block_variables_not_accessible_in_catch() {
             }
         "#;
 
-    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
-    run_until_done(&mut vm);
+    let workflow = crate::parser::parse_workflow(source).expect("Parse should succeed");
+    let errors = crate::parser::semantic_validator::validate_workflow(&workflow, source);
+    let validation_errors: Vec<_> = errors.iter().filter(|e| e.is_error()).collect();
 
-    // Should fail with undefined variable error - email is out of scope in catch
-    let Control::Throw(Val::Error(err)) = vm.control else {
-        unreachable!(
-            "Expected Control::Throw with undefined variable error, got {:?}",
-            vm.control
-        );
-    };
-    assert!(
-        err.message.contains("Undefined variable"),
-        "Expected undefined variable error, got: {}",
-        err.message
-    );
+    assert_eq!(validation_errors.len(), 1);
+    assert_eq!(validation_errors[0].message, "Undefined variable 'email'");
 }
 
 #[test]

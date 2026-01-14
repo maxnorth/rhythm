@@ -256,6 +256,7 @@ fn test_assign_with_error() {
 fn test_assign_in_try_catch() {
     // try { result = Context.bad; } catch (e) { result = "error"; } return result;
     let source = r#"
+            let result = null
             try {
                 result = Context.bad
             } catch (e) {
@@ -269,7 +270,6 @@ fn test_assign_in_try_catch() {
 
     // Should return "error" from the catch block
     assert_eq!(vm.control, Control::Return(Val::Str("error".to_string())));
-    assert_eq!(vm.env.get("result"), Some(&Val::Str("error".to_string())));
 }
 
 /* ===================== Multiple Assignments ===================== */

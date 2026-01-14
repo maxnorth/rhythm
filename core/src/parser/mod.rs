@@ -684,13 +684,24 @@ fn build_expression(pair: pest::iterators::Pair<Rule>, source: &str) -> ParseRes
             }
         }
         Rule::await_expr => {
+            // await_expr = { "await" ~ unary_expr | call_expr }
+            // If first child is unary_expr, we have await. If call_expr, no await.
             let mut inner = pair.into_inner();
-            let expr_pair = inner.next().unwrap();
-            let inner_expr = build_expression(expr_pair, source)?;
-            Ok(Expr::Await {
-                inner: Box::new(inner_expr),
-                span,
-            })
+            let first = inner.next().unwrap();
+            match first.as_rule() {
+                Rule::unary_expr => {
+                    // This is "await" ~ unary_expr - the await keyword was consumed
+                    let inner_expr = build_expression(first, source)?;
+                    Ok(Expr::Await {
+                        inner: Box::new(inner_expr),
+                        span,
+                    })
+                }
+                _ => {
+                    // This is just call_expr - pass through
+                    build_expression(first, source)
+                }
+            }
         }
         Rule::call_expr => {
             let mut inner = pair.into_inner();
