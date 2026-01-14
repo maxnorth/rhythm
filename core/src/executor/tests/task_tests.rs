@@ -1,6 +1,6 @@
 //! Tests for Task.run() and outbox functionality
 
-use super::helpers::parse_workflow_and_build_vm;
+use super::helpers::{parse_workflow_and_build_vm, parse_workflow_without_validation};
 use crate::executor::{errors, run_until_done, Awaitable, Control, Val};
 use std::collections::HashMap;
 
@@ -102,12 +102,13 @@ fn test_fire_and_forget_then_await() {
     // 1. Fire-and-forget tasks are recorded in the outbox
     // 2. Awaited tasks also get recorded in the outbox
     // 3. VM suspends on the await, preserving state
+    // Note: Skip validation because we manually inject inputs1/inputs2 after parsing
     let source = r#"
             Task.run("fire_and_forget_task", inputs1)
             return await Task.run("awaited_task", inputs2)
         "#;
 
-    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    let mut vm = parse_workflow_without_validation(source, HashMap::new());
 
     // Manually add inputs1 and inputs2 to env (not parameters, just env variables)
     let mut inputs1 = HashMap::new();

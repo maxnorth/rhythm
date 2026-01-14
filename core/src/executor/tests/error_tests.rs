@@ -2,7 +2,7 @@
 //!
 //! Tests that errors in expressions properly escalate to Control::Throw
 
-use super::helpers::parse_workflow_and_build_vm;
+use super::helpers::{parse_workflow_and_build_vm, parse_workflow_without_validation};
 use crate::executor::errors;
 use crate::executor::{run_until_done, Control, Val, VM};
 use std::collections::HashMap;
@@ -370,6 +370,7 @@ fn test_error_in_catch_handler() {
 fn test_try_block_variables_not_accessible_in_catch() {
     // Variables declared in try block are NOT accessible in catch block
     // This is standard JavaScript scoping - try and catch are separate block scopes
+    // Note: Skip validation because this test intentionally uses out-of-scope variable
     let source = r#"
             let obj = {}
             try {
@@ -380,7 +381,7 @@ fn test_try_block_variables_not_accessible_in_catch() {
             }
         "#;
 
-    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    let mut vm = parse_workflow_without_validation(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Should fail with undefined variable error - email is out of scope in catch

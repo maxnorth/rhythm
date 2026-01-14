@@ -1,6 +1,6 @@
 //! Tests for variable declarations (let/const)
 
-use crate::executor::tests::helpers::parse_workflow_and_build_vm;
+use crate::executor::tests::helpers::{parse_workflow_and_build_vm, parse_workflow_without_validation};
 use crate::executor::{run_until_done, Control, Val};
 use maplit::hashmap;
 
@@ -107,6 +107,7 @@ fn test_mixed_let_const() {
 
 #[test]
 fn test_block_scope_cleanup() {
+    // Tests runtime error for out-of-scope access (validation would catch this)
     let source = r#"
             {
                 let scoped = 999
@@ -114,7 +115,7 @@ fn test_block_scope_cleanup() {
             return scoped
         "#;
 
-    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    let mut vm = parse_workflow_without_validation(source, hashmap! {});
     run_until_done(&mut vm);
 
     // Variable 'scoped' should not be defined outside the block
@@ -384,6 +385,7 @@ fn test_continue_unwinds_and_cleans_up_scopes() {
 
 #[test]
 fn test_nested_try_blocks_with_cleanup() {
+    // Tests runtime scoping behavior (validation would catch the out-of-scope access)
     let source = r#"
             let outer = 1
             try {
@@ -400,7 +402,7 @@ fn test_nested_try_blocks_with_cleanup() {
             }
     "#;
 
-    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    let mut vm = parse_workflow_without_validation(source, hashmap! {});
     run_until_done(&mut vm);
 
     // Inner catch should handle the error, but try2 is not in scope there
@@ -563,6 +565,7 @@ fn test_destructure_non_object_throws() {
 
 #[test]
 fn test_destructure_scope_cleanup() {
+    // Tests runtime error for out-of-scope access (validation would catch this)
     let source = r#"
         {
             let { a, b } = { a: 1, b: 2 }
@@ -570,7 +573,7 @@ fn test_destructure_scope_cleanup() {
         return a
     "#;
 
-    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    let mut vm = parse_workflow_without_validation(source, hashmap! {});
     run_until_done(&mut vm);
 
     // 'a' should not be defined outside the block

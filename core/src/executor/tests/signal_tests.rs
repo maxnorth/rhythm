@@ -1,6 +1,6 @@
 //! Tests for Signal.next() function implementation
 
-use super::helpers::parse_workflow_and_build_vm;
+use super::helpers::{parse_workflow_and_build_vm, parse_workflow_without_validation};
 use crate::executor::{errors, run_until_done, Awaitable, Control, Val, VM};
 use std::collections::HashMap;
 
@@ -99,6 +99,7 @@ fn test_signal_next_wrong_arg_type() {
 #[test]
 fn test_signal_resume_try_catch_scoping() {
     // Workflow that declares a variable in try, awaits signal, then throws
+    // Note: Skip validation - this test intentionally uses out-of-scope variable
     let source = r#"
         let result = null
         try {
@@ -113,7 +114,7 @@ fn test_signal_resume_try_catch_scoping() {
         return result
     "#;
 
-    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    let mut vm = parse_workflow_without_validation(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Should suspend waiting for signal

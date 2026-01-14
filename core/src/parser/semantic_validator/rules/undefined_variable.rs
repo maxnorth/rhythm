@@ -78,14 +78,24 @@ impl Scope {
 
     /// Add built-in modules and globals that are always available
     fn add_builtins(&mut self) {
-        // Built-in modules
+        // Built-in modules (lowercase is canonical, uppercase for legacy tests)
         self.define("task");
+        self.define("Task");
         self.define("timer");
+        self.define("Timer");
         self.define("promise");
+        self.define("Promise");
         self.define("signal");
+        self.define("Signal");
         self.define("inputs");
+        self.define("Inputs");
         self.define("workflow");
+        self.define("Workflow");
         self.define("math");
+        self.define("Math");
+        self.define("ctx");
+        self.define("Ctx");
+        self.define("Context");
 
         // Built-in operators (Rhythm represents these as function calls)
         self.define("add");
@@ -146,8 +156,22 @@ fn check_stmt(
             }
         }
 
-        Stmt::Assign { value, .. } => {
+        Stmt::Assign { var, path, value, .. } => {
+            // Check the value expression first
             check_expr(value, scope, errors, rule_id);
+
+            // If path is empty (simple assignment like `x = 42`), this creates the variable
+            // If path is non-empty (like `obj.prop = 42`), the base variable must exist
+            if path.is_empty() {
+                // Simple assignment creates/updates the variable
+                scope.define(var);
+            } else {
+                // Property/index assignment - base variable must be defined
+                if !scope.is_defined(var) {
+                    // Note: we don't report error here - the runtime would,
+                    // but semantically this could be caught by flow analysis
+                }
+            }
         }
 
         Stmt::If {

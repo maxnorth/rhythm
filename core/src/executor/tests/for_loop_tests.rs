@@ -1,7 +1,7 @@
 //! Tests for ForLoop statements (for...in / for...of)
 
 use super::super::*;
-use super::helpers::parse_workflow_and_build_vm;
+use super::helpers::{parse_workflow_and_build_vm, parse_workflow_without_validation};
 use maplit::hashmap;
 
 /* ===================== for...of Tests ===================== */
@@ -261,6 +261,8 @@ fn test_for_in_non_object_throws() {
 
 #[test]
 fn test_for_of_binding_not_in_scope_after_loop() {
+    // This test verifies runtime error handling for undefined variables.
+    // Validation would catch this, so we skip validation to test runtime behavior.
     let source = r#"
         let arr = [1, 2, 3]
         for (let x of arr) {
@@ -269,7 +271,7 @@ fn test_for_of_binding_not_in_scope_after_loop() {
         return x
     "#;
 
-    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
+    let mut vm = parse_workflow_without_validation(source, hashmap! {});
     run_until_done(&mut vm);
 
     // x should not be in scope after the loop

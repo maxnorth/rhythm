@@ -1,6 +1,6 @@
 //! Tests for Workflow.run() and sub-workflow functionality
 
-use super::helpers::parse_workflow_and_build_vm;
+use super::helpers::{parse_workflow_and_build_vm, parse_workflow_without_validation};
 use crate::executor::{errors, run_until_done, Awaitable, Control, Val};
 use crate::types::ExecutionType;
 use std::collections::HashMap;
@@ -100,12 +100,13 @@ fn test_workflow_run_multiple_calls() {
 #[test]
 fn test_workflow_fire_and_forget_then_await() {
     // Fire-and-forget one workflow, then await another
+    // Note: Skip validation because we manually inject inputs1/inputs2 after parsing
     let source = r#"
             Workflow.run("fire_and_forget_workflow", inputs1)
             return await Workflow.run("awaited_workflow", inputs2)
         "#;
 
-    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
+    let mut vm = parse_workflow_without_validation(source, HashMap::new());
 
     let mut inputs1 = HashMap::new();
     inputs1.insert("background".to_string(), Val::Bool(true));

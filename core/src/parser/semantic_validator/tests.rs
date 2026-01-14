@@ -340,9 +340,9 @@ fn test_nested_await_valid_return() {
 
 #[test]
 fn test_nested_await_invalid_binary_op() {
-    // Note: In Rhythm, `a + b` becomes `add(a, b)`, so this tests await in call args.
-    // Must use parens because `await` has highest precedence: `await x + 1` parses as `await(x + 1)`.
-    let source = r#"let x = (await task.run("foo", {})) + 1"#;
+    // In Rhythm, `a + b` becomes `add(a, b)`, so this tests await in call args.
+    // `await` has unary-level precedence, so `await x + 1` parses as `add(await x, 1)`.
+    let source = r#"let x = await task.run("foo", {}) + 1"#;
 
     let errors = validate(source);
     assert!(has_rule(&errors, "nested-await"));
@@ -421,7 +421,8 @@ fn test_nested_await_invalid_double_await() {
 
 #[test]
 fn test_nested_await_multiple_errors() {
-    let source = r#"let x = (await task.run("a", {})) + (await task.run("b", {}))"#;
+    // With unary-level precedence, this parses as: add(await ..., await ...)
+    let source = r#"let x = await task.run("a", {}) + await task.run("b", {})"#;
 
     let errors = validate(source);
     let await_errors = for_rule(&errors, "nested-await");
