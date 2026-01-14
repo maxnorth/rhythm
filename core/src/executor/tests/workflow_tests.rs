@@ -1,6 +1,6 @@
 //! Tests for Workflow.run() and sub-workflow functionality
 
-use super::helpers::{parse_workflow_and_build_vm, parse_workflow_without_validation};
+use super::helpers::parse_workflow_and_build_vm;
 use crate::executor::{errors, run_until_done, Awaitable, Control, Val};
 use crate::types::ExecutionType;
 use std::collections::HashMap;
@@ -100,23 +100,14 @@ fn test_workflow_run_multiple_calls() {
 #[test]
 fn test_workflow_fire_and_forget_then_await() {
     // Fire-and-forget one workflow, then await another
-    // Note: Skip validation because we manually inject inputs1/inputs2 after parsing
     let source = r#"
+            let inputs1 = { background: true }
+            let inputs2 = { foreground: true }
             Workflow.run("fire_and_forget_workflow", inputs1)
             return await Workflow.run("awaited_workflow", inputs2)
         "#;
 
-    let mut vm = parse_workflow_without_validation(source, HashMap::new());
-
-    let mut inputs1 = HashMap::new();
-    inputs1.insert("background".to_string(), Val::Bool(true));
-    vm.env
-        .insert("inputs1".to_string(), Val::Obj(inputs1.clone()));
-
-    let mut inputs2 = HashMap::new();
-    inputs2.insert("foreground".to_string(), Val::Bool(true));
-    vm.env
-        .insert("inputs2".to_string(), Val::Obj(inputs2.clone()));
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
 
     run_until_done(&mut vm);
 
@@ -139,12 +130,16 @@ fn test_workflow_fire_and_forget_then_await() {
         vm.outbox.executions[0].target_name,
         "fire_and_forget_workflow"
     );
-    assert_eq!(vm.outbox.executions[0].inputs, inputs1);
+    let mut expected_inputs1 = HashMap::new();
+    expected_inputs1.insert("background".to_string(), Val::Bool(true));
+    assert_eq!(vm.outbox.executions[0].inputs, expected_inputs1);
     assert_eq!(vm.outbox.executions[0].target_type, ExecutionType::Workflow);
 
     // Second execution (awaited)
     assert_eq!(vm.outbox.executions[1].target_name, "awaited_workflow");
-    assert_eq!(vm.outbox.executions[1].inputs, inputs2);
+    let mut expected_inputs2 = HashMap::new();
+    expected_inputs2.insert("foreground".to_string(), Val::Bool(true));
+    assert_eq!(vm.outbox.executions[1].inputs, expected_inputs2);
     assert_eq!(vm.outbox.executions[1].target_type, ExecutionType::Workflow);
 
     // The suspended execution ID should match the second execution in the outbox

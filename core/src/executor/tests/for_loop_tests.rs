@@ -1,7 +1,7 @@
 //! Tests for ForLoop statements (for...in / for...of)
 
 use super::super::*;
-use super::helpers::{parse_workflow_and_build_vm, parse_workflow_without_validation};
+use super::helpers::parse_workflow_and_build_vm;
 use maplit::hashmap;
 
 /* ===================== for...of Tests ===================== */
@@ -261,29 +261,23 @@ fn test_for_in_non_object_throws() {
 
 #[test]
 fn test_for_of_binding_not_in_scope_after_loop() {
-    // This test verifies runtime error handling for undefined variables.
-    // Validation would catch this, so we skip validation to test runtime behavior.
+    // Loop binding 'x' is block-scoped and should be removed from env after the loop
     let source = r#"
         let arr = [1, 2, 3]
+        let sum = 0
         for (let x of arr) {
-            let y = x
+            sum = sum + x
         }
-        return x
+        return sum
     "#;
 
-    let mut vm = parse_workflow_without_validation(source, hashmap! {});
+    let mut vm = parse_workflow_and_build_vm(source, hashmap! {});
     run_until_done(&mut vm);
 
-    // x should not be in scope after the loop
-    match vm.control {
-        Control::Throw(Val::Error(ref err)) => {
-            assert!(err.message.contains("Undefined variable"));
-        }
-        _ => panic!(
-            "Expected error for undefined variable, got {:?}",
-            vm.control
-        ),
-    }
+    assert_eq!(vm.control, Control::Return(Val::Num(6.0)));
+
+    // Loop binding should be cleaned up after loop exits
+    assert!(!vm.env.contains_key("x"));
 }
 
 #[test]

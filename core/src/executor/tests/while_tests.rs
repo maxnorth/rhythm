@@ -1,7 +1,7 @@
 //! Tests for While statements
 
 use super::super::*;
-use super::helpers::{parse_workflow_and_build_vm, parse_workflow_without_validation};
+use super::helpers::parse_workflow_and_build_vm;
 use maplit::hashmap;
 use std::collections::HashMap;
 
@@ -150,7 +150,7 @@ fn test_while_with_error_in_test() {
 #[test]
 fn test_while_with_try_catch() {
     // i = 0; while (i < 5) { try { if (i == 3) { throw {code: "E", message: "msg"}; } i = i + 1; } catch (e) { i = 10; } } return i;
-    // Note: Skip validation - assignments to i propagate across scopes at runtime
+    // Simple assignments (without `let`) propagate to outer scope at runtime AND in validation.
     let source = r#"
             i = 0
             while (lt(i, 5)) {
@@ -166,7 +166,7 @@ fn test_while_with_try_catch() {
             return i
         "#;
 
-    let mut vm = parse_workflow_without_validation(source, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Loop runs 0,1,2 iterations normally, then throws on i=3, catch sets i=10, loop exits

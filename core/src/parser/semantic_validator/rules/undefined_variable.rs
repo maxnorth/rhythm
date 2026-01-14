@@ -54,21 +54,37 @@ impl ValidationRule for UndefinedVariableRule {
 // ============================================================================
 
 /// Tracks variables in scope.
+///
+/// In Rhythm, variables can be declared in two ways:
+/// - `let x = 1` - block-scoped, removed when block exits
+/// - `x = 1` - function-scoped, persists outside blocks
+///
+/// This struct tracks both types to properly handle nested scopes.
 struct Scope {
-    /// Variables currently in scope
+    /// Variables currently visible (includes inherited from parent)
     defined: HashSet<String>,
+    /// Variables declared with `let` in the current block (to remove on exit)
+    block_local: HashSet<String>,
 }
 
 impl Scope {
     fn new() -> Self {
         Self {
             defined: HashSet::new(),
+            block_local: HashSet::new(),
         }
     }
 
-    /// Add a variable to the current scope
+    /// Add a variable declared with `let` (block-scoped)
+    fn define_let(&mut self, name: &str) {
+        self.defined.insert(name.to_string());
+        self.block_local.insert(name.to_string());
+    }
+
+    /// Add a variable from simple assignment (function-scoped)
     fn define(&mut self, name: &str) {
         self.defined.insert(name.to_string());
+        // NOT added to block_local - persists outside blocks
     }
 
     /// Check if a variable is defined
@@ -111,16 +127,31 @@ impl Scope {
         self.define("neg");
         self.define("not");
 
+        // Control flow
+        self.define("throw");
+
         // Common globals
         self.define("console");
         self.define("JSON");
     }
 
-    /// Create a child scope (for blocks, loops, etc.)
-    fn child(&self) -> Self {
-        Self {
-            defined: self.defined.clone(),
+    /// Enter a child block scope
+    ///
+    /// Returns the set of block-local variables to restore on exit
+    fn enter_block(&mut self) -> HashSet<String> {
+        std::mem::take(&mut self.block_local)
+    }
+
+    /// Exit a child block scope
+    ///
+    /// Removes block-local variables and restores parent's block_local set
+    fn exit_block(&mut self, parent_block_local: HashSet<String>) {
+        // Remove variables that were declared with `let` in this block
+        for var in &self.block_local {
+            self.defined.remove(var);
         }
+        // Restore parent's block_local tracking
+        self.block_local = parent_block_local;
     }
 }
 
@@ -143,14 +174,14 @@ fn check_stmt(
                 check_expr(init_expr, scope, errors, rule_id);
             }
 
-            // Then add the declared variable(s) to scope
+            // Then add the declared variable(s) to scope (block-scoped with `let`)
             match target {
                 DeclareTarget::Simple { name, .. } => {
-                    scope.define(name);
+                    scope.define_let(name);
                 }
                 DeclareTarget::Destructure { names, .. } => {
                     for name in names {
-                        scope.define(name);
+                        scope.define_let(name);
                     }
                 }
             }
@@ -163,7 +194,7 @@ fn check_stmt(
             // If path is empty (simple assignment like `x = 42`), this creates the variable
             // If path is non-empty (like `obj.prop = 42`), the base variable must exist
             if path.is_empty() {
-                // Simple assignment creates/updates the variable
+                // Simple assignment creates/updates the variable (function-scoped)
                 scope.define(var);
             } else {
                 // Property/index assignment - base variable must be defined
@@ -182,21 +213,24 @@ fn check_stmt(
         } => {
             check_expr(test, scope, errors, rule_id);
 
-            // Use child scope for branches
-            let mut then_scope = scope.child();
-            check_stmt(then_s, &mut then_scope, errors, rule_id);
+            // Enter block scope for then branch
+            let saved = scope.enter_block();
+            check_stmt(then_s, scope, errors, rule_id);
+            scope.exit_block(saved);
 
             if let Some(else_stmt) = else_s {
-                let mut else_scope = scope.child();
-                check_stmt(else_stmt, &mut else_scope, errors, rule_id);
+                let saved = scope.enter_block();
+                check_stmt(else_stmt, scope, errors, rule_id);
+                scope.exit_block(saved);
             }
         }
 
         Stmt::While { test, body, .. } => {
             check_expr(test, scope, errors, rule_id);
 
-            let mut body_scope = scope.child();
-            check_stmt(body, &mut body_scope, errors, rule_id);
+            let saved = scope.enter_block();
+            check_stmt(body, scope, errors, rule_id);
+            scope.exit_block(saved);
         }
 
         Stmt::ForLoop {
@@ -208,10 +242,11 @@ fn check_stmt(
             // Check iterable in current scope
             check_expr(iterable, scope, errors, rule_id);
 
-            // Create child scope with loop variable
-            let mut body_scope = scope.child();
-            body_scope.define(binding);
-            check_stmt(body, &mut body_scope, errors, rule_id);
+            // Enter block scope with loop variable (loop variable is block-scoped)
+            let saved = scope.enter_block();
+            scope.define_let(binding);
+            check_stmt(body, scope, errors, rule_id);
+            scope.exit_block(saved);
         }
 
         Stmt::Try {
@@ -220,21 +255,24 @@ fn check_stmt(
             catch_body,
             ..
         } => {
-            // Check try body in child scope
-            let mut try_scope = scope.child();
-            check_stmt(body, &mut try_scope, errors, rule_id);
+            // Check try body in block scope
+            let saved = scope.enter_block();
+            check_stmt(body, scope, errors, rule_id);
+            scope.exit_block(saved);
 
-            // Check catch body with error variable in scope
-            let mut catch_scope = scope.child();
-            catch_scope.define(catch_var);
-            check_stmt(catch_body, &mut catch_scope, errors, rule_id);
+            // Check catch body with error variable in scope (block-scoped)
+            let saved = scope.enter_block();
+            scope.define_let(catch_var);
+            check_stmt(catch_body, scope, errors, rule_id);
+            scope.exit_block(saved);
         }
 
         Stmt::Block { body, .. } => {
-            let mut block_scope = scope.child();
+            let saved = scope.enter_block();
             for stmt in body {
-                check_stmt(stmt, &mut block_scope, errors, rule_id);
+                check_stmt(stmt, scope, errors, rule_id);
             }
+            scope.exit_block(saved);
         }
 
         Stmt::Return { value, .. } => {

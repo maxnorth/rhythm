@@ -428,3 +428,4 @@ fn test_nested_await_multiple_errors() {
     let await_errors = for_rule(&errors, "nested-await");
     assert_eq!(await_errors.len(), 2, "Should report both nested awaits");
 }
+

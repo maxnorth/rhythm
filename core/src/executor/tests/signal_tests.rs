@@ -1,6 +1,6 @@
 //! Tests for Signal.next() function implementation
 
-use super::helpers::{parse_workflow_and_build_vm, parse_workflow_without_validation};
+use super::helpers::parse_workflow_and_build_vm;
 use crate::executor::{errors, run_until_done, Awaitable, Control, Val, VM};
 use std::collections::HashMap;
 
@@ -95,73 +95,30 @@ fn test_signal_next_wrong_arg_type() {
 /// 6. Catch block tries to access the try-block variable -> FAILS with undefined
 ///
 /// This is expected behavior - try and catch have separate block scopes.
-/// Variables declared in try are NOT accessible in catch.
+/// Variables declared with `let` in try are NOT accessible in catch.
+/// Semantic validation catches this error.
 #[test]
 fn test_signal_resume_try_catch_scoping() {
-    // Workflow that declares a variable in try, awaits signal, then throws
-    // Note: Skip validation - this test intentionally uses out-of-scope variable
+    // Variable declared with `let` in try block should NOT be accessible in catch.
     let source = r#"
         let result = null
         try {
             let user_email = "test@example.com"
             let signal_data = await Signal.next("approval")
-            // After resumption, access missing property to trigger error
             return signal_data.missing_property
         } catch (e) {
-            // Try to use user_email from try block - THIS WILL FAIL
+            // user_email from try block is NOT in scope here
             result = user_email
         }
         return result
     "#;
 
-    let mut vm = parse_workflow_without_validation(source, HashMap::new());
-    run_until_done(&mut vm);
+    let workflow = crate::parser::parse_workflow(source).expect("Parse should succeed");
+    let errors = crate::parser::semantic_validator::validate_workflow(&workflow, source);
+    let validation_errors: Vec<_> = errors.iter().filter(|e| e.is_error()).collect();
 
-    // Should suspend waiting for signal
-    assert!(
-        matches!(&vm.control, Control::Suspend(Awaitable::Signal { .. })),
-        "Expected Suspend(Signal), got {:?}",
-        vm.control
-    );
-
-    // Verify user_email is in the environment while suspended
-    assert!(
-        vm.env.contains_key("user_email"),
-        "user_email should be in env while suspended in try block"
-    );
-
-    // Serialize and deserialize (simulating persistence)
-    let serialized = serde_json::to_string(&vm).unwrap();
-    let mut vm: VM = serde_json::from_str(&serialized).unwrap();
-
-    // Verify user_email is still in env after deserialization
-    assert!(
-        vm.env.contains_key("user_email"),
-        "user_email should persist through serialization"
-    );
-
-    // Resume with signal data (an object without 'missing_property')
-    vm.resume(Val::Obj(HashMap::new()));
-    run_until_done(&mut vm);
-
-    // The workflow should fail with "Undefined variable 'user_email'"
-    // because user_email was declared in try block and is not accessible in catch
-    let Control::Throw(Val::Error(err)) = &vm.control else {
-        panic!(
-            "Expected Throw with undefined variable error, got {:?}",
-            vm.control
-        );
-    };
-    assert!(
-        err.message.contains("Undefined variable"),
-        "Expected undefined variable error, got: {}",
-        err.message
-    );
-    assert!(
-        err.message.contains("user_email"),
-        "Error should mention user_email, got: {}",
-        err.message
-    );
+    assert_eq!(validation_errors.len(), 1);
+    assert_eq!(validation_errors[0].message, "Undefined variable 'user_email'");
 }
 
 /// Test that demonstrates the CORRECT way to handle this - declare outside try

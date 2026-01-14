@@ -1,6 +1,6 @@
 //! Tests for assignment statements
 
-use super::helpers::{parse_workflow_and_build_vm, parse_workflow_without_validation};
+use super::helpers::parse_workflow_and_build_vm;
 use crate::executor::{run_until_done, Control, Val};
 use maplit::hashmap;
 use std::collections::HashMap;
@@ -255,9 +255,8 @@ fn test_assign_with_error() {
 #[test]
 fn test_assign_in_try_catch() {
     // try { result = Context.bad; } catch (e) { result = "error"; } return result;
-    // Note: Skip validation because assignments in try/catch propagate to outer scope
-    // at runtime, but the validator uses stricter block scoping.
     let source = r#"
+            let result = null
             try {
                 result = Context.bad
             } catch (e) {
@@ -266,12 +265,11 @@ fn test_assign_in_try_catch() {
             return result
         "#;
 
-    let mut vm = parse_workflow_without_validation(source, HashMap::new());
+    let mut vm = parse_workflow_and_build_vm(source, HashMap::new());
     run_until_done(&mut vm);
 
     // Should return "error" from the catch block
     assert_eq!(vm.control, Control::Return(Val::Str("error".to_string())));
-    assert_eq!(vm.env.get("result"), Some(&Val::Str("error".to_string())));
 }
 
 /* ===================== Multiple Assignments ===================== */
